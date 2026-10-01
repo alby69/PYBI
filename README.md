@@ -15,7 +15,41 @@
 
 ---
 
-## 🚀 Quickstart & Setup
+## 🐳 Docker Deployment (Phase 1)
+
+The simplest way to run PyBI is using Docker and Docker Compose.
+
+> **Prerequisite:** Docker and Docker Compose must be installed and running on your system.
+
+### Linux / macOS
+1. Make the start and stop scripts executable (first time only):
+   ```bash
+   chmod +x start.sh stop.sh
+   ```
+2. Start the application:
+   ```bash
+   ./start.sh
+   ```
+3. Access PyBI in your browser at: [http://localhost:8080](http://localhost:8080)
+4. Stop the application:
+   ```bash
+   ./stop.sh
+   ```
+
+### Windows
+1. Start the application by double-clicking `start.bat` or running in Command Prompt / PowerShell:
+   ```cmd
+   start.bat
+   ```
+2. Access PyBI in your browser at: [http://localhost:8080](http://localhost:8080)
+3. Stop the application by double-clicking `stop.bat` or running:
+   ```cmd
+   stop.bat
+   ```
+
+---
+
+## 🚀 Quickstart & Setup (Local Python)
 
 ### 1. Installation
 ```bash

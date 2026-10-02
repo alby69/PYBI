@@ -1,11 +1,26 @@
-"""Dashboard Editor page implementation using DashboardGrid component."""
+"""Dashboard Editor page implementation using DashboardGrid and ChartWidget with DataBinder."""
 
 from nicegui import ui
+import polars as pl
+from pybi.dashboard import default_binder
+from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
 
+
 def create_dashboard_editor_page():
-    ui.label('Dashboard Editor - Drag & Drop Canvas').classes('text-2xl font-bold q-mb-sm')
-    ui.label('Interactive dashboard layout builder using Vue Grid Layout. Drag widgets by header or resize using bottom-right handle.').classes('text-gray-600 q-mb-md')
+    ui.label('Dashboard Editor - Canvas & Chart Binding').classes('text-2xl font-bold q-mb-sm')
+    ui.label('Interactive dashboard layout builder using Vue Grid Layout with live DataBinder chart widgets.').classes('text-gray-600 q-mb-md')
+
+    # Register initial sample data source if not registered
+    try:
+        default_binder.get_source_data('regional_sales')
+    except KeyError:
+        sample_df = pl.DataFrame({
+            'region': ['Europe', 'North America', 'Asia Pacific', 'Latin America'],
+            'revenue': [1200, 1850, 950, 420],
+            'units_sold': [120, 190, 85, 45]
+        })
+        default_binder.register_source('regional_sales', sample_df)
 
     # Initial sample dashboard widgets layout
     sample_layout = [
@@ -34,9 +49,36 @@ def create_dashboard_editor_page():
 
     with ui.row().classes('w-full gap-4 items-center q-mb-md'):
         ui.button('Reset Layout', on_click=lambda: reset_layout()).props('color=secondary icon=refresh')
+        ui.button('Refresh Data Source', on_click=lambda: refresh_source_data()).props('color=primary icon=autorenew')
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
 
-    grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 500px; width: 100%;')
+    grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
+
+    # Dynamic Chart Widget bound to DataBinder
+    with ui.card().classes('w-full q-mt-md p-4'):
+        chart_container = ui.column().classes('w-full')
+
+        with chart_container:
+            chart = ChartWidget(
+                chart_type='bar',
+                x_col='region',
+                y_cols=['revenue'],
+                title='Regional Sales Revenue'
+            )
+            chart.bind_to(
+                binder=default_binder,
+                widget_id='w2_chart',
+                source_name='regional_sales',
+                x_col='region',
+                y_cols=['revenue']
+            )
+
+            with ui.row().classes('w-full items-center justify-between q-mt-xs'):
+                ui.label('Dynamic Data-Bound Chart Widget').classes('font-bold text-sm text-gray-700')
+                with ui.row().classes('gap-2'):
+                    ui.button('Bar Chart', on_click=lambda: chart.update_data(chart._df, chart_type='bar')).props('outline dense size=sm color=primary')
+                    ui.button('Line Chart', on_click=lambda: chart.update_data(chart._df, chart_type='line')).props('outline dense size=sm color=primary')
+                    ui.button('Pie Chart', on_click=lambda: chart.update_data(chart._df, chart_type='pie')).props('outline dense size=sm color=primary')
 
     with ui.card().classes('w-full q-mt-md p-4'):
         ui.label('Live Event & Layout State Log').classes('font-bold text-lg q-mb-xs')
@@ -50,6 +92,16 @@ def create_dashboard_editor_page():
         status_label.set_text(f'State: Layout updated ({len(layout)} items)')
 
     grid.on_layout_updated(handle_layout_updated)
+
+    def refresh_source_data():
+        updated_df = pl.DataFrame({
+            'region': ['Europe', 'North America', 'Asia Pacific', 'Latin America'],
+            'revenue': [1500, 2100, 1300, 680],
+            'units_sold': [150, 210, 110, 60]
+        })
+        default_binder.update_source('regional_sales', updated_df)
+        log_container.push('[Data Source] Updated "regional_sales" data source. Chart refreshed reactively.')
+        status_label.set_text('State: Source data refreshed')
 
     def reset_layout():
         grid.layout = sample_layout

@@ -1,0 +1,279 @@
+"""ETL Execution Engine for PyBI visual DAGs using Polars and DuckDB."""
+
+from dataclasses import dataclass, field
+import graphlib
+import re
+from typing import Any, Dict, List, Optional, Union
+
+import duckdb
+import polars as pl
+
+from .connectors import read_csv, read_parquet
+
+
+@dataclass
+class ETLResult:
+    """Dataclass holding execution results of an ETL DAG pipeline."""
+
+    status: str
+    dataframes: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    output_tables: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    logs: List[str] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+class ETLExecutor:
+    """ETLExecutor parses a visual Vue Flow DAG (nodes & edges) and executes it using Polars and DuckDB."""
+
+    def __init__(self, duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> None:
+        """Initialize ETLExecutor.
+
+        Args:
+            duckdb_conn: Optional DuckDB connection instance.
+        """
+        self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
+
+    def execute(self, dag: Dict[str, Any]) -> ETLResult:
+        """Execute a DAG defined by nodes and edges.
+
+        Args:
+            dag: Dict containing 'nodes' (list) and 'edges' (list).
+
+        Returns:
+            ETLResult containing execution status, output DataFrames, and logs.
+        """
+        nodes = dag.get("nodes", [])
+        edges = dag.get("edges", [])
+        logs: List[str] = []
+
+        if not nodes:
+            return ETLResult(status="success", logs=["No nodes found in DAG."])
+
+        node_map: Dict[str, Dict[str, Any]] = {n["id"]: n for n in nodes}
+        parents_map: Dict[str, List[str]] = {n_id: [] for n_id in node_map}
+
+        for edge in edges:
+            source = edge.get("source")
+            target = edge.get("target")
+            if source in node_map and target in node_map:
+                parents_map[target].append(source)
+
+        # Topological sort
+        try:
+            ts = graphlib.TopologicalSorter(parents_map)
+            execution_order = list(ts.static_order())
+        except graphlib.CycleError as err:
+            return ETLResult(
+                status="error",
+                logs=logs,
+                error=f"DAG execution failed due to cycle error: {err}",
+            )
+
+        logs.append(f"Topological execution order: {' -> '.join(execution_order)}")
+        node_results: Dict[str, pl.DataFrame] = {}
+        output_tables: Dict[str, pl.DataFrame] = {}
+
+        for node_id in execution_order:
+            node = node_map[node_id]
+            parent_ids = parents_map[node_id]
+
+            try:
+                df_res, log_msg, output_table_info = self._execute_node(
+                    node, parent_ids, node_results
+                )
+                node_results[node_id] = df_res
+                logs.append(f"[{node_id}] {log_msg}")
+
+                if output_table_info:
+                    tbl_name, tbl_df = output_table_info
+                    output_tables[tbl_name] = tbl_df
+
+            except Exception as e:
+                err_msg = f"Error executing node '{node_id}': {e}"
+                logs.append(f"[{node_id}] FAILED: {e}")
+                return ETLResult(
+                    status="error",
+                    dataframes=node_results,
+                    output_tables=output_tables,
+                    logs=logs,
+                    error=err_msg,
+                )
+
+        return ETLResult(
+            status="success",
+            dataframes=node_results,
+            output_tables=output_tables,
+            logs=logs,
+        )
+
+    def _execute_node(
+        self,
+        node: Dict[str, Any],
+        parent_ids: List[str],
+        node_results: Dict[str, pl.DataFrame],
+    ) -> tuple[pl.DataFrame, str, Optional[tuple[str, pl.DataFrame]]]:
+        """Execute an individual node in the DAG.
+
+        Args:
+            node: The node dictionary definition.
+            parent_ids: List of parent node IDs.
+            node_results: Dict mapping completed node IDs to DataFrames.
+
+        Returns:
+            Tuple of (Result DataFrame, Log message, Optional (table_name, DataFrame)).
+        """
+        node_id = node.get("id", "unknown")
+        data = node.get("data", {})
+        label = node.get("label", data.get("label", ""))
+        node_type = (
+            data.get("node_type")
+            or node.get("node_type")
+            or data.get("type")
+            or node.get("type")
+        )
+
+        # Classify node type if not explicit
+        if not node_type or node_type in ("input", "default", "output"):
+            if node_type == "input" or "Source" in label or "CSV" in label or "Parquet" in label or "read_" in label:
+                category = "DataSource"
+            elif node_type == "output" or "Output" in label or "Table" in label or "Save" in label:
+                category = "Output"
+            else:
+                category = "Transform"
+        else:
+            category = node_type
+
+        # 1. DataSource
+        if category in ("DataSource", "source", "input_source"):
+            source_type = data.get("source_type")
+            filepath = data.get("file_path") or data.get("path") or data.get("filepath")
+
+            # Fallback parsing from label if parameters not explicitly set in data dict
+            if not filepath and label:
+                match = re.search(r"\(([^)]+)\)", label)
+                if match:
+                    filepath = match.group(1)
+
+            if not source_type:
+                if filepath and filepath.endswith(".parquet"):
+                    source_type = "parquet"
+                else:
+                    source_type = "csv"
+
+            if not filepath:
+                raise ValueError(f"No file path provided for DataSource node '{node_id}'")
+
+            if source_type == "parquet":
+                df = read_parquet(filepath)
+            else:
+                df = read_csv(filepath)
+
+            return df, f"Loaded {len(df)} rows from {source_type.upper()} file '{filepath}'", None
+
+        # 2. Transform
+        elif category in ("Transform", "transform"):
+            if not parent_ids:
+                raise ValueError(f"Transform node '{node_id}' requires at least one parent input")
+
+            parent_df = node_results[parent_ids[0]]
+            transform_type = data.get("transform_type") or data.get("action")
+
+            # Infer transform type from label if absent
+            if not transform_type and label:
+                label_lower = label.lower()
+                if "filter" in label_lower:
+                    transform_type = "filter"
+                elif "select" in label_lower:
+                    transform_type = "select"
+                elif "group" in label_lower:
+                    transform_type = "groupby"
+
+            if not transform_type:
+                transform_type = "filter"  # default transform fallback
+
+            if transform_type == "filter":
+                condition = data.get("condition") or data.get("predicate")
+                if not condition and label:
+                    match = re.search(r"\(([^)]+)\)", label)
+                    if match:
+                        condition = match.group(1)
+
+                if condition:
+                    # DuckDB SQL evaluation for flexible filter condition support
+                    temp_conn = duckdb.connect(":memory:")
+                    temp_conn.register("source_df", parent_df)
+                    filtered_df = temp_conn.query(f"SELECT * FROM source_df WHERE {condition}").pl()
+                    return filtered_df, f"Applied filter ({condition}): {len(filtered_df)} rows remaining", None
+                else:
+                    return parent_df, "Filter node condition empty, passing through data", None
+
+            elif transform_type == "select":
+                cols = data.get("columns", [])
+                if isinstance(cols, str):
+                    cols = [c.strip() for c in cols.split(",")]
+                if cols:
+                    selected_df = parent_df.select(cols)
+                    return selected_df, f"Selected columns: {cols}", None
+                return parent_df, "Select columns empty, passing through data", None
+
+            elif transform_type in ("groupby", "group_by"):
+                group_cols = data.get("group_by") or data.get("by") or data.get("columns", [])
+                if isinstance(group_cols, str):
+                    group_cols = [c.strip() for c in group_cols.split(",")]
+
+                aggs = data.get("aggregations", {})  # e.g. {"sales": "sum"}
+                if group_cols:
+                    if aggs:
+                        agg_exprs = []
+                        for col_name, agg_func in aggs.items():
+                            if hasattr(pl.col(col_name), agg_func):
+                                agg_exprs.append(getattr(pl.col(col_name), agg_func)())
+                        grouped_df = parent_df.group_by(group_cols).agg(agg_exprs)
+                    else:
+                        grouped_df = parent_df.group_by(group_cols).first()
+                    return grouped_df, f"Grouped by {group_cols}", None
+                return parent_df, "GroupBy columns empty, passing through data", None
+
+            else:
+                return parent_df, f"Unknown transform '{transform_type}', passing data through", None
+
+        # 3. Output
+        elif category in ("Output", "output", "sink"):
+            if not parent_ids:
+                raise ValueError(f"Output node '{node_id}' requires a parent input")
+
+            parent_df = node_results[parent_ids[0]]
+            table_name = data.get("table_name")
+
+            if not table_name and label:
+                match = re.search(r"\(([^)]+)\)", label)
+                if match:
+                    table_name = match.group(1)
+
+            if not table_name:
+                table_name = f"output_{node_id}"
+
+            # Register with DuckDB
+            self.duckdb_conn.register(table_name, parent_df)
+            return parent_df, f"Saved {len(parent_df)} rows to DuckDB table '{table_name}'", (table_name, parent_df)
+
+        else:
+            # Fallback pass-through
+            if parent_ids:
+                return node_results[parent_ids[0]], f"Unrecognized node category '{category}', passing through parent data", None
+            else:
+                return pl.DataFrame(), f"Unrecognized node category '{category}' with no parents", None
+
+
+def execute_dag(dag: Dict[str, Any], duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> ETLResult:
+    """Convenience function to execute an ETL DAG.
+
+    Args:
+        dag: Dict representing the DAG (nodes and edges).
+        duckdb_conn: Optional DuckDB connection.
+
+    Returns:
+        ETLResult instance.
+    """
+    executor = ETLExecutor(duckdb_conn=duckdb_conn)
+    return executor.execute(dag)

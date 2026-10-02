@@ -17,8 +17,13 @@ dependencies = [
     "pydantic>=2.0.0",
     "pyjwt>=2.8.0",
     "casbin>=1.30.0",
-    "click>=8.1.0"
+    "click>=8.1.0",
+    "pyarrow"
 ]
 
 [project.scripts]
 pybi = "pybi.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pybi*"]

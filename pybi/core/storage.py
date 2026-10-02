@@ -7,6 +7,39 @@ import os
 from typing import Any, Dict, List, Optional, Union
 
 
+DEFAULT_STORAGE_DIR = "pybi_data"
+ID_SAFE_CHARS = ("-", "_")
+
+
+def sanitize_project_id(project_id: str) -> str:
+    """Normalize a project id into a filesystem-safe name.
+
+    Args:
+        project_id: Raw project identifier typed by the user.
+
+    Returns:
+        str: Sanitized identifier, or "default" when nothing usable remains.
+    """
+    safe_id = "".join(c for c in project_id if c.isalnum() or c in ID_SAFE_CHARS).strip()
+    return safe_id or "default"
+
+
+def resolve_storage_dir(storage_dir: Optional[str] = None) -> str:
+    """Resolve the directory holding project JSON files.
+
+    Resolution order: explicit argument, DATA_DIR environment variable, "pybi_data".
+
+    Args:
+        storage_dir: Optional explicit directory overriding environment lookup.
+
+    Returns:
+        str: Directory path to use for project storage.
+    """
+    if storage_dir:
+        return storage_dir
+    return os.environ.get("DATA_DIR") or DEFAULT_STORAGE_DIR
+
+
 class ProjectStorage(ABC):
     """Abstract base class defining the interface for PyBI project storage backends."""
 
@@ -36,17 +69,23 @@ class ProjectStorage(ABC):
         """Delete project configuration by project_id."""
         pass
 
+    @abstractmethod
+    def project_exists(self, project_id: str) -> bool:
+        """Check whether a project has already been saved."""
+        pass
+
 
 class FileProjectStorage(ProjectStorage):
     """JSON file system storage implementation for PyBI projects under pybi_data/."""
 
-    def __init__(self, storage_dir: str = "pybi_data") -> None:
+    def __init__(self, storage_dir: Optional[str] = None) -> None:
         """Initialize FileProjectStorage.
 
         Args:
-            storage_dir: Base directory path to store project files.
+            storage_dir: Base directory path to store project files. Defaults to
+                the DATA_DIR environment variable, then "pybi_data".
         """
-        self.storage_dir = storage_dir
+        self.storage_dir = resolve_storage_dir(storage_dir)
         self.projects_dir = os.path.join(self.storage_dir, "projects")
         os.makedirs(self.projects_dir, exist_ok=True)
 
@@ -59,10 +98,7 @@ class FileProjectStorage(ProjectStorage):
         Returns:
             str: Full path to the project JSON file.
         """
-        safe_id = "".join(c for c in project_id if c.isalnum() or c in ("-", "_")).strip()
-        if not safe_id:
-            safe_id = "default"
-        return os.path.join(self.projects_dir, f"{safe_id}.json")
+        return os.path.join(self.projects_dir, f"{sanitize_project_id(project_id)}.json")
 
     def save_project(
         self,
@@ -141,7 +177,7 @@ class FileProjectStorage(ProjectStorage):
         """Delete project configuration JSON file.
 
         Args:
-            project_id: Identifier for the project.
+            project_id: Identifier of the project.
 
         Returns:
             bool: True if deleted, False if file did not exist.
@@ -151,6 +187,49 @@ class FileProjectStorage(ProjectStorage):
             os.remove(filepath)
             return True
         return False
+
+    def project_exists(self, project_id: str) -> bool:
+        """Check whether a project has already been saved.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            bool: True if the project file exists.
+        """
+        return os.path.exists(self._get_project_path(project_id))
+
+    def rename_project(self, project_id: str, new_project_id: str, name: Optional[str] = None) -> str:
+        """Rename a project, preserving its ETL DAG and dashboard layout.
+
+        Args:
+            project_id: Current identifier of the project.
+            new_project_id: New identifier for the project.
+            name: Optional new human-readable name, kept as-is when omitted.
+
+        Returns:
+            str: The sanitized new identifier actually used on disk.
+
+        Raises:
+            FileNotFoundError: If the source project does not exist.
+            ValueError: If the sanitized target id is already taken by another project.
+        """
+        source = self.load_project(project_id)
+        target_id = sanitize_project_id(new_project_id)
+        if target_id == sanitize_project_id(project_id):
+            self.save_project(target_id, name=name if name is not None else source.get("name", ""))
+            return target_id
+        if self.project_exists(target_id):
+            raise ValueError(f"Project '{target_id}' already exists.")
+
+        self.save_project(
+            project_id=target_id,
+            etl_dag=source.get("etl_dag", {"nodes": [], "edges": []}),
+            dashboard_layout=source.get("dashboard_layout", []),
+            name=name if name is not None else source.get("name", ""),
+        )
+        self.delete_project(project_id)
+        return target_id
 
     def save_etl_dag(self, project_id: str, etl_dag: Dict[str, Any]) -> None:
         """Convenience method to save only the ETL DAG for a project."""

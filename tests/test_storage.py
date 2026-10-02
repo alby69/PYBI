@@ -4,7 +4,11 @@ import os
 import tempfile
 import pytest
 
-from pybi.core.storage import FileProjectStorage
+from pybi.core.storage import (
+    FileProjectStorage,
+    resolve_storage_dir,
+    sanitize_project_id,
+)
 
 
 @pytest.fixture
@@ -81,3 +85,89 @@ def test_partial_updates(temp_storage):
     reloaded = temp_storage.load_project("proj_partial")
     assert reloaded["etl_dag"] == dag1
     assert reloaded["dashboard_layout"] == layout1
+
+
+def test_sanitize_project_id():
+    assert sanitize_project_id("my project") == "myproject"
+    assert sanitize_project_id("sales-2024_q1") == "sales-2024_q1"
+    assert sanitize_project_id("../escape") == "escape"
+    assert sanitize_project_id("") == "default"
+    assert sanitize_project_id("!!!") == "default"
+
+
+def test_resolve_storage_dir_prefers_explicit_argument(monkeypatch):
+    monkeypatch.setenv("DATA_DIR", "/app/data")
+    assert resolve_storage_dir("/explicit") == "/explicit"
+
+
+def test_resolve_storage_dir_uses_data_dir(monkeypatch):
+    monkeypatch.setenv("DATA_DIR", "/app/data")
+    assert resolve_storage_dir() == "/app/data"
+
+
+def test_resolve_storage_dir_falls_back_to_default(monkeypatch):
+    monkeypatch.delenv("DATA_DIR", raising=False)
+    assert resolve_storage_dir() == "pybi_data"
+
+
+def test_storage_uses_data_dir_env(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        monkeypatch.setenv("DATA_DIR", tmpdir)
+        storage = FileProjectStorage()
+        assert storage.storage_dir == tmpdir
+        assert storage.projects_dir == os.path.join(tmpdir, "projects")
+        storage.save_project("env_proj", name="Env Project")
+        assert os.path.exists(os.path.join(tmpdir, "projects", "env_proj.json"))
+        assert storage.load_project("env_proj")["name"] == "Env Project"
+
+
+def test_project_exists(temp_storage):
+    assert temp_storage.project_exists("later") is False
+    temp_storage.save_project("later")
+    assert temp_storage.project_exists("later") is True
+
+
+def test_rename_project_preserves_content(temp_storage):
+    dag = {"nodes": [{"id": "n1"}], "edges": []}
+    layout = [{"i": "w1", "x": 0, "y": 0, "w": 4, "h": 3}]
+    temp_storage.save_project("old_id", etl_dag=dag, dashboard_layout=layout, name="Old Name")
+
+    new_id = temp_storage.rename_project("old_id", "new_id")
+
+    assert new_id == "new_id"
+    assert temp_storage.project_exists("old_id") is False
+    renamed = temp_storage.load_project("new_id")
+    assert renamed["etl_dag"] == dag
+    assert renamed["dashboard_layout"] == layout
+    assert renamed["name"] == "Old Name"
+    assert renamed["created_at"]
+
+
+def test_rename_project_can_change_name(temp_storage):
+    temp_storage.save_project("keep", name="Keep")
+    temp_storage.rename_project("keep", "renamed", name="Brand New")
+    assert temp_storage.load_project("renamed")["name"] == "Brand New"
+
+
+def test_rename_project_to_same_id_just_updates_name(temp_storage):
+    temp_storage.save_project("same", etl_dag={"nodes": [{"id": "a"}], "edges": []}, name="Before")
+    temp_storage.rename_project("same", "same", name="After")
+    assert temp_storage.load_project("same")["name"] == "After"
+    assert temp_storage.load_project("same")["etl_dag"] == {"nodes": [{"id": "a"}], "edges": []}
+
+
+def test_rename_project_rejects_existing_target(temp_storage):
+    temp_storage.save_project("taken")
+    temp_storage.save_project("mover")
+    with pytest.raises(ValueError, match="already exists"):
+        temp_storage.rename_project("mover", "taken")
+    assert temp_storage.project_exists("mover") is True
+
+
+def test_rename_project_requires_source(temp_storage):
+    with pytest.raises(FileNotFoundError):
+        temp_storage.rename_project("ghost", "target")
+
+
+def test_delete_project_returns_false_when_missing(temp_storage):
+    assert temp_storage.delete_project("never_saved") is False

@@ -74,13 +74,17 @@ pybi --port 8080 --host 0.0.0.0
 
 ---
 
-## 🌐 Routes & Phase 0 Features
+## 🌐 Routes & Features
 
 - **`/` (Home):** Welcome dashboard & portal navigation.
 - **`/etl-editor` (ETL DAG Editor):**
   - Interactive pipeline canvas powered by Vue Flow.
+  - **Node palette:** add Data Source, Filter Rows, Select Columns, Group By and Output Table nodes.
+  - **Property editor:** double-click a node to edit its parameters, or delete it.
+  - Pipeline validation before execution (missing connections, cycles).
   - Reactive `nodes` and `edges` state synced bidirectionally between Python and Vue frontend.
-  - Event listeners for node repositioning (`node_drag_stop`), connection creation (`connect`), and pipeline modifications (`change`).
+  - Event listeners for node selection (`node_click`, `node_dbl_click`), repositioning
+    (`node_drag_stop`), connection creation (`connect`) and pipeline modifications (`change`).
 - **`/dashboard-editor` (Dashboard Editor):**
   - Drag-and-drop & resizable widget grid powered by Vue Grid Layout.
   - Supports KPI cards, bar charts, data tables, and custom cards.
@@ -90,11 +94,57 @@ pybi --port 8080 --host 0.0.0.0
 
 ---
 
+## 🗂️ Projects
+
+A project bundles an ETL pipeline and a dashboard layout. Each project is a single
+JSON file in `pybi_data/projects/<project_id>.json`, managed from the project
+selector in the ETL Editor and Dashboard Editor (switch, create, rename, delete).
+
+The storage directory is resolved in this order: explicit argument, the `DATA_DIR`
+environment variable, then `pybi_data`. In Docker `DATA_DIR=/app/data` points at the
+`./pybi_data` bind mount, so projects survive container rebuilds.
+
+`etl_dag` and `dashboard_layout` are saved independently: saving a pipeline never
+overwrites the dashboard layout and vice versa. Switching projects reloads both.
+
+Project ids are sanitized to filesystem-safe names (alphanumerics, `-` and `_` only),
+so `my project` is stored as `myproject.json`.
+
+---
+
+## 🧩 Node Reference
+
+Nodes are executed by `pybi/etl/executor.py`; the canonical templates live in
+`pybi/etl/node_factory.py`. Each node stores its parameters under `data`:
+
+| Node | Parameters | Notes |
+|---|---|---|
+| **Data Source** | `source_type` (`csv`/`parquet`/`sqlite`), `file_path`, `query` | `query` is SQLite only: a `SELECT`/`WITH` statement, a table name, or empty for the first table |
+| **Filter Rows** | `condition` | DuckDB `WHERE` expression; use single quotes for strings, e.g. `region = 'EU'` |
+| **Select Columns** | `columns` | Comma separated column names |
+| **Group By** | `group_by`, `aggregations` | `aggregations` uses `column:function` pairs, e.g. `sales:sum` |
+| **Output Table** | `table_name`, `output_type` (`duckdb`/`sqlite`), `file_path` | `duckdb` keeps the table in memory and exposes it to dashboard widgets; `sqlite` also writes a database file |
+
+Nodes are executed in topological order and each node reads **its first** input, so
+join-style multi-input nodes are not supported yet. Output tables are registered in
+the shared `default_binder` (in memory), so the Dashboard Editor sees them after you
+run a pipeline in the same server session.
+
+---
+
 ## 🧪 Testing & Verification
 
-Run the automated test suite with Playwright:
+Unit and end-to-end tests require `pytest` and `playwright` with a Chromium install:
 ```bash
-python3 tests/test_e2e.py
+pip install pytest playwright
+playwright install --with-deps chromium
+python3 -m pytest tests/ -q
+```
+
+Inside Docker, mount the tests folder (the image excludes them):
+```bash
+docker compose run --rm -v "$PWD/tests:/app/tests" pybi \
+  sh -c "pip install pytest playwright && playwright install --with-deps chromium && python -m pytest tests/ -q"
 ```
 
 ---

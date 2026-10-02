@@ -19,10 +19,12 @@ def get_free_port():
 
 @pytest.fixture(scope='module')
 def server():
-    """Start the PyBI server in a subprocess and yield its base URL."""
+    """Start the PyBI server in a subprocess with isolated storage and yield its base URL."""
     port = get_free_port()
+    data_dir = tempfile.mkdtemp()
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    env['DATA_DIR'] = data_dir
     log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     proc = subprocess.Popen(
         ['python3', '-m', 'pybi.main', '--port', str(port)],
@@ -110,7 +112,7 @@ def test_node_property_editor_rejects_invalid_condition(page):
     dialog.get_by_label('SQL condition').fill('')
     dialog.get_by_role('button', name='Add Node').click()
     expect(dialog).to_be_visible()
-    page.get_by_role('button', name='Cancel').last.click()
+    dialog.get_by_role('button', name='Cancel').click()
     expect(dialog).not_to_be_visible()
 
 

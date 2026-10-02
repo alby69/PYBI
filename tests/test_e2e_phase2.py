@@ -17,8 +17,10 @@ def get_free_port():
 
 def test_e2e_phase2_data_flow():
     port = get_free_port()
+    data_dir = tempfile.mkdtemp()
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    env['DATA_DIR'] = data_dir
     log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
     try:

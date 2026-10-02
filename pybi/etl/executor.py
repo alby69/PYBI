@@ -8,7 +8,14 @@ from typing import Any, Dict, List, Optional, Union
 import duckdb
 import polars as pl
 
-from .connectors import read_csv, read_parquet, read_sqlite, write_sqlite
+from .connectors import (
+    read_csv,
+    read_parquet,
+    read_postgres,
+    read_sqlite,
+    write_postgres,
+    write_sqlite,
+)
 
 
 @dataclass
@@ -134,9 +141,9 @@ class ETLExecutor:
 
         # Classify node type if not explicit
         if not node_type or node_type in ("input", "default", "output"):
-            if node_type == "input" or "Source" in label or "CSV" in label or "Parquet" in label or "read_" in label:
+            if node_type == "input" or any(k in label for k in ("Source", "CSV", "Parquet", "PostgreSQL", "read_")):
                 category = "DataSource"
-            elif node_type == "output" or "Output" in label or "Table" in label or "Save" in label:
+            elif node_type == "output" or any(k in label for k in ("Output", "Table", "Save")):
                 category = "Output"
             else:
                 category = "Transform"
@@ -145,8 +152,8 @@ class ETLExecutor:
 
         # 1. DataSource
         if category in ("DataSource", "source", "input_source"):
-            source_type = data.get("source_type")
-            filepath = data.get("file_path") or data.get("path") or data.get("filepath")
+            source_type = (data.get("source_type") or "").lower()
+            filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
 
             # Fallback parsing from label if parameters not explicitly set in data dict
             if not filepath and label:
@@ -155,12 +162,22 @@ class ETLExecutor:
                     filepath = match.group(1)
 
             if not source_type:
-                if filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3")):
+                if filepath and ("postgres" in filepath or "postgresql" in filepath):
+                    source_type = "postgres"
+                elif filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3")):
                     source_type = "sqlite"
                 elif filepath and filepath.endswith(".parquet"):
                     source_type = "parquet"
                 else:
                     source_type = "csv"
+
+            if source_type in ("postgres", "postgresql"):
+                uri = data.get("uri") or data.get("connection_string") or filepath
+                if not uri:
+                    raise ValueError(f"No URI provided for PostgreSQL DataSource node '{node_id}'")
+                query = data.get("query") or data.get("table_name") or data.get("table") or "SELECT 1"
+                df = read_postgres(uri, query)
+                return df, f"Loaded {len(df)} rows from POSTGRESQL '{uri}'", None
 
             if not filepath:
                 raise ValueError(f"No file path provided for DataSource node '{node_id}'")
@@ -258,17 +275,26 @@ class ETLExecutor:
             if not table_name:
                 table_name = f"output_{node_id}"
 
-            # If output destination specifies sqlite
-            output_type = data.get("output_type") or data.get("destination_type")
-            filepath = data.get("file_path") or data.get("path") or data.get("filepath")
-            if output_type == "sqlite" or (filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3"))):
+            output_type = (data.get("output_type") or data.get("destination_type") or "").lower()
+            filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
+
+            if output_type in ("postgres", "postgresql") or (filepath and "postgres" in filepath):
+                uri = data.get("uri") or data.get("connection_string") or filepath
+                if not uri:
+                    raise ValueError(f"No URI provided for PostgreSQL Output node '{node_id}'")
+                write_postgres(parent_df, uri, table_name)
+                log_msg = f"Saved {len(parent_df)} rows to PostgreSQL table '{table_name}'"
+            elif output_type == "sqlite" or (filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3"))):
                 if not filepath:
                     filepath = "output.db"
                 write_sqlite(parent_df, filepath, table_name)
+                log_msg = f"Saved {len(parent_df)} rows to SQLite table '{table_name}' at '{filepath}'"
+            else:
+                log_msg = f"Saved {len(parent_df)} rows to DuckDB table '{table_name}'"
 
             # Register with DuckDB
             self.duckdb_conn.register(table_name, parent_df)
-            return parent_df, f"Saved {len(parent_df)} rows to DuckDB table '{table_name}'", (table_name, parent_df)
+            return parent_df, log_msg, (table_name, parent_df)
 
         else:
             # Fallback pass-through

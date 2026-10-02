@@ -1,10 +1,41 @@
+# --- Secrets & local config ---
+.env
+.env.local
+!.env.example
+
+# --- Python ---
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
-.pytest_cache/
+*.so
+.venv/
+venv/
+env/
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Build output ---
 dist/
 build/
-screenshots/
+
+# --- IDE ---
+.idea/
+.vscode/
+
+# --- NiceGUI runtime ---
 .nicegui/
+screenshots/
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- App data (bind mount ./pybi_data:/app/data) ---
+pybi_data/projects/
+*.db
+*.sqlite
+*.sqlite3
+*.parquet

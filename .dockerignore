@@ -1,6 +1,5 @@
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
 .git
 .gitignore
@@ -15,3 +14,9 @@ tests/
 *.egg-info/
 dist/
 build/
+pybi_data/projects/
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+screenshots/

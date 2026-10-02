@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 import duckdb
 
-from pybi.etl.connectors import read_csv, read_parquet
+from pybi.etl.connectors import read_csv, read_parquet, read_sqlite, write_sqlite
 from pybi.etl.executor import ETLExecutor, execute_dag
 from pybi.dashboard import DataBinder
 from pybi.ui.components.chart_widget import ChartWidget
@@ -39,7 +39,18 @@ def sample_parquet_file(sample_csv_file):
         os.remove(parquet_path)
 
 
-def test_connectors(sample_csv_file, sample_parquet_file):
+@pytest.fixture
+def sample_sqlite_file(sample_csv_file):
+    """Fixture creating a temporary SQLite database file with sample data."""
+    df = read_csv(sample_csv_file)
+    db_path = sample_csv_file.replace(".csv", ".db")
+    write_sqlite(df, db_path, table_name="sales")
+    yield db_path
+    if os.path.exists(db_path):
+        os.remove(db_path)
+
+
+def test_connectors(sample_csv_file, sample_parquet_file, sample_sqlite_file):
     """Test read_csv and read_parquet connectors."""
     df_csv = read_csv(sample_csv_file)
     assert isinstance(df_csv, pl.DataFrame)
@@ -50,6 +61,11 @@ def test_connectors(sample_csv_file, sample_parquet_file):
     assert isinstance(df_parquet, pl.DataFrame)
     assert len(df_parquet) == 5
     assert df_parquet.equals(df_csv)
+
+    df_sqlite = read_sqlite(sample_sqlite_file, query_or_table="sales")
+    assert isinstance(df_sqlite, pl.DataFrame)
+    assert len(df_sqlite) == 5
+    assert set(df_sqlite.columns) == {"id", "region", "product", "sales", "quantity"}
 
 
 def test_etl_executor_csv_filter_output(sample_csv_file):
@@ -87,6 +103,42 @@ def test_etl_executor_csv_filter_output(sample_csv_file):
     output_df = result.output_tables["filtered_sales"]
     assert len(output_df) == 3
     assert set(output_df["region"].to_list()) == {"EU"}
+
+
+def test_etl_executor_sqlite_pipeline(sample_sqlite_file):
+    """Test ETL executor with SQLite source -> Filter -> SQLite Output pipeline."""
+    out_db = sample_sqlite_file.replace(".db", "_out.db")
+    dag = {
+        "nodes": [
+            {
+                "id": "sq1",
+                "data": {"node_type": "DataSource", "source_type": "sqlite", "file_path": sample_sqlite_file, "table_name": "sales"},
+            },
+            {
+                "id": "flt",
+                "data": {"node_type": "Transform", "transform_type": "filter", "condition": "sales > 500"},
+            },
+            {
+                "id": "out",
+                "data": {"node_type": "Output", "output_type": "sqlite", "file_path": out_db, "table_name": "high_sales"},
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source": "sq1", "target": "flt"},
+            {"id": "e2", "source": "flt", "target": "out"},
+        ],
+    }
+
+    try:
+        result = execute_dag(dag)
+        assert result.status == "success"
+        assert "high_sales" in result.output_tables
+
+        out_df = read_sqlite(out_db, table_name="high_sales")
+        assert len(out_df) == 2  # 1200 and 800
+    finally:
+        if os.path.exists(out_db):
+            os.remove(out_db)
 
 
 def test_etl_executor_groupby_transform(sample_csv_file):

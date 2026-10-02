@@ -1,22 +1,39 @@
 """Test for Dashboard Editor page and DashboardGrid component."""
 
+import os
 import time
+import socket
+import tempfile
 import subprocess
 import urllib.request
 from playwright.sync_api import sync_playwright
 
+def get_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
 def test_dashboard_editor_page():
-    proc = subprocess.Popen(['python3', '-m', 'pybi.main'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    port = get_free_port()
+    env = os.environ.copy()
+    env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+    proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
     try:
         server_ready = False
+        req = urllib.request.Request(f'http://127.0.0.1:{port}/dashboard-editor', headers={'User-Agent': 'Mozilla/5.0'})
         for _ in range(30):
             try:
-                res = urllib.request.urlopen('http://127.0.0.1:8080/dashboard-editor')
+                res = urllib.request.urlopen(req)
                 if res.status == 200:
                     server_ready = True
                     break
             except Exception:
                 time.sleep(0.5)
+
+        if not server_ready:
+            with open(log_f.name, 'r') as f:
+                print(f"Server Log: {f.read()}")
 
         assert server_ready, "Server failed to start within timeout"
 
@@ -27,7 +44,7 @@ def test_dashboard_editor_page():
             page.on("console", lambda msg: print(f"BROWSER CONSOLE [{msg.type}]: {msg.text}"))
             page.on("pageerror", lambda err: print(f"BROWSER UNCAUGHT EXCEPTION: {err}"))
 
-            page.goto('http://127.0.0.1:8080/dashboard-editor')
+            page.goto(f'http://127.0.0.1:{port}/dashboard-editor')
             page.wait_for_selector('.dashboard-grid-container', timeout=10000)
 
             # Wait for grid items to be rendered

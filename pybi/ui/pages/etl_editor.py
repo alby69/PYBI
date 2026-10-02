@@ -1,6 +1,7 @@
 """ETL Editor page implementation with FlowEditor component and ETLExecutor."""
 
 from nicegui import ui
+from pybi.core.storage import default_storage
 from pybi.etl.executor import execute_dag
 from pybi.ui.components.flow_editor import FlowEditor
 from pybi.dashboard.binding import default_binder
@@ -43,8 +44,12 @@ def create_etl_editor_page():
         {'id': 'e2-3', 'source': 'node_2', 'target': 'node_3', 'label': 'filtered_stream'}
     ]
 
+    project_input = ui.input('Project ID', value='default').classes('w-32')
+
     with ui.row().classes('w-full gap-4 items-center q-mb-md'):
         ui.button('Execute Pipeline', on_click=lambda: run_pipeline()).props('color=primary icon=play_arrow')
+        ui.button('Save Pipeline', on_click=lambda: save_pipeline()).props('color=positive icon=save')
+        ui.button('Load Pipeline', on_click=lambda: load_pipeline()).props('color=info icon=folder_open')
         ui.button('Reset Pipeline', on_click=lambda: reset_pipeline()).props('color=secondary icon=refresh')
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
 
@@ -110,6 +115,27 @@ def create_etl_editor_page():
         else:
             status_label.set_text(f'State: Execution Failed ({result.error})')
             ui.notify(f'Execution Error: {result.error}', type='negative')
+
+    def save_pipeline():
+        pid = project_input.value or 'default'
+        dag_data = {'nodes': flow.nodes, 'edges': flow.edges}
+        default_storage.save_etl_dag(pid, dag_data)
+        log_container.push(f'[Storage] Saved ETL DAG for project "{pid}".')
+        status_label.set_text(f'State: Pipeline saved to "{pid}"')
+        ui.notify(f'Pipeline saved for project "{pid}"', type='positive')
+
+    def load_pipeline():
+        pid = project_input.value or 'default'
+        try:
+            dag_data = default_storage.load_etl_dag(pid)
+            flow.nodes = dag_data.get('nodes', [])
+            flow.edges = dag_data.get('edges', [])
+            log_container.push(f'[Storage] Loaded ETL DAG for project "{pid}".')
+            status_label.set_text(f'State: Pipeline loaded from "{pid}"')
+            ui.notify(f'Pipeline loaded for project "{pid}"', type='positive')
+        except Exception as e:
+            log_container.push(f'[Storage Error] Could not load project "{pid}": {e}')
+            ui.notify(f'Failed to load project: {e}', type='negative')
 
     def reset_pipeline():
         flow.nodes = sample_nodes

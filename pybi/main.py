@@ -34,8 +34,7 @@ def setup_routes():
 @click.option('--host', default='0.0.0.0', help='Host to bind NiceGUI server to')
 def cli(port: int, host: str):
     setup_routes()
-    ui.run(title='PyBI - OpenBI Platform', host=host, port=port, reload=False)
+    ui.run(title='PyBI - OpenBI Platform', host=host, port=port, reload=False, show=False)
 
 if __name__ in {"__main__", "__mp_main__"}:
-    setup_routes()
-    ui.run(title='PyBI - OpenBI Platform', port=8080)
+    cli()

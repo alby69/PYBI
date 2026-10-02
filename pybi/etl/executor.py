@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 import duckdb
 import polars as pl
 
-from .connectors import read_csv, read_parquet
+from .connectors import read_csv, read_parquet, read_sqlite, write_sqlite
 
 
 @dataclass
@@ -155,7 +155,9 @@ class ETLExecutor:
                     filepath = match.group(1)
 
             if not source_type:
-                if filepath and filepath.endswith(".parquet"):
+                if filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3")):
+                    source_type = "sqlite"
+                elif filepath and filepath.endswith(".parquet"):
                     source_type = "parquet"
                 else:
                     source_type = "csv"
@@ -163,7 +165,10 @@ class ETLExecutor:
             if not filepath:
                 raise ValueError(f"No file path provided for DataSource node '{node_id}'")
 
-            if source_type == "parquet":
+            if source_type == "sqlite":
+                query_or_table = data.get("query") or data.get("table_name") or data.get("table")
+                df = read_sqlite(filepath, query_or_table=query_or_table)
+            elif source_type == "parquet":
                 df = read_parquet(filepath)
             else:
                 df = read_csv(filepath)
@@ -252,6 +257,14 @@ class ETLExecutor:
 
             if not table_name:
                 table_name = f"output_{node_id}"
+
+            # If output destination specifies sqlite
+            output_type = data.get("output_type") or data.get("destination_type")
+            filepath = data.get("file_path") or data.get("path") or data.get("filepath")
+            if output_type == "sqlite" or (filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3"))):
+                if not filepath:
+                    filepath = "output.db"
+                write_sqlite(parent_df, filepath, table_name)
 
             # Register with DuckDB
             self.duckdb_conn.register(table_name, parent_df)

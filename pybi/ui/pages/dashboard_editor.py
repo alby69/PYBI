@@ -1,11 +1,14 @@
 """Dashboard Editor page implementation using DashboardGrid and ChartWidget with DataBinder."""
 
+import copy
+
 from nicegui import ui
 import polars as pl
 from pybi.core.storage import default_storage
 from pybi.dashboard import default_binder
 from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
+from pybi.ui.components.project_manager import ProjectManager
 
 
 def create_dashboard_editor_page():
@@ -48,16 +51,30 @@ def create_dashboard_editor_page():
         }
     ]
 
-    project_input = ui.input('Project ID', value='default').classes('w-32')
+    def handle_project_switch(pid, action):
+        if action == 'delete':
+            reset_layout()
+            status_label.set_text(f'State: Switched to "{pid}"')
+            return
+        try:
+            layout_data = default_storage.load_dashboard_layout(pid)
+        except Exception:
+            layout_data = []
+        grid.layout = layout_data if layout_data else copy.deepcopy(sample_layout)
+        status_label.set_text(f'State: "{pid}" layout loaded' if layout_data else f'State: "{pid}" has no saved layout yet')
+
+    with ui.row().classes('w-full items-center gap-4 q-mb-md'):
+        project_manager = ProjectManager(value='default', on_switch=handle_project_switch)
+        ui.space()
+        status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
+
+    grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
 
     with ui.row().classes('w-full gap-4 items-center q-mb-md'):
         ui.button('Save Layout', on_click=lambda: save_layout()).props('color=positive icon=save')
         ui.button('Load Layout', on_click=lambda: load_layout()).props('color=info icon=folder_open')
         ui.button('Reset Layout', on_click=lambda: reset_layout()).props('color=secondary icon=refresh')
         ui.button('Refresh Data Source', on_click=lambda: refresh_source_data()).props('color=primary icon=autorenew')
-        status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
-
-    grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
 
     # Dynamic Chart Widget bound to DataBinder
     with ui.card().classes('w-full q-mt-md p-4'):
@@ -109,14 +126,15 @@ def create_dashboard_editor_page():
         status_label.set_text('State: Source data refreshed')
 
     def save_layout():
-        pid = project_input.value or 'default'
+        pid = project_manager.project_id
         default_storage.save_dashboard_layout(pid, grid.layout)
         log_container.push(f'[Storage] Saved Dashboard layout for project "{pid}".')
         status_label.set_text(f'State: Layout saved to "{pid}"')
         ui.notify(f'Layout saved for project "{pid}"', type='positive')
+        project_manager.refresh()
 
     def load_layout():
-        pid = project_input.value or 'default'
+        pid = project_manager.project_id
         try:
             layout_data = default_storage.load_dashboard_layout(pid)
             if layout_data:
@@ -129,6 +147,16 @@ def create_dashboard_editor_page():
             ui.notify(f'Failed to load project: {e}', type='negative')
 
     def reset_layout():
-        grid.layout = sample_layout
+        grid.layout = copy.deepcopy(sample_layout)
         log_container.push('[Reset] Layout restored to default configuration.')
         status_label.set_text('State: Layout reset completed')
+
+    if default_storage.project_exists(project_manager.project_id):
+        try:
+            saved_layout = default_storage.load_dashboard_layout(project_manager.project_id)
+        except Exception:
+            saved_layout = []
+        if saved_layout:
+            grid.layout = saved_layout
+            log_container.push(f'[Storage] Layout for "{project_manager.project_id}" restored on open.')
+            status_label.set_text(f'State: Layout loaded from "{project_manager.project_id}"')

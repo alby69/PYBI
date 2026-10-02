@@ -1,7 +1,8 @@
 """Python wrapper for Vue Flow ETL Editor component."""
 
-from typing import Dict, List, Any, Callable, Optional
+from typing import Any, Callable, Dict, List, Optional
 from nicegui import ui
+
 
 class FlowEditor(ui.element, component='flow_editor.js'):
     """FlowEditor wraps Vue Flow component for visual ETL DAG creation."""
@@ -40,8 +41,44 @@ class FlowEditor(ui.element, component='flow_editor.js'):
         self._props['edges'] = value
         self.update()
 
+    def sync_from_client(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
+        """Adopt the graph state produced in the browser without pushing props back.
+
+        Keeps the Python-side graph in sync with canvas edits (dragging, new
+        connections) so saving persists what the user actually sees, and avoids
+        echoing the state back to the component.
+
+        Args:
+            nodes: Current canvas nodes.
+            edges: Current canvas edges.
+        """
+        self._nodes = nodes or []
+        self._edges = edges or []
+
+    def find_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+        """Look up a node by id in the current graph.
+
+        Args:
+            node_id: Identifier of the node.
+
+        Returns:
+            Optional[Dict[str, Any]]: Node dictionary, or None when not found.
+        """
+        for node in self._nodes:
+            if node.get('id') == node_id:
+                return node
+        return None
+
     def on_node_drag_stop(self, handler: Callable) -> 'FlowEditor':
         self.on('node_drag_stop', handler)
+        return self
+
+    def on_node_click(self, handler: Callable) -> 'FlowEditor':
+        self.on('node_click', handler)
+        return self
+
+    def on_node_dbl_click(self, handler: Callable) -> 'FlowEditor':
+        self.on('node_dbl_click', handler)
         return self
 
     def on_connect(self, handler: Callable) -> 'FlowEditor':

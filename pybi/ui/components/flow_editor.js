@@ -10,7 +10,11 @@ export default {
                 class="vue-flow-theme-default"
                 style="height: 100%; width: 100%;"
                 @node-drag-stop="onNodeDragStop"
+                @node-click="onNodeClick"
+                @node-double-click="onNodeDoubleClick"
                 @connect="onConnect"
+                @nodes-change="emitChange"
+                @edges-change="emitChange"
             >
             </VueFlow>
         </div>
@@ -51,15 +55,38 @@ export default {
         }
     },
     methods: {
+        emitChange() {
+            this.$emit('change', {
+                nodes: this.localNodes,
+                edges: this.localEdges
+            });
+        },
+        onNodeClick(payload) {
+            const node = payload && payload.node ? payload.node : null;
+            if (!node) {
+                return;
+            }
+            this.$emit('node_click', {
+                node: node,
+                nodes: this.localNodes
+            });
+        },
+        onNodeDoubleClick(payload) {
+            const node = payload && payload.node ? payload.node : null;
+            if (!node) {
+                return;
+            }
+            this.$emit('node_dbl_click', {
+                node: node,
+                nodes: this.localNodes
+            });
+        },
         onNodeDragStop(event) {
             this.$emit('node_drag_stop', {
                 node: event.node,
                 nodes: this.localNodes
             });
-            this.$emit('change', {
-                nodes: this.localNodes,
-                edges: this.localEdges
-            });
+            this.emitChange();
         },
         onConnect(connection) {
             const newEdge = {
@@ -74,10 +101,7 @@ export default {
                 edge: newEdge,
                 edges: this.localEdges
             });
-            this.$emit('change', {
-                nodes: this.localNodes,
-                edges: this.localEdges
-            });
+            this.emitChange();
         }
     }
 };

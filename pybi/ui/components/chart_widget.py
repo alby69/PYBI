@@ -35,7 +35,7 @@ class ChartWidget:
 
         # Build initial ECharts option dict
         options = self._build_options(self._df, self.chart_type, self.x_col, self.y_cols, self.title)
-        self.echart = ui.echarts(options).classes("w-full h-full min-h-[220px]")
+        self.echart = ui.echart(options).classes("w-full h-full min-h-[220px]")
 
     def bind_to(
         self,

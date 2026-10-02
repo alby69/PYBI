@@ -1,4 +1,4 @@
-"""Test for ETL Editor page and FlowEditor Vue component."""
+"""E2E test for Phase 2 data flow: CSV loading -> ETL DAG execution -> Dashboard data binding."""
 
 import os
 import time
@@ -8,12 +8,14 @@ import subprocess
 import urllib.request
 from playwright.sync_api import sync_playwright
 
+
 def get_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
 
-def test_etl_editor_page():
+
+def test_e2e_phase2_data_flow():
     port = get_free_port()
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
@@ -21,7 +23,7 @@ def test_etl_editor_page():
     proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
     try:
         server_ready = False
-        req = urllib.request.Request(f'http://127.0.0.1:{port}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(f'http://127.0.0.1:{port}/', headers={'User-Agent': 'Mozilla/5.0'})
         for _ in range(30):
             try:
                 res = urllib.request.urlopen(req)
@@ -41,30 +43,39 @@ def test_etl_editor_page():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            page.on("console", lambda msg: print(f"BROWSER CONSOLE [{msg.type}]: {msg.text}"))
-            page.on("pageerror", lambda err: print(f"BROWSER UNCAUGHT EXCEPTION: {err}"))
-
+            # 1. Visit ETL Editor and execute pipeline
             page.goto(f'http://127.0.0.1:{port}/etl-editor')
             page.wait_for_selector('.flow-editor-container', timeout=10000)
 
-            # Wait for nodes to be rendered
-            page.wait_for_selector('.vue-flow__node', timeout=15000)
+            # Click 'Execute Pipeline' button
+            execute_btn = page.get_by_role('button', name='Execute Pipeline')
+            execute_btn.click()
 
-            nodes = page.query_selector_all('.vue-flow__node')
-            print(f"Found {len(nodes)} Vue Flow nodes rendered on canvas.")
-            assert len(nodes) >= 3, f"Expected at least 3 nodes, found {len(nodes)}"
-
+            # Wait for output table header or state label indicating success
+            page.wait_for_selector('text=Output Table: filtered_sales', timeout=10000)
             content = page.content()
-            assert 'CSV Source' in content
-            assert 'Filter Rows' in content
-            assert 'DuckDB Table' in content
+            assert 'filtered_sales' in content
+            assert 'Execution Succeeded' in content or '3 rows' in content
+
+            # 2. Navigate to Dashboard Editor and verify widgets
+            page.goto(f'http://127.0.0.1:{port}/dashboard-editor')
+            page.wait_for_selector('.dashboard-grid-container', timeout=10000)
+
+            # Verify grid items and chart container are rendered
+            page.wait_for_selector('.vgl-item', timeout=15000)
+            items = page.query_selector_all('.vgl-item')
+            assert len(items) >= 3, f"Expected at least 3 grid items, found {len(items)}"
+
+            dashboard_content = page.content()
+            assert 'Regional Sales Revenue' in dashboard_content or 'Quarterly Revenue' in dashboard_content
 
             browser.close()
-            print("ETL Editor test passed successfully!")
+            print("Phase 2 E2E Data Flow test passed successfully!")
 
     finally:
         proc.terminate()
         proc.wait()
 
+
 if __name__ == '__main__':
-    test_etl_editor_page()
+    test_e2e_phase2_data_flow()

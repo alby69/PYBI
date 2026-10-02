@@ -2,6 +2,7 @@
 
 from nicegui import ui
 import polars as pl
+from pybi.core.storage import default_storage
 from pybi.dashboard import default_binder
 from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
@@ -47,7 +48,11 @@ def create_dashboard_editor_page():
         }
     ]
 
+    project_input = ui.input('Project ID', value='default').classes('w-32')
+
     with ui.row().classes('w-full gap-4 items-center q-mb-md'):
+        ui.button('Save Layout', on_click=lambda: save_layout()).props('color=positive icon=save')
+        ui.button('Load Layout', on_click=lambda: load_layout()).props('color=info icon=folder_open')
         ui.button('Reset Layout', on_click=lambda: reset_layout()).props('color=secondary icon=refresh')
         ui.button('Refresh Data Source', on_click=lambda: refresh_source_data()).props('color=primary icon=autorenew')
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
@@ -102,6 +107,26 @@ def create_dashboard_editor_page():
         default_binder.update_source('regional_sales', updated_df)
         log_container.push('[Data Source] Updated "regional_sales" data source. Chart refreshed reactively.')
         status_label.set_text('State: Source data refreshed')
+
+    def save_layout():
+        pid = project_input.value or 'default'
+        default_storage.save_dashboard_layout(pid, grid.layout)
+        log_container.push(f'[Storage] Saved Dashboard layout for project "{pid}".')
+        status_label.set_text(f'State: Layout saved to "{pid}"')
+        ui.notify(f'Layout saved for project "{pid}"', type='positive')
+
+    def load_layout():
+        pid = project_input.value or 'default'
+        try:
+            layout_data = default_storage.load_dashboard_layout(pid)
+            if layout_data:
+                grid.layout = layout_data
+            log_container.push(f'[Storage] Loaded Dashboard layout for project "{pid}".')
+            status_label.set_text(f'State: Layout loaded from "{pid}"')
+            ui.notify(f'Layout loaded for project "{pid}"', type='positive')
+        except Exception as e:
+            log_container.push(f'[Storage Error] Could not load project "{pid}": {e}')
+            ui.notify(f'Failed to load project: {e}', type='negative')
 
     def reset_layout():
         grid.layout = sample_layout

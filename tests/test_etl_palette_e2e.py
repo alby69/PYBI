@@ -81,7 +81,7 @@ def choose_project(page, project_id):
 
 def test_palette_shows_every_node_kind(page):
     palette = page.locator('.q-card', has_text='Add Node').first
-    for label in ('Data Source', 'Filter Rows', 'Select Columns', 'Group By', 'Output Table'):
+    for label in ('Data Source', 'Filter Rows', 'Select Columns', 'Group By', 'Join Tables', 'Output Table'):
         expect(palette.get_by_role('button', name=label)).to_be_visible()
 
 

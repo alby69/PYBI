@@ -8,9 +8,10 @@ dependency so it can be imported and tested standalone.
 from typing import Any, Dict, List, Optional, Tuple
 
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
-TRANSFORM_TYPES = ("filter", "select", "groupby")
+TRANSFORM_TYPES = ("filter", "select", "groupby", "join")
 OUTPUT_TYPES = ("duckdb", "sqlite")
 AGGREGATIONS = ("sum", "mean", "min", "max", "count", "first", "last", "median", "std", "n_unique")
+JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
 
 NODE_KINDS: Dict[str, Dict[str, Any]] = {
     "DataSource": {
@@ -91,6 +92,35 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "Join": {
+        "label": "Join Tables",
+        "icon": "🔗",
+        "style": {"background": "#ffedd5", "border": "2px solid #ea580c", "borderRadius": "8px", "padding": "10px"},
+        "fields": [
+            {
+                "key": "left_on",
+                "label": "Left column",
+                "kind": "text",
+                "default": "region",
+                "help": "Key column of the first (upper) input. Comma separated for a composite key.",
+            },
+            {
+                "key": "right_on",
+                "label": "Right column",
+                "kind": "text",
+                "default": "region",
+                "help": "Key column of the second (lower) input. Must match the number of left columns.",
+            },
+            {
+                "key": "how",
+                "label": "Join type",
+                "kind": "choice",
+                "options": list(JOIN_TYPES),
+                "default": "inner",
+                "help": "inner keeps matches, left keeps all left rows, full keeps everything, cross needs no key.",
+            },
+        ],
+    },
     "Output": {
         "label": "Output Table",
         "icon": "💾",
@@ -127,10 +157,18 @@ KIND_PREFIX = {
     "Filter": "filter",
     "Select": "select",
     "GroupBy": "group",
+    "Join": "join",
     "Output": "output",
 }
 
-_TRANSFORM_KIND = {"filter": "Filter", "select": "Select", "groupby": "GroupBy", "group_by": "GroupBy"}
+_TRANSFORM_KIND = {
+    "filter": "Filter",
+    "select": "Select",
+    "groupby": "GroupBy",
+    "group_by": "GroupBy",
+    "join": "Join",
+    "inner_join": "Join",
+}
 
 
 def parse_aggregations(text: str) -> Dict[str, str]:
@@ -229,6 +267,15 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
         group_by = ", ".join(data.get("group_by", []))
         aggs = format_aggregations(data.get("aggregations"))
         return f"{icon} Group By ({group_by}) {aggs}".rstrip()
+    if kind == "Join":
+        how = (data.get("how") or "inner").lower()
+        if how == "cross":
+            return f"{icon} Join Tables (cross)"
+        left_on = data.get("left_on")
+        right_on = data.get("right_on")
+        left_label = ", ".join(left_on) if isinstance(left_on, list) else left_on
+        right_label = ", ".join(right_on) if isinstance(right_on, list) else right_on
+        return f"{icon} {how.upper()} Join ({left_label} = {right_label})"
     if kind == "Output":
         table_name = data.get("table_name", "")
         if data.get("output_type") == "sqlite":
@@ -293,6 +340,35 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
             "transform_type": "groupby",
             "group_by": group_by,
             "aggregations": aggregations or {},
+        }
+
+    if kind == "Join":
+        how = (values.get("how") or "inner").lower()
+        if how == "outer":
+            how = "full"
+        if how not in JOIN_TYPES:
+            raise ValueError(f"Unsupported join type '{how}'. Supported: {', '.join(JOIN_TYPES)}.")
+        if how == "cross":
+            return {"node_type": "Transform", "transform_type": "join", "how": "cross"}
+        left_on = values.get("left_on")
+        left_on = parse_columns(left_on) if isinstance(left_on, str) else list(left_on or [])
+        right_on = values.get("right_on")
+        right_on = parse_columns(right_on) if isinstance(right_on, str) else list(right_on or [])
+        if not left_on:
+            raise ValueError("Left column is required for a Join node.")
+        if not right_on:
+            raise ValueError("Right column is required for a Join node.")
+        if len(left_on) != len(right_on):
+            raise ValueError(
+                f"Join needs the same number of keys on both sides, got {len(left_on)} left "
+                f"and {len(right_on)} right."
+            )
+        return {
+            "node_type": "Transform",
+            "transform_type": "join",
+            "how": how,
+            "left_on": left_on,
+            "right_on": right_on,
         }
 
     if kind == "Output":
@@ -388,6 +464,15 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(group_by, list):
             group_by = ", ".join(str(c) for c in group_by)
         return {"group_by": group_by, "aggregations": format_aggregations(data.get("aggregations"))}
+    if kind == "Join":
+        left_on = data.get("left_on") or data.get("left_column") or []
+        right_on = data.get("right_on") or data.get("right_column") or []
+        if isinstance(left_on, list):
+            left_on = ", ".join(str(c) for c in left_on)
+        if isinstance(right_on, list):
+            right_on = ", ".join(str(c) for c in right_on)
+        how = (data.get("how") or "inner").lower()
+        return {"left_on": left_on, "right_on": right_on, "how": "inner" if how == "cross" else how}
     return {
         "table_name": data.get("table_name") or "",
         "output_type": data.get("output_type") or ("sqlite" if data.get("file_path") else "duckdb"),
@@ -468,5 +553,16 @@ def validate_pipeline(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) 
             problems.append(f"Node '{node_id}' (Data Source) must not have incoming connections.")
         if kind == "Output" and len(parents[node_id]) > 1:
             problems.append(f"Node '{node_id}' (Output) only reads its first input.")
+        if kind == "Join":
+            incoming = len(parents[node_id])
+            if incoming == 1:
+                problems.append(
+                    f"Node '{node_id}' (Join Tables) needs two incoming connections: "
+                    "the first one is the left table, the second one is the right table."
+                )
+            elif incoming > 2:
+                problems.append(
+                    f"Node '{node_id}' (Join Tables) supports exactly two incoming connections, got {incoming}."
+                )
 
     return problems

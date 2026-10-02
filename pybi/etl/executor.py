@@ -16,6 +16,28 @@ from .connectors import (
     write_postgres,
     write_sqlite,
 )
+from .node_factory import JOIN_TYPES
+
+
+def _as_key_list(value: Any) -> List[str]:
+    """Normalise a join key definition into a list of column names."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(part).strip() for part in value if str(part).strip()]
+    return [str(value).strip()]
+
+
+def _check_join_keys(node_id: str, df: pl.DataFrame, keys: List[str], side: str) -> None:
+    """Fail with a helpful message when a join key is missing from its input."""
+    missing = [key for key in keys if key not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Join node '{node_id}': {side} input has no column(s) {', '.join(missing)}. "
+            f"Available columns: {', '.join(df.columns) or '(none)'}."
+        )
 
 
 @dataclass
@@ -209,6 +231,8 @@ class ETLExecutor:
                     transform_type = "select"
                 elif "group" in label_lower:
                     transform_type = "groupby"
+                elif "join" in label_lower:
+                    transform_type = "join"
 
             if not transform_type:
                 transform_type = "filter"  # default transform fallback
@@ -255,6 +279,43 @@ class ETLExecutor:
                         grouped_df = parent_df.group_by(group_cols).first()
                     return grouped_df, f"Grouped by {group_cols}", None
                 return parent_df, "GroupBy columns empty, passing through data", None
+
+            elif transform_type == "join":
+                if len(parent_ids) < 2:
+                    raise ValueError(
+                        f"Join node '{node_id}' requires two parent inputs: the first connection is the "
+                        "left table, the second one is the right table."
+                    )
+                left_df = node_results[parent_ids[0]]
+                right_df = node_results[parent_ids[1]]
+                how = (data.get("how") or data.get("join_type") or "inner").lower()
+                if how == "outer":
+                    how = "full"
+                if how not in JOIN_TYPES:
+                    raise ValueError(
+                        f"Unsupported join type '{how}' on node '{node_id}'. "
+                        f"Supported: {', '.join(JOIN_TYPES)}."
+                    )
+
+                if how == "cross":
+                    joined_df = left_df.join(right_df, how="cross")
+                    return joined_df, f"Cross joined the two inputs: {len(joined_df)} rows", None
+
+                left_on = _as_key_list(data.get("left_on") or data.get("left_column") or data.get("on"))
+                right_on = _as_key_list(data.get("right_on") or data.get("right_column") or data.get("on"))
+                if not left_on or not right_on:
+                    raise ValueError(f"Join node '{node_id}' requires both a left and a right key column.")
+                if len(left_on) != len(right_on):
+                    raise ValueError(
+                        f"Join node '{node_id}' needs the same number of keys on both sides, got "
+                        f"{len(left_on)} left and {len(right_on)} right."
+                    )
+                _check_join_keys(node_id, left_df, left_on, "left")
+                _check_join_keys(node_id, right_df, right_on, "right")
+
+                joined_df = left_df.join(right_df, left_on=left_on, right_on=right_on, how=how)
+                keys = ", ".join(left_on)
+                return joined_df, f"{how.upper()} joined on {keys}: {len(joined_df)} rows", None
 
             else:
                 return parent_df, f"Unknown transform '{transform_type}', passing data through", None

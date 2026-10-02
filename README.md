@@ -79,7 +79,7 @@ pybi --port 8080 --host 0.0.0.0
 - **`/` (Home):** Welcome dashboard & portal navigation.
 - **`/etl-editor` (ETL DAG Editor):**
   - Interactive pipeline canvas powered by Vue Flow.
-  - **Node palette:** add Data Source, Filter Rows, Select Columns, Group By and Output Table nodes.
+  - **Node palette:** add Data Source, Filter Rows, Select Columns, Group By, Join Tables and Output Table nodes.
   - **Property editor:** double-click a node to edit its parameters, or delete it.
   - Pipeline validation before execution (missing connections, cycles).
   - Reactive `nodes` and `edges` state synced bidirectionally between Python and Vue frontend.
@@ -123,12 +123,14 @@ Nodes are executed by `pybi/etl/executor.py`; the canonical templates live in
 | **Filter Rows** | `condition` | DuckDB `WHERE` expression; use single quotes for strings, e.g. `region = 'EU'` |
 | **Select Columns** | `columns` | Comma separated column names |
 | **Group By** | `group_by`, `aggregations` | `aggregations` uses `column:function` pairs, e.g. `sales:sum` |
+| **Join Tables** | `left_on`, `right_on`, `how` | Needs two inputs. `how` is `inner`, `left`, `right`, `full`, `cross`, `semi` or `anti` |
 | **Output Table** | `table_name`, `output_type` (`duckdb`/`sqlite`), `file_path` | `duckdb` keeps the table in memory and exposes it to dashboard widgets; `sqlite` also writes a database file |
 
-Nodes are executed in topological order and each node reads **its first** input, so
-join-style multi-input nodes are not supported yet. Output tables are registered in
-the shared `default_binder` (in memory), so the Dashboard Editor sees them after you
-run a pipeline in the same server session.
+Nodes are executed in topological order. Each node reads its first input, except the
+**Join Tables** node, which reads exactly two: the first connection is the left table
+and the second one is the right table. Output tables are registered in the shared
+`default_binder` (in memory), so the Dashboard Editor sees them after you run a
+pipeline in the same server session.
 
 ---
 

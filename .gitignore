@@ -34,7 +34,9 @@ screenshots/
 docker-compose.override.yml
 
 # --- App data (bind mount ./pybi_data:/app/data) ---
-pybi_data/projects/
+# Intera cartella: contiene dataset reali dell'utente (CSV, db, parquet).
+# I dataset di esempio restano tracciati nella root del progetto.
+pybi_data/
 *.db
 *.sqlite
 *.sqlite3

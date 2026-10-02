@@ -18,7 +18,9 @@ dependencies = [
     "pyjwt>=2.8.0",
     "casbin>=1.30.0",
     "click>=8.1.0",
-    "pyarrow"
+    "pyarrow>=14.0.0",
+    "sqlalchemy>=2.0.0",
+    "pandas>=2.0.0"
 ]
 
 [project.scripts]

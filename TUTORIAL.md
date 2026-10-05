@@ -138,7 +138,7 @@ esistono proprio per intercettare questo prima del deploy.
 
 ## 5. I progetti
 
-Ogni progetto è un file JSON in `pybi_data/projects/<id>.json` e contiene:
+Ogni progetto ha una cartella dedicata con una sottocartella `data/` per i file dati (`pybi_data/projects/<id>/data/`) e un file JSON di configurazione in `pybi_data/projects/<id>.json` contenente:
 
 ```json
 {
@@ -163,7 +163,8 @@ Il **project manager** (home, `/`) permette di:
 - **Create New Project** — crea il progetto attivo e lo apre nell'ETL editor
 - **Switch** — cambia progetto attivo (ricarica editor e dashboard)
 - **Rename** — rinomina; **il DAG e il layout vengono conservati**
-- **Delete** — elimina definitivamente il file del progetto
+- **Delete** — elimina definitivamente il progetto e la relativa cartella `data/`
+- **Gestione File Dati Progetto** — permette di caricare file locali (CSV, Parquet, JSON, SQLite) nella cartella `data/` del progetto attivo, elencare i file caricati ed eliminarli direttamente dall'ETL Editor
 - **Open** — riapre l'ultimo progetto attivo all'avvio del server
 
 > Nota: eliminare un progetto non è reversibile. Non esiste un "cestino".

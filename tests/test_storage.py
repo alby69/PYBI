@@ -171,3 +171,44 @@ def test_rename_project_requires_source(temp_storage):
 
 def test_delete_project_returns_false_when_missing(temp_storage):
     assert temp_storage.delete_project("never_saved") is False
+
+
+def test_project_data_directory_and_file_operations(temp_storage):
+    pid = "test_data_proj"
+
+    # Test get_project_data_dir creates data directory
+    data_dir = temp_storage.get_project_data_dir(pid)
+    assert os.path.exists(data_dir)
+    assert os.path.isdir(data_dir)
+    assert data_dir.endswith(os.path.join("test_data_proj", "data"))
+
+    # Test saving project creates data directory automatically
+    temp_storage.save_project(pid, name="Data Test Project")
+    assert os.path.exists(data_dir)
+
+    # Test saving uploaded file
+    file_content = b"id,val\n1,100\n2,200\n"
+    file_path = temp_storage.save_uploaded_file(pid, "sales.csv", file_content)
+    assert os.path.exists(file_path)
+    with open(file_path, "rb") as f:
+        assert f.read() == file_content
+
+    # Test listing files
+    files = temp_storage.list_project_files(pid)
+    assert files == ["sales.csv"]
+
+    # Test deleting file
+    deleted_file = temp_storage.delete_project_file(pid, "sales.csv")
+    assert deleted_file is True
+    assert temp_storage.list_project_files(pid) == []
+    assert temp_storage.delete_project_file(pid, "sales.csv") is False
+
+    # Test deleting project cleans project directory and json
+    temp_storage.save_uploaded_file(pid, "extra.parquet", b"dummy")
+    project_dir = os.path.dirname(data_dir)
+    assert os.path.exists(project_dir)
+
+    deleted_proj = temp_storage.delete_project(pid)
+    assert deleted_proj is True
+    assert not os.path.exists(project_dir)
+    assert not temp_storage.project_exists(pid)

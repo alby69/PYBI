@@ -89,16 +89,47 @@ class FileProjectStorage(ProjectStorage):
         self.projects_dir = os.path.join(self.storage_dir, "projects")
         os.makedirs(self.projects_dir, exist_ok=True)
 
-    def _get_project_path(self, project_id: str) -> str:
-        """Get filesystem path for a project JSON file.
+    def get_project_dir(self, project_id: str) -> str:
+        """Get filesystem directory path for a project.
 
         Args:
             project_id: Identifier of the project.
 
         Returns:
-            str: Full path to the project JSON file.
+            str: Path to project directory pybi_data/projects/<project_id>/.
         """
-        return os.path.join(self.projects_dir, f"{sanitize_project_id(project_id)}.json")
+        proj_dir = os.path.join(self.projects_dir, sanitize_project_id(project_id))
+        os.makedirs(proj_dir, exist_ok=True)
+        return proj_dir
+
+    def get_project_data_dir(self, project_id: str) -> str:
+        """Get filesystem path for a project's data directory.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            str: Path to data directory pybi_data/projects/<project_id>/data/.
+        """
+        data_dir = os.path.join(self.get_project_dir(project_id), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
+
+    def _get_project_path(self, project_id: str) -> str:
+        """Get filesystem path for a project JSON configuration file.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            str: Full path to project.json or legacy <project_id>.json.
+        """
+        safe_id = sanitize_project_id(project_id)
+        folder_json = os.path.join(self.projects_dir, safe_id, "project.json")
+        legacy_json = os.path.join(self.projects_dir, f"{safe_id}.json")
+        if not os.path.exists(folder_json) and os.path.exists(legacy_json):
+            return legacy_json
+        return folder_json
 
     def save_project(
         self,
@@ -138,8 +169,21 @@ class FileProjectStorage(ProjectStorage):
             "updated_at": now_str,
         }
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        # Migrate from legacy single file if needed
+        safe_id = sanitize_project_id(project_id)
+        folder = self.get_project_dir(safe_id)
+        self.get_project_data_dir(safe_id)
+        target_filepath = os.path.join(folder, "project.json")
+
+        with open(target_filepath, "w", encoding="utf-8") as f:
             json.dump(project_data, f, indent=2)
+
+        legacy_filepath = os.path.join(self.projects_dir, f"{safe_id}.json")
+        if os.path.exists(legacy_filepath) and legacy_filepath != target_filepath:
+            try:
+                os.remove(legacy_filepath)
+            except OSError:
+                pass
 
         return project_data
 
@@ -167,14 +211,49 @@ class FileProjectStorage(ProjectStorage):
         """
         if not os.path.exists(self.projects_dir):
             return []
-        projects = []
-        for filename in os.listdir(self.projects_dir):
-            if filename.endswith(".json"):
-                projects.append(filename[:-5])
-        return sorted(projects)
+        projects = set()
+        for item in os.listdir(self.projects_dir):
+            item_path = os.path.join(self.projects_dir, item)
+            if os.path.isdir(item_path):
+                projects.add(item)
+            elif item.endswith(".json"):
+                projects.add(item[:-5])
+        return sorted(list(projects))
+
+    def save_project_data_file(self, project_id: str, filename: str, content: bytes) -> str:
+        """Save a data source file into project's data directory.
+
+        Args:
+            project_id: Identifier of project.
+            filename: Name of file (e.g., "sales.csv").
+            content: Raw byte contents.
+
+        Returns:
+            str: Full path to saved file.
+        """
+        data_dir = self.get_project_data_dir(project_id)
+        safe_name = os.path.basename(filename)
+        dest_path = os.path.join(data_dir, safe_name)
+        with open(dest_path, "wb") as f:
+            f.write(content)
+        return dest_path
+
+    def list_project_data_files(self, project_id: str) -> List[str]:
+        """List all files in project's data directory.
+
+        Args:
+            project_id: Identifier of project.
+
+        Returns:
+            List[str]: List of filenames in data directory.
+        """
+        data_dir = self.get_project_data_dir(project_id)
+        if not os.path.exists(data_dir):
+            return []
+        return sorted([f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))])
 
     def delete_project(self, project_id: str) -> bool:
-        """Delete project configuration JSON file.
+        """Delete project configuration JSON file or project directory.
 
         Args:
             project_id: Identifier of the project.
@@ -182,11 +261,19 @@ class FileProjectStorage(ProjectStorage):
         Returns:
             bool: True if deleted, False if file did not exist.
         """
-        filepath = self._get_project_path(project_id)
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            return True
-        return False
+        import shutil
+        safe_id = sanitize_project_id(project_id)
+        proj_dir = os.path.join(self.projects_dir, safe_id)
+        legacy_path = os.path.join(self.projects_dir, f"{safe_id}.json")
+
+        deleted = False
+        if os.path.exists(proj_dir) and os.path.isdir(proj_dir):
+            shutil.rmtree(proj_dir)
+            deleted = True
+        if os.path.exists(legacy_path):
+            os.remove(legacy_path)
+            deleted = True
+        return deleted
 
     def project_exists(self, project_id: str) -> bool:
         """Check whether a project has already been saved.

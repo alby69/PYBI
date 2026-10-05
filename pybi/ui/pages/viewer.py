@@ -3,15 +3,11 @@
 from nicegui import ui
 from pybi.ui.components.dashboard_grid import DashboardGrid
 
-def create_viewer_page():
-    with ui.row().classes('w-full items-center justify-between border-b pb-3 q-mb-md'):
-        with ui.column().classes('gap-0'):
-            ui.label('🚀 Executive Sales Dashboard (Published)').classes('text-2xl font-bold text-gray-900')
-            ui.label('Public read-only viewer mode for end-user consultation. Dragging and resizing are disabled.').classes('text-sm text-gray-500')
+from pybi.ui.components.navigation import render_navigation_bar
 
-        with ui.row().classes('gap-2 items-center'):
-            ui.chip('READ ONLY', color='positive', text_color='white', icon='lock').classes('font-bold text-xs')
-            ui.button('Back to Home', on_click=lambda: ui.navigate.to('/')).props('flat color=primary icon=home')
+def create_viewer_page():
+    render_navigation_bar('🚀 Executive Sales Dashboard (Published)', current_page='/viewer')
+    ui.label('Public read-only viewer mode for end-user consultation. Dragging and resizing are disabled.').classes('text-sm text-gray-500 q-mb-md')
 
     # Published dashboard layout configuration
     published_layout = [

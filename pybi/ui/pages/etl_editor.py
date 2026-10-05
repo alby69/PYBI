@@ -19,8 +19,14 @@ from pybi.etl.node_factory import (
     palette_entry,
     validate_pipeline,
 )
+from pybi.core.history import HistoryManager
+from pybi.ui.components.data_file_manager import DataFileManager
 from pybi.ui.components.flow_editor import FlowEditor
+from pybi.ui.components.navigation import render_navigation_bar
 from pybi.ui.components.project_manager import ProjectManager
+from pybi.ui.components.property_panel import PropertyPanel
+from pybi.ui.components.search_bar import SearchBar
+from pybi.ui.theme import NODE_COLORS
 from pybi.ui.table_utils import build_preview_table
 
 NEW_NODE_X = 80
@@ -28,7 +34,7 @@ NEW_NODE_Y_STEP = 90
 
 
 def create_etl_editor_page():
-    ui.label('ETL Editor - Pipeline DAG Builder').classes('text-2xl font-bold q-mb-sm')
+    render_navigation_bar('ETL Editor - Pipeline DAG Builder', current_page='/etl-editor')
     ui.label('Build a pipeline by adding nodes, editing their parameters, then connecting them left to right.').classes('text-gray-600 q-mb-md')
 
     sample_nodes = [
@@ -96,21 +102,66 @@ def create_etl_editor_page():
         ui.space()
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
 
+    history = HistoryManager()
+
+    def record_history():
+        history.push_state({'nodes': copy.deepcopy(flow.nodes), 'edges': copy.deepcopy(flow.edges)})
+
+    def apply_undo():
+        prev = history.undo()
+        if prev:
+            flow.nodes = prev.get('nodes', [])
+            flow.edges = prev.get('edges', [])
+            log_container.push('[Undo] Restored previous pipeline state.')
+            status_label.set_text('State: Undo applied')
+
+    def apply_redo():
+        nxt = history.redo()
+        if nxt:
+            flow.nodes = nxt.get('nodes', [])
+            flow.edges = nxt.get('edges', [])
+            log_container.push('[Redo] Restored next pipeline state.')
+            status_label.set_text('State: Redo applied')
+
+    def get_search_items():
+        return [{'id': n.get('id'), 'label': n.get('label'), 'kind': node_kind(n)} for n in flow.nodes]
+
+    def on_search_select(item):
+        node_id = item.get('id')
+        if node_id:
+            found = flow.find_node(node_id)
+            if found:
+                property_panel.open_node(node_kind(found), node_id, found)
+
+    search_bar = SearchBar(items_provider=get_search_items, on_select=on_search_select)
+
+    data_file_manager = DataFileManager(get_project_id=lambda: project_manager.project_id)
+
     # --- Action toolbar ----------------------------------------------------
-    with ui.row().classes('w-full gap-4 items-center q-mb-md'):
+    with ui.row().classes('w-full gap-2 items-center q-mb-md'):
         ui.button('Execute Pipeline', on_click=lambda: run_pipeline()).props('color=primary icon=play_arrow')
         ui.button('Save Pipeline', on_click=lambda: save_pipeline()).props('color=positive icon=save')
         ui.button('Load Pipeline', on_click=lambda: load_pipeline()).props('color=info icon=folder_open')
         ui.button('Reset Pipeline', on_click=lambda: reset_pipeline()).props('color=secondary icon=refresh')
+        data_file_manager.render_button()
+        ui.separator().props('vertical')
+        ui.button(icon='undo', on_click=apply_undo).props('flat dense').tooltip('Undo (Ctrl+Z)')
+        ui.button(icon='redo', on_click=apply_redo).props('flat dense').tooltip('Redo (Ctrl+Y)')
+        search_bar.render_button()
 
-    # --- Node palette ------------------------------------------------------
+    # --- Visual Node Palette Card ------------------------------------------
     with ui.card().classes('w-full q-mb-md p-3'):
-        ui.label('Add Node').classes('font-bold text-sm q-mb-xs')
-        with ui.row().classes('gap-2 items-center'):
-            for kind in NODE_KINDS:
-                _, palette_label = palette_entry(kind)
-                ui.button(palette_label, on_click=lambda k=kind: open_node_dialog(k)).props('flat dense size=sm outline')
-        ui.label('Double-click a node on the canvas to edit or delete it. Drag from the node dot to connect nodes.').classes('text-xs text-gray-500 q-mt-xs')
+        ui.label('Node Palette').classes('font-bold text-sm q-mb-xs')
+        with ui.row().classes('gap-3 flex-wrap items-center'):
+            for kind, meta in NODE_KINDS.items():
+                col_info = NODE_COLORS.get(kind, {'bg': '#f3f4f6', 'border': '#9ca3af', 'icon': '📌'})
+                with ui.card().classes('cursor-pointer hover:shadow-md transition-all').style(
+                    f"background: {col_info['bg']}; border: 2px solid {col_info['border']}; border-radius: 8px; padding: 6px 12px;"
+                ).on('click', lambda k=kind: property_panel.open_node(k)):
+                    with ui.row().classes('items-center gap-2'):
+                        ui.label(col_info['icon']).classes('text-lg')
+                        ui.label(meta['label']).classes('font-semibold text-xs')
+        ui.label('Double-click a node on canvas to edit in Property Panel. Drag connector dots to link nodes.').classes('text-xs text-gray-500 q-mt-xs')
 
     flow = FlowEditor(nodes=copy.deepcopy(sample_nodes), edges=copy.deepcopy(sample_edges)).style('height: 480px; width: 100%;')
 
@@ -260,6 +311,35 @@ def create_etl_editor_page():
             ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
             ui.button('Confirm', on_click=confirm_node_deletion).props('color=negative')
 
+    # --- Property Panel callbacks & handlers ------------------------------
+    def on_property_save(node_id, kind, values):
+        record_history()
+        if node_id is None:
+            new_id = new_node_id(kind, [n.get('id') for n in flow.nodes])
+            node = build_node(kind, values, new_id, {'x': NEW_NODE_X, 'y': 100 + NEW_NODE_Y_STEP * len(flow.nodes)})
+            flow.nodes = flow.nodes + [node]
+            log_container.push(f'[Node Added] {node["label"]}')
+        else:
+            index = next((i for i, n in enumerate(flow.nodes) if n.get('id') == node_id), None)
+            if index is not None:
+                node = build_node(kind, values, node_id, flow.nodes[index].get('position', {}))
+                updated = list(flow.nodes)
+                updated[index] = node
+                flow.nodes = updated
+                log_container.push(f'[Node Updated] {node["label"]}')
+        status_label.set_text('State: Pipeline modified, save to persist')
+
+    def on_property_delete(node_id):
+        record_history()
+        removed = next((n for n in flow.nodes if n.get('id') == node_id), None)
+        flow.nodes = [n for n in flow.nodes if n.get('id') != node_id]
+        flow.edges = [e for e in flow.edges if e.get('source') != node_id and e.get('target') != node_id]
+        if removed:
+            log_container.push(f'[Node Deleted] {node_id} "{removed.get("label", "")}"')
+        status_label.set_text('State: Pipeline modified, save to persist')
+
+    property_panel = PropertyPanel(on_save=on_property_save, on_delete=on_property_delete)
+
     # --- Canvas event handlers --------------------------------------------
     def handle_node_click(e):
         node = e.args.get('node') or {}
@@ -272,14 +352,17 @@ def create_etl_editor_page():
         if not node_id:
             return
         log_container.push(f'[Node Selected] {node_id} "{node.get("label", "")}"')
-        open_node_dialog(node_kind(node), node_id)
+        found = flow.find_node(node_id)
+        property_panel.open_node(node_kind(found) if found else 'DataSource', node_id, found)
 
     def handle_node_drag_stop(e):
+        record_history()
         node = e.args.get('node', {})
         pos = e.args.get('node', {}).get('position', {})
         log_container.push(f'[Node Moved] Node "{node.get("id", "unknown")}" stopped at x={pos.get("x")}, y={pos.get("y")}')
 
     def handle_connect(e):
+        record_history()
         conn = e.args.get('connection', {})
         log_container.push(f'[Connection Created] Connected {conn.get("source")} -> {conn.get("target")}')
         status_label.set_text(f'State: New connection {conn.get("source")} -> {conn.get("target")}')

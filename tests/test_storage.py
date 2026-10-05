@@ -117,7 +117,7 @@ def test_storage_uses_data_dir_env(monkeypatch):
         assert storage.storage_dir == tmpdir
         assert storage.projects_dir == os.path.join(tmpdir, "projects")
         storage.save_project("env_proj", name="Env Project")
-        assert os.path.exists(os.path.join(tmpdir, "projects", "env_proj.json"))
+        assert storage.project_exists("env_proj")
         assert storage.load_project("env_proj")["name"] == "Env Project"
 
 

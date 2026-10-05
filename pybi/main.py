@@ -6,13 +6,20 @@ import click
 def setup_routes():
     @ui.page('/')
     def home_page():
-        ui.label('Welcome to OpenBI / PyBI').classes('text-2xl font-bold q-mb-md')
+        from pybi.ui.onboarding import WelcomeWizard
+        wizard = WelcomeWizard()
+
+        with ui.row().classes('w-full justify-between items-center q-mb-md'):
+            ui.label('Welcome to OpenBI / PyBI').classes('text-2xl font-bold')
+            wizard.render_button()
+
         ui.label('Python Business Intelligence Platform - Phase 0 Prototype').classes('text-gray-600 q-mb-lg')
 
         with ui.row().classes('gap-4'):
             ui.button('ETL Editor', on_click=lambda: ui.navigate.to('/etl-editor')).props('color=primary icon=account_tree')
             ui.button('Dashboard Editor', on_click=lambda: ui.navigate.to('/dashboard-editor')).props('color=secondary icon=dashboard')
             ui.button('Public Viewer', on_click=lambda: ui.navigate.to('/viewer')).props('color=positive icon=visibility')
+            ui.button('Welcome Tour', on_click=wizard.open).props('outline color=info icon=auto_awesome')
 
     @ui.page('/etl-editor')
     def etl_editor_page():

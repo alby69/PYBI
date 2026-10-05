@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 import json
 import os
+import shutil
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -42,6 +43,18 @@ def resolve_storage_dir(storage_dir: Optional[str] = None) -> str:
 
 class ProjectStorage(ABC):
     """Abstract base class defining the interface for PyBI project storage backends."""
+
+    @abstractmethod
+    def get_project_data_dir(self, project_id: str) -> str:
+        """Returns and creates (if it does not exist) the 'data' directory for the project.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            str: Path to the project's data directory.
+        """
+        pass
 
     @abstractmethod
     def save_project(
@@ -100,6 +113,20 @@ class FileProjectStorage(ProjectStorage):
         """
         return os.path.join(self.projects_dir, f"{sanitize_project_id(project_id)}.json")
 
+    def get_project_data_dir(self, project_id: str) -> str:
+        """Returns and creates (if it does not exist) the 'data' directory for the project.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            str: Path to the project's data directory.
+        """
+        safe_id = sanitize_project_id(project_id)
+        data_dir = os.path.join(self.projects_dir, safe_id, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        return data_dir
+
     def save_project(
         self,
         project_id: str,
@@ -118,6 +145,7 @@ class FileProjectStorage(ProjectStorage):
         Returns:
             Dict[str, Any]: Saved project dictionary.
         """
+        self.get_project_data_dir(project_id)
         filepath = self._get_project_path(project_id)
         existing_data = {}
         if os.path.exists(filepath):
@@ -173,8 +201,60 @@ class FileProjectStorage(ProjectStorage):
                 projects.append(filename[:-5])
         return sorted(projects)
 
+    def save_uploaded_file(self, project_id: str, filename: str, content: bytes) -> str:
+        """Save an uploaded file in the project's data directory.
+
+        Args:
+            project_id: Identifier of the project.
+            filename: Original name of the uploaded file.
+            content: Raw bytes content of the file.
+
+        Returns:
+            str: Absolute path to the saved file.
+        """
+        safe_filename = os.path.basename(filename)
+        data_dir = self.get_project_data_dir(project_id)
+        file_path = os.path.join(data_dir, safe_filename)
+
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        return os.path.abspath(file_path)
+
+    def list_project_files(self, project_id: str) -> List[str]:
+        """Return list of files in the project's data directory.
+
+        Args:
+            project_id: Identifier of the project.
+
+        Returns:
+            List[str]: Filenames of files present in project's data directory.
+        """
+        data_dir = self.get_project_data_dir(project_id)
+        if not os.path.exists(data_dir):
+            return []
+        return [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+
+    def delete_project_file(self, project_id: str, filename: str) -> bool:
+        """Delete a specific file from the project's data directory.
+
+        Args:
+            project_id: Identifier of the project.
+            filename: Name of the file to delete.
+
+        Returns:
+            bool: True if deleted, False if file did not exist.
+        """
+        safe_id = sanitize_project_id(project_id)
+        safe_filename = os.path.basename(filename)
+        file_path = os.path.join(self.projects_dir, safe_id, "data", safe_filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return True
+        return False
+
     def delete_project(self, project_id: str) -> bool:
-        """Delete project configuration JSON file.
+        """Delete project configuration JSON file and its associated directory structure.
 
         Args:
             project_id: Identifier of the project.
@@ -183,10 +263,17 @@ class FileProjectStorage(ProjectStorage):
             bool: True if deleted, False if file did not exist.
         """
         filepath = self._get_project_path(project_id)
+        deleted_file = False
         if os.path.exists(filepath):
             os.remove(filepath)
-            return True
-        return False
+            deleted_file = True
+
+        safe_id = sanitize_project_id(project_id)
+        project_dir = os.path.join(self.projects_dir, safe_id)
+        if os.path.exists(project_dir):
+            shutil.rmtree(project_dir)
+
+        return deleted_file
 
     def project_exists(self, project_id: str) -> bool:
         """Check whether a project has already been saved.

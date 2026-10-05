@@ -96,9 +96,11 @@ pybi --port 8080 --host 0.0.0.0
 
 ## 🗂️ Projects
 
-A project bundles an ETL pipeline and a dashboard layout. Each project is a single
-JSON file in `pybi_data/projects/<project_id>.json`, managed from the project
-selector in the ETL Editor and Dashboard Editor (switch, create, rename, delete).
+A project bundles an ETL pipeline, a dashboard layout, and a dedicated data directory.
+Each project is stored under `pybi_data/projects/<project_id>/` with a configuration JSON
+(`pybi_data/projects/<project_id>.json`) and a `data/` subfolder (`pybi_data/projects/<project_id>/data/`),
+managed from the project selector in the ETL Editor and Dashboard Editor (switch, create, rename, delete).
+In the ETL Editor, users can upload local files (CSV, Parquet, JSON, SQLite) directly to the active project's `data/` directory, list uploaded files, and delete them.
 
 The storage directory is resolved in this order: explicit argument, the `DATA_DIR`
 environment variable, then `pybi_data`. In Docker `DATA_DIR=/app/data` points at the

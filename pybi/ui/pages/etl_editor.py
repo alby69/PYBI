@@ -81,10 +81,12 @@ def create_etl_editor_page():
             log_container.push(f'[Project] Created "{pid}" with the sample pipeline.')
             ui.notify(f'Project "{pid}" created with the sample pipeline.', type='positive')
             status_label.set_text(f'State: New project "{pid}"')
+            refresh_file_list()
             return
         if action == 'delete':
             load_pipeline(notify=False)
             status_label.set_text(f'State: Switched to "{pid}"')
+            refresh_file_list()
             return
         if default_storage.project_exists(pid):
             load_pipeline(notify=False)
@@ -94,6 +96,53 @@ def create_etl_editor_page():
             flow.nodes = nodes
             flow.edges = edges
             status_label.set_text(f'State: "{pid}" has no saved pipeline yet')
+        refresh_file_list()
+
+    # --- Gestione File Dati Progetto ----------------------------------------------------
+    def handle_upload(e):
+        pid = project_manager.project_id
+        if not pid:
+            ui.notify('Seleziona o crea prima un progetto.', type='warning')
+            return
+
+        try:
+            content = e.content.read() if hasattr(e.content, 'read') else e.content
+            file_path = default_storage.save_uploaded_file(pid, e.name, content)
+            log_container.push(f'[Upload] File "{e.name}" salvato in: {file_path}')
+            ui.notify(f'File "{e.name}" importato con successo!', type='positive')
+            refresh_file_list()
+        except Exception as err:
+            ui.notify(f'Errore durante il salvataggio: {err}', type='negative')
+
+    def refresh_file_list():
+        pid = project_manager.project_id
+        file_list_container.clear()
+        if not pid:
+            return
+        files = default_storage.list_project_files(pid)
+        with file_list_container:
+            if not files:
+                ui.label('Nessun file presente. Carica un file per iniziare.').classes('text-sm text-gray-500 italic')
+            else:
+                for f in files:
+                    with ui.row().classes('w-full items-center gap-2 q-pa-xs'):
+                        ui.icon('insert_drive_file', color='primary')
+                        ui.label(f).classes('text-sm flex-grow').style('word-break: break-all;')
+                        ui.button(
+                            icon='delete',
+                            color='negative',
+                            flat=True,
+                            size='sm',
+                            on_click=lambda fn=f: delete_file(fn)
+                        ).props('dense').tooltip('Elimina file')
+
+    def delete_file(filename: str):
+        pid = project_manager.project_id
+        if default_storage.delete_project_file(pid, filename):
+            ui.notify(f'File "{filename}" eliminato.', type='positive')
+            refresh_file_list()
+        else:
+            ui.notify(f'Impossibile eliminare "{filename}".', type='negative')
 
     # --- Project bar -------------------------------------------------------
     with ui.row().classes('w-full items-center gap-4 q-mb-md'):
@@ -146,6 +195,24 @@ def create_etl_editor_page():
         search_bar.render_button()
         render_shortcuts_help_button()
         default_theme.render_toggle_button()
+
+    # --- Gestione File Dati Progetto (UI) -----------------------------------
+    with ui.expansion('📁 Gestione File Dati Progetto', icon='folder').classes('w-full q-mb-md'):
+        ui.label('Carica file (CSV, Parquet, ecc.) direttamente nella cartella `data` del progetto corrente.').classes('text-sm text-gray-600 q-mb-xs')
+        with ui.row().classes('w-full items-center gap-4'):
+            ui.upload(
+                on_upload=handle_upload,
+                label='Seleziona File dal Computer',
+                auto_upload=True,
+                multiple=False
+            ).props('accept=.csv,.parquet,.json,.sqlite').classes('flex-grow')
+
+        with ui.column().classes('w-full q-mt-sm'):
+            ui.label('File disponibili per i nodi "Data Source" (usa il percorso relativo o assoluto):').classes('text-sm font-bold q-mb-xs')
+            file_list_container = ui.column().classes('w-full')
+
+    # Inizializza la lista al caricamento della pagina
+    refresh_file_list()
 
     # --- Visual Node Palette Card ------------------------------------------
     with ui.card().classes('w-full q-mb-md p-3'):

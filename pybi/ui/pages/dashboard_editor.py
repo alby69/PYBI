@@ -6,9 +6,15 @@ from nicegui import ui
 import polars as pl
 from pybi.core.storage import default_storage
 from pybi.dashboard import default_binder
+from pybi.core.history import HistoryManager
 from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
 from pybi.ui.components.project_manager import ProjectManager
+from pybi.export.dashboard_exporter import render_export_dialog
+from pybi.ui.components.search_bar import SearchBar
+from pybi.ui.components.widget_configurator import WidgetConfigurator, render_data_status_badge
+from pybi.ui.shortcuts import render_shortcuts_help_button
+from pybi.ui.theme import default_theme
 
 
 def create_dashboard_editor_page():
@@ -63,18 +69,67 @@ def create_dashboard_editor_page():
         grid.layout = layout_data if layout_data else copy.deepcopy(sample_layout)
         status_label.set_text(f'State: "{pid}" layout loaded' if layout_data else f'State: "{pid}" has no saved layout yet')
 
+    history = HistoryManager()
+
+    def record_history():
+        history.push_state(copy.deepcopy(grid.layout))
+
+    def apply_undo():
+        prev = history.undo()
+        if prev:
+            grid.layout = prev
+            log_container.push('[Undo] Restored previous layout state.')
+            status_label.set_text('State: Layout undo applied')
+
+    def apply_redo():
+        nxt = history.redo()
+        if nxt:
+            grid.layout = nxt
+            log_container.push('[Redo] Restored next layout state.')
+            status_label.set_text('State: Layout redo applied')
+
     with ui.row().classes('w-full items-center gap-4 q-mb-md'):
         project_manager = ProjectManager(value='default', on_switch=handle_project_switch)
         ui.space()
+        render_data_status_badge('fresh')
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
 
     grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
 
-    with ui.row().classes('w-full gap-4 items-center q-mb-md'):
+    def on_widget_configured(updated_widget):
+        record_history()
+        layout = list(grid.layout)
+        for idx, item in enumerate(layout):
+            if item.get('i') == updated_widget.get('i'):
+                layout[idx] = updated_widget
+                break
+        grid.layout = layout
+        log_container.push(f"[Config] Updated widget {updated_widget.get('i')} ({updated_widget.get('title')})")
+
+    configurator = WidgetConfigurator(on_save=on_widget_configured)
+
+    def get_search_items():
+        return [{'id': item.get('i'), 'title': item.get('title'), 'type': item.get('type')} for item in grid.layout]
+
+    def on_search_select(item):
+        found = next((w for w in grid.layout if w.get('i') == item.get('id')), None)
+        if found:
+            configurator.open_widget(found)
+
+    search_bar = SearchBar(items_provider=get_search_items, on_select=on_search_select)
+
+    with ui.row().classes('w-full gap-2 items-center q-mb-md'):
         ui.button('Save Layout', on_click=lambda: save_layout()).props('color=positive icon=save')
         ui.button('Load Layout', on_click=lambda: load_layout()).props('color=info icon=folder_open')
         ui.button('Reset Layout', on_click=lambda: reset_layout()).props('color=secondary icon=refresh')
         ui.button('Refresh Data Source', on_click=lambda: refresh_source_data()).props('color=primary icon=autorenew')
+        render_export_dialog(project_manager.project_id, grid.layout)
+        ui.separator().props('vertical')
+        ui.button(icon='undo', on_click=apply_undo).props('flat dense').tooltip('Undo (Ctrl+Z)')
+        ui.button(icon='redo', on_click=apply_redo).props('flat dense').tooltip('Redo (Ctrl+Y)')
+        search_bar.render_button()
+        render_shortcuts_help_button()
+        default_theme.render_toggle_button()
 
     # Dynamic Chart Widget bound to DataBinder
     with ui.card().classes('w-full q-mt-md p-4'):
@@ -108,6 +163,7 @@ def create_dashboard_editor_page():
         log_container.push('Dashboard Editor initialized with 3 resizable/draggable widgets.')
 
     def handle_layout_updated(e):
+        record_history()
         layout = e.args.get('layout', [])
         summary = ", ".join([f"{item.get('i')}:({item.get('x')},{item.get('y')},{item.get('w')}x{item.get('h')})" for item in layout])
         log_container.push(f'[Layout Updated] {summary}')

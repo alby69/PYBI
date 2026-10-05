@@ -7,6 +7,8 @@ dependency so it can be imported and tested standalone.
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from pybi.ui.theme import NODE_COLORS
+
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
 TRANSFORM_TYPES = ("filter", "select", "groupby", "join")
 OUTPUT_TYPES = ("duckdb", "sqlite")
@@ -16,8 +18,8 @@ JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
 NODE_KINDS: Dict[str, Dict[str, Any]] = {
     "DataSource": {
         "label": "Data Source",
-        "icon": "📄",
-        "style": {"background": "#e0f2fe", "border": "2px solid #0284c7", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["DataSource"]["icon"],
+        "style": {"background": NODE_COLORS["DataSource"]["bg"], "border": f"2px solid {NODE_COLORS['DataSource']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "source_type",
@@ -45,8 +47,8 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
     },
     "Filter": {
         "label": "Filter Rows",
-        "icon": "⚡",
-        "style": {"background": "#fef3c7", "border": "2px solid #d97706", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["Filter"]["icon"],
+        "style": {"background": NODE_COLORS["Filter"]["bg"], "border": f"2px solid {NODE_COLORS['Filter']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "condition",
@@ -59,8 +61,8 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
     },
     "Select": {
         "label": "Select Columns",
-        "icon": "🔍",
-        "style": {"background": "#ede9fe", "border": "2px solid #7c3aed", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["Select"]["icon"],
+        "style": {"background": NODE_COLORS["Select"]["bg"], "border": f"2px solid {NODE_COLORS['Select']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "columns",
@@ -73,8 +75,8 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
     },
     "GroupBy": {
         "label": "Group By",
-        "icon": "📊",
-        "style": {"background": "#fce7f3", "border": "2px solid #db2777", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["GroupBy"]["icon"],
+        "style": {"background": NODE_COLORS["GroupBy"]["bg"], "border": f"2px solid {NODE_COLORS['GroupBy']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "group_by",
@@ -94,8 +96,8 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
     },
     "Join": {
         "label": "Join Tables",
-        "icon": "🔗",
-        "style": {"background": "#ffedd5", "border": "2px solid #ea580c", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["Join"]["icon"],
+        "style": {"background": NODE_COLORS["Join"]["bg"], "border": f"2px solid {NODE_COLORS['Join']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "left_on",
@@ -123,8 +125,8 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
     },
     "Output": {
         "label": "Output Table",
-        "icon": "💾",
-        "style": {"background": "#dcfce7", "border": "2px solid #16a34a", "borderRadius": "8px", "padding": "10px"},
+        "icon": NODE_COLORS["Output"]["icon"],
+        "style": {"background": NODE_COLORS["Output"]["bg"], "border": f"2px solid {NODE_COLORS['Output']['border']}", "borderRadius": "8px", "padding": "10px"},
         "fields": [
             {
                 "key": "table_name",

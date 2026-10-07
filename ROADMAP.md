@@ -3,8 +3,9 @@
 Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaforma BI open-source 100% Python, pensata come alternativa moderna e leggera a PowerBI Desktop.
 
 ## 📌 Stato Attuale
-- **Fase Completata:** Fase 1 (Foundation & Scaffolding)
-- **Prossima Fase:** Fase 2 (Core Data Engine & Visual Binding)
+- **Fasi Completate:** Fase 1 (Foundation & Scaffolding) e Fase 2 (Core Data Engine & Visual Binding)
+- **Fase In Corso:** Fase 2.5 (Advanced Analytics & Excel-like UX)
+- **Prossima Fase:** Fase 3 (Persistence, Auth & Advanced Features)
 
 ---
 
@@ -16,16 +17,26 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 - [x] Canvas Dashboard: Integrazione di Vue Grid Layout (`grid-layout-plus`) per widget drag-and-drop.
 - [x] Routing di base: `/`, `/etl-editor`, `/dashboard-editor`, `/viewer`.
 - [x] Ponte bidirezionale Vue-Python per la sincronizzazione reattiva di nodi, bordi e layout.
+- [x] **Dockerization:** Creare un `Dockerfile` e un `docker-compose.yml` per un deployment a colpo singolo.
 
 ---
 
-## 🚀 Fase 2: Core Data Engine & Visual Binding (🔄 IN CORSO)
+## 🚀 Fase 2: Core Data Engine & Visual Binding (✅ COMPLETATA)
 **Obiettivo:** Rendere funzionale il motore di elaborazione dati e collegarlo all'interfaccia visuale.
-- [ ] **ETL Execution Engine:** Tradurre il DAG JSON di Vue Flow in un piano di esecuzione Polars/DuckDB.
-- [ ] **Data Connectors:** Implementare connettori di base (CSV, Parquet, SQLite) tramite Polars.
-- [ ] **Dashboard Data Binding:** Collegare i widget della griglia a query DuckDB o DataFrame Polars in memoria.
-- [ ] **Charting Integration:** Aggiungere un componente di grafici riutilizzabile (es. ECharts o Plotly) in NiceGUI.
-- [ ] **Testing:** Scrivere test unitari ed E2E (Playwright) per il flusso ETL e il rendering dei grafici.
+- [x] **ETL Execution Engine:** Tradurre il DAG JSON di Vue Flow in un piano di esecuzione Polars/DuckDB.
+- [x] **Data Connectors:** Implementare connettori di base (CSV, Parquet, SQLite, PostgreSQL) tramite Polars.
+- [x] **Dashboard Data Binding:** Collegare i widget della griglia a query DuckDB o DataFrame Polars in memoria.
+- [x] **Charting Integration:** Aggiungere un componente di grafici riutilizzabile in NiceGUI.
+- [x] **Testing:** Scrivere test unitari ed E2E (Playwright) per il flusso ETL e il rendering dei grafici.
+
+---
+
+## 📊 Fase 2.5: Advanced Analytics & Excel-like UX (🔄 IN CORSO)
+**Obiettivo:** Arricchire la piattaforma con strumenti avanzati di analisi ed esperienze interattive stile foglio di calcolo.
+- [ ] **Pivot Table Widget:** Implementazione del widget Pivot Table interattivo con drag & drop di campi (righe, colonne, valori).
+- [ ] **Multiple Aggregations:** Supporto a funzioni di aggregazione dinamiche (Somma, Conteggio, Media, Min, Max).
+- [ ] **CSV Export:** Esportazione dei dati pivotati in formato CSV.
+- [ ] **Server-side Fallback:** Aggregazione dinamica lato server con DuckDB per dataset di grandi dimensioni (>50k righe).
 
 ---
 
@@ -40,7 +51,6 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 
 ## 🏆 Fase 4: Production Readiness & Polish
 **Obiettivo:** Preparare il progetto per il rilascio pubblico e l'uso in produzione.
-- [ ] **Dockerization:** Creare un `Dockerfile` e un `docker-compose.yml` per un deployment a colpo singolo.
 - [ ] **Performance Optimization:** Ottimizzare le query DuckDB e la gestione della memoria per dataset di medie dimensioni (>1M righe).
 - [ ] **Documentation:** Scrivere documentazione completa (README, guide per gli sviluppatori, tutorial per gli utenti finali).
 - [ ] **CI/CD Pipeline:** Configurare GitHub Actions per linting, testing automatico e build dei container.
@@ -48,7 +58,7 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 ---
 
 ## 🤖 Linee Guida per l'Interazione con Google Jules
-1. **Assegnazione Task:** Copiare il prompt specifico della fase (es. Fase 2) come nuova GitHub Issue o task diretto per Jules.
-2. **Revisione:** Verificare che Jules crei commit atomici e separati per logica (es. un commit per i connettori, uno per l'executor).
+1. **Assegnazione Task:** Copiare il prompt specifico della fase come nuova GitHub Issue o task diretto per Jules.
+2. **Revisione:** Verificare che Jules crei commit atomici e separati per logica.
 3. **Validazione:** Eseguire sempre `python3 -m pytest tests/` e `python3 -m pybi.main` dopo ogni intervento di Jules per garantire la non-regressione.
-4. **Gestione Context:** Se un task risulta troppo ampio per un singolo run di Jules, suddividerlo in sotto-task sequenziali (es. "Implementa solo i connettori CSV/Parquet" prima di "Implementa l'executor completo").
+4. **Gestione Context:** Se un task risulta troppo ampio per un singolo run di Jules, suddividerlo in sotto-task sequenziali.

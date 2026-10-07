@@ -24,6 +24,7 @@ class WidgetConfigurator:
         self.drawer.style('width: 380px;')
         self.current_widget: Dict[str, Any] = {}
         self._is_new = False
+        self._sources: List[str] = ['regional_sales']
 
     def open_widget(self, widget: Dict[str, Any], available_sources: Optional[List[str]] = None):
         """Open configurator drawer to edit an existing widget item."""
@@ -48,6 +49,7 @@ class WidgetConfigurator:
 
     def _render(self, available_sources: Optional[List[str]] = None):
         sources = available_sources or ['regional_sales']
+        self._sources = sources
         header = 'Add Widget' if self._is_new else f"Configure: {self.current_widget.get('title', 'Widget')}"
 
         self.drawer.clear()
@@ -62,6 +64,7 @@ class WidgetConfigurator:
                 label='Widget Type',
                 value=w_type
             ).classes('w-full mb-3')
+            type_select.on_value_change(lambda args, t=title_inp: self._on_type_change(args.value, t.value))
 
             source_select = ui.select(
                 options=sources,
@@ -100,6 +103,12 @@ class WidgetConfigurator:
     def close(self):
         """Close configurator drawer."""
         self.drawer.set_value(False)
+
+    def _on_type_change(self, new_type: str, title: str) -> None:
+        """Re-render the drawer so type-specific inputs follow the selected type."""
+        self.current_widget['title'] = title
+        self.current_widget['type'] = new_type
+        self._render(self._sources)
 
     def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style):
         self.current_widget['title'] = title

@@ -10,13 +10,8 @@ from pybi.etl.executor import execute_dag
 from pybi.etl.node_factory import (
     NODE_KINDS,
     build_node,
-    build_node_data,
-    default_values,
-    fields_for,
     new_node_id,
     node_kind,
-    node_values,
-    palette_entry,
     validate_pipeline,
 )
 from pybi.core.history import HistoryManager
@@ -69,9 +64,6 @@ def create_etl_editor_page():
 
     def _sample_graph():
         return copy.deepcopy(sample_nodes), copy.deepcopy(sample_edges)
-
-    editing = {'node_id': None}
-    rendering = {'form': False}
 
     def handle_project_switch(pid, action):
         if action == 'create':
@@ -216,16 +208,12 @@ def create_etl_editor_page():
 
     # --- Visual Node Palette Card ------------------------------------------
     with ui.card().classes('w-full q-mb-md p-3'):
-        ui.label('Node Palette').classes('font-bold text-sm q-mb-xs')
+        ui.label('Add Node').classes('font-bold text-sm q-mb-xs')
         with ui.row().classes('gap-3 flex-wrap items-center'):
             for kind, meta in NODE_KINDS.items():
                 col_info = NODE_COLORS.get(kind, {'bg': '#f3f4f6', 'border': '#9ca3af', 'icon': '📌'})
-                with ui.card().classes('cursor-pointer hover:shadow-md transition-all').style(
-                    f"background: {col_info['bg']}; border: 2px solid {col_info['border']}; border-radius: 8px; padding: 6px 12px;"
-                ).on('click', lambda k=kind: property_panel.open_node(k)):
-                    with ui.row().classes('items-center gap-2'):
-                        ui.label(col_info['icon']).classes('text-lg')
-                        ui.label(meta['label']).classes('font-semibold text-xs')
+                label_text = f"{col_info['icon']} {meta['label']}"
+                ui.button(label_text, on_click=lambda k=kind: property_panel.open_node(k)).props('dense flat').classes('q-px-sm')
         ui.label('Double-click a node on canvas to edit in Property Panel. Drag connector dots to link nodes.').classes('text-xs text-gray-500 q-mt-xs')
 
     flow = FlowEditor(nodes=copy.deepcopy(sample_nodes), edges=copy.deepcopy(sample_edges)).style('height: 480px; width: 100%;')
@@ -236,145 +224,6 @@ def create_etl_editor_page():
         log_container = ui.log(max_lines=20).classes('w-full h-32 bg-gray-900 text-green-400 font-mono text-xs q-mb-md')
         log_container.push('ETL Flow Editor initialized. Use the palette to add nodes.')
         table_container = ui.column().classes('w-full overflow-x-auto')
-
-    # --- Node property editor logic ----------------------------------------
-    # Functions are declared before the dialogs that wire them up, because they
-    # are passed as callback arguments (evaluated at build time, not on click).
-    confirmed = {'node_id': None}
-
-    def confirm_node_deletion():
-        node_id = confirmed['node_id']
-        confirmed['node_id'] = None
-        confirm_dialog.close()
-        if node_id is None:
-            return
-        removed = next((node for node in flow.nodes if node.get('id') == node_id), None)
-        flow.nodes = [node for node in flow.nodes if node.get('id') != node_id]
-        flow.edges = [
-            edge for edge in flow.edges
-            if edge.get('source') != node_id and edge.get('target') != node_id
-        ]
-        if removed:
-            log_container.push(f'[Node Deleted] {node_id} "{removed.get("label", "")}"')
-        status_label.set_text('State: Pipeline modified, save to persist')
-        node_dialog.close()
-
-    # --- Node form rendering ----------------------------------------------
-    def render_node_form(kind, values):
-        rendering['form'] = True
-        try:
-            node_field_inputs.clear()
-            node_form_container.clear()
-            with node_form_container:
-                for field in fields_for(kind):
-                    key = field['key']
-                    current = values.get(key, field.get('default', ''))
-                    if field['kind'] == 'choice':
-                        element = ui.select(field['options'], label=field['label'], value=current)
-                    else:
-                        element = ui.input(field['label'], value=current)
-                    element.classes('w-full')
-                    if field.get('help'):
-                        element.tooltip(field['help'])
-                    node_field_inputs[key] = element
-        finally:
-            rendering['form'] = False
-
-    def on_node_kind_changed(e):
-        if rendering['form']:
-            return
-        kind = e.value or 'DataSource'
-        if editing['node_id'] is None:
-            node_title.text = f"New {NODE_KINDS[kind]['label']} node"
-            node_save_button.text = 'Add Node'
-        render_node_form(kind, default_values(kind))
-
-    def open_node_dialog(kind, node_id=None):
-        editing['node_id'] = node_id
-        if node_id is None:
-            node_title.text = f"New {NODE_KINDS[kind]['label']} node"
-            node_save_button.text = 'Add Node'
-            node_delete_button.set_enabled(False)
-            render_node_form(kind, default_values(kind))
-        else:
-            node = flow.find_node(node_id)
-            if node is None:
-                return
-            node_title.text = f"Edit node {node_id}"
-            node_save_button.text = 'Save Node'
-            node_delete_button.set_enabled(True)
-            render_node_form(kind, node_values(node))
-        rendering['form'] = True
-        try:
-            node_kind_select.value = kind
-        finally:
-            rendering['form'] = False
-        node_dialog.open()
-
-    def collect_form_values():
-        return {key: (element.value or '') for key, element in node_field_inputs.items()}
-
-    def save_node():
-        kind = node_kind_select.value or 'DataSource'
-        try:
-            data = build_node_data(kind, collect_form_values())
-        except ValueError as error:
-            ui.notify(str(error), type='negative')
-            return
-
-        node_id = editing['node_id']
-        if node_id is None:
-            new_id = new_node_id(kind, [node.get('id') for node in flow.nodes])
-            node = build_node(
-                kind,
-                collect_form_values(),
-                new_id,
-                {'x': NEW_NODE_X, 'y': 100 + NEW_NODE_Y_STEP * len(flow.nodes)},
-            )
-            flow.nodes = flow.nodes + [node]
-            log_container.push(f'[Node Added] {node["label"]}')
-        else:
-            index = next((i for i, node in enumerate(flow.nodes) if node.get('id') == node_id), None)
-            if index is None:
-                ui.notify(f'Node "{node_id}" is no longer in the pipeline.', type='warning')
-                node_dialog.close()
-                return
-            node = build_node(kind, collect_form_values(), node_id, flow.nodes[index].get('position', {}))
-            updated = list(flow.nodes)
-            updated[index] = node
-            flow.nodes = updated
-            log_container.push(f'[Node Updated] {node["label"]}')
-
-        status_label.set_text('State: Pipeline modified, save to persist')
-        node_dialog.close()
-
-    def delete_node():
-        node_id = editing['node_id']
-        if node_id is None:
-            return
-        confirmed['node_id'] = node_id
-        confirm_message.text = f'Delete node "{node_id}" and its connections?'
-        confirm_dialog.open()
-
-    # --- Node property editor dialogs --------------------------------------
-    with ui.dialog() as node_dialog, ui.card().classes('w-[420px] gap-2'):
-        node_title = ui.label().classes('text-lg font-bold')
-        node_kind_select = (
-            ui.select(list(NODE_KINDS), label='Node type', on_change=on_node_kind_changed)
-            .classes('w-full')
-        )
-        node_form_container = ui.column().classes('w-full gap-2')
-        node_field_inputs = {}
-        with ui.row().classes('w-full justify-end gap-2'):
-            node_delete_button = ui.button('Delete Node', on_click=lambda: delete_node()).props('color=negative outline')
-            ui.button('Cancel', on_click=node_dialog.close).props('flat')
-            node_save_button = ui.button('Add Node', on_click=lambda: save_node()).props('color=primary')
-
-    with ui.dialog() as confirm_dialog, ui.card().classes('w-96 gap-2'):
-        confirm_message = ui.label().classes('text-sm')
-        with ui.row().classes('w-full justify-end gap-2'):
-            ui.button('Cancel', on_click=confirm_dialog.close).props('flat')
-            ui.button('Confirm', on_click=confirm_node_deletion).props('color=negative')
 
     # --- Property Panel callbacks & handlers ------------------------------
     def on_property_save(node_id, kind, values):

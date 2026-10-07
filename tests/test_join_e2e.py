@@ -62,12 +62,12 @@ def page(server):
         browser.close()
 
 
-def open_join_dialog(page):
-    """Open the Join node dialog from the palette."""
+def open_join_panel(page):
+    """Open the Join node form in the property panel drawer."""
     page.get_by_role('button', name='🔗 Join Tables').first.click()
-    dialog = page.locator('.q-dialog').filter(has_text='Left column')
-    expect(dialog).to_be_visible()
-    return dialog
+    panel = page.locator('.q-drawer', has_text='Left column')
+    expect(panel).to_be_visible()
+    return panel
 
 
 def test_palette_offers_join_tables(page):
@@ -77,46 +77,46 @@ def test_palette_offers_join_tables(page):
 
 
 def test_join_dialog_exposes_key_and_type_fields(page):
-    """The Join dialog offers both key columns and the join type."""
-    dialog = open_join_dialog(page)
+    """The Join form offers both key columns and the join type."""
+    panel = open_join_panel(page)
 
-    expect(dialog.get_by_label('Left column')).to_be_visible()
-    expect(dialog.get_by_label('Right column')).to_be_visible()
-    expect(dialog.get_by_label('Join type')).to_be_visible()
+    expect(panel.get_by_label('Left column')).to_be_visible()
+    expect(panel.get_by_label('Right column')).to_be_visible()
+    expect(panel.get_by_label('Join type')).to_be_visible()
 
-    dialog.get_by_role('button', name='Cancel').click()
-    expect(dialog).not_to_be_visible()
+    panel.get_by_role('button', name='Close').click()
+    expect(panel).not_to_be_visible()
 
 
 def test_add_join_node_from_palette(page):
-    """A filled Join dialog adds a node labelled with both keys and the join type."""
+    """A filled Join form adds a node labelled with both keys and the join type."""
     before = page.locator('.vue-flow__node').count()
-    dialog = open_join_dialog(page)
+    panel = open_join_panel(page)
 
-    dialog.get_by_label('Left column').fill('region')
-    dialog.get_by_label('Right column').fill('region_code')
-    dialog.get_by_label('Join type').click()
+    panel.get_by_label('Left column').fill('region')
+    panel.get_by_label('Right column').fill('region_code')
+    panel.get_by_label('Join type').click()
     page.get_by_role('option', name='left').click()
-    dialog.get_by_role('button', name='Add Node').click()
+    panel.get_by_role('button', name='Apply').click()
 
-    expect(dialog).not_to_be_visible()
+    expect(panel).not_to_be_visible()
     expect(page.locator('.vue-flow__node')).to_have_count(before + 1)
     expect(page.locator('.vue-flow__node', has_text='LEFT Join (region = region_code)')).to_have_count(1)
 
 
 def test_join_dialog_rejects_missing_key(page):
     """A Join node without a right key cannot be created."""
-    dialog = open_join_dialog(page)
+    panel = open_join_panel(page)
 
-    dialog.get_by_label('Left column').fill('region')
-    dialog.get_by_label('Right column').fill('')
-    dialog.get_by_role('button', name='Add Node').click()
+    panel.get_by_label('Left column').fill('region')
+    panel.get_by_label('Right column').fill('')
+    panel.get_by_role('button', name='Apply').click()
 
-    expect(dialog).to_be_visible()
+    expect(panel).to_be_visible()
     expect(page.locator('.q-notification', has_text='Right column is required')).to_be_visible()
 
-    dialog.get_by_role('button', name='Cancel').click()
-    expect(dialog).not_to_be_visible()
+    panel.get_by_role('button', name='Close').click()
+    expect(panel).not_to_be_visible()
 
 
 def test_join_node_parameters_survive_a_reload(page):

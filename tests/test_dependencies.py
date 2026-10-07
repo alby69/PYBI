@@ -19,7 +19,7 @@ STDLIB_AND_LOCAL = {
     'abc', 'ast', 'asyncio', 'collections', 'contextlib', 'copy', 'csv', 'dataclasses',
     'datetime', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
     'math', 'os', 'pathlib', 'random', 're', 'socket', 'sqlite3', 'string', 'subprocess',
-    'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
+    'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
     'pybi',
 }
 

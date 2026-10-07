@@ -17,6 +17,8 @@ def test_etl_editor_page():
     port = get_free_port()
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    # Isolate storage: the developer machine may hold projects with an empty pipeline.
+    env['DATA_DIR'] = tempfile.mkdtemp()
     log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
     try:

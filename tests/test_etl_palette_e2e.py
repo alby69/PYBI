@@ -67,6 +67,11 @@ def node_filter(page, text):
     return page.locator('.vue-flow__node', has_text=text)
 
 
+def property_panel(page, marker):
+    """Locate the right drawer property panel whose form contains the given marker."""
+    return page.locator('.q-drawer', has_text=marker)
+
+
 def selected_project(page):
     """Read the project id currently shown in the project selector."""
     return page.locator('.q-select').first.locator('input').input_value()
@@ -95,25 +100,26 @@ def test_add_filter_node_from_palette(page):
     before = page.locator('.vue-flow__node').count()
     page.get_by_role('button', name='⚡ Filter Rows').first.click()
 
-    dialog = page.locator('.q-dialog').filter(has_text='SQL condition')
-    expect(dialog).to_be_visible()
+    panel = property_panel(page, 'SQL condition')
+    expect(panel).to_be_visible()
 
-    dialog.get_by_label('SQL condition').fill('sales > 300')
-    dialog.get_by_role('button', name='Add Node').click()
+    panel.get_by_label('SQL condition').fill('sales > 300')
+    panel.get_by_role('button', name='Apply').click()
 
-    expect(dialog).not_to_be_visible()
+    expect(panel).not_to_be_visible()
     expect(page.locator('.vue-flow__node')).to_have_count(before + 1)
     expect(node_filter(page, 'sales > 300')).to_have_count(1)
 
 
 def test_node_property_editor_rejects_invalid_condition(page):
     page.get_by_role('button', name='⚡ Filter Rows').first.click()
-    dialog = page.locator('.q-dialog').filter(has_text='SQL condition')
-    dialog.get_by_label('SQL condition').fill('')
-    dialog.get_by_role('button', name='Add Node').click()
-    expect(dialog).to_be_visible()
-    dialog.get_by_role('button', name='Cancel').click()
-    expect(dialog).not_to_be_visible()
+    panel = property_panel(page, 'SQL condition')
+    panel.get_by_label('SQL condition').fill('')
+    panel.get_by_role('button', name='Apply').click()
+    expect(panel).to_be_visible()
+    expect(page.locator('.q-notification', has_text='SQL condition is required')).to_be_visible()
+    panel.get_by_role('button', name='Close').click()
+    expect(panel).not_to_be_visible()
 
 
 def test_validation_blocks_disconnected_pipeline(page):

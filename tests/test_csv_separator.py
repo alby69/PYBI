@@ -2,6 +2,7 @@
 
 from pybi.etl.connectors.csv import detect_csv_separator, read_csv
 from pybi.etl.executor import execute_dag
+import polars as pl
 
 
 def _write(tmp_path, name, content):
@@ -100,3 +101,38 @@ def test_execute_dag_uses_explicit_separator_when_configured(tmp_path):
     assert result.status == "success"
     assert set(result.output_tables["pipes"].columns) == {"a", "b"}
     assert result.output_tables["pipes"].height == 2
+
+
+def test_read_csv_normalises_comma_decimals_after_parse_failure(tmp_path):
+    path = _write(
+        tmp_path,
+        "prezzi.csv",
+        "Prodotto;Prezzo\nGPL;330\nGPL;362,14\nAZOTO;21,84\n",
+    )
+    df = read_csv(path)
+
+    assert list(df.columns) == ["Prodotto", "Prezzo"]
+    assert df["Prezzo"].dtype == pl.Float64
+    assert df["Prezzo"].to_list() == [330.0, 362.14, 21.84]
+
+
+def test_read_csv_keeps_free_text_with_commas(tmp_path):
+    path = _write(
+        tmp_path,
+        "clienti.csv",
+        "Nome;Citta\n\"Smith, John\";Roma\nAnna;Bari\n",
+    )
+    df = read_csv(path)
+
+    assert df["Nome"].dtype == pl.Utf8
+    assert df["Nome"].to_list() == ["Smith, John", "Anna"]
+    assert df["Citta"].dtype == pl.Utf8
+
+
+def test_normalisation_handles_thousands_and_decimal_comma(tmp_path):
+    path = _write(tmp_path, "importi.csv", "Importo;Codice\n1.234,56;A\n980;B\n")
+    df = read_csv(path)
+
+    assert df["Importo"].dtype == pl.Float64
+    assert df["Importo"].to_list() == [1234.56, 980.0]
+    assert df["Codice"].to_list() == ["A", "B"]

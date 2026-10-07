@@ -1,6 +1,6 @@
 """Property panel component using a side drawer for node configuration."""
 
-from typing import Callable, Dict, Any, Optional
+from typing import Callable, Dict, Any, List, Optional
 from nicegui import ui
 
 from pybi.etl.node_factory import (
@@ -16,9 +16,15 @@ from pybi.etl.node_factory import (
 class PropertyPanel:
     """Side drawer panel for editing node parameters without blocking canvas modals."""
 
-    def __init__(self, on_save: Callable[[str, str, Dict[str, Any]], None], on_delete: Callable[[str], None]):
+    def __init__(
+        self,
+        on_save: Callable[[str, str, Dict[str, Any]], None],
+        on_delete: Callable[[str], None],
+        file_options: Optional[Callable[[], List[str]]] = None,
+    ):
         self.on_save = on_save
         self.on_delete = on_delete
+        self.file_options = file_options
         self.drawer = ui.right_drawer(value=False).classes('bg-gray-50 border-l border-gray-200 p-4')
         self.drawer.style('width: 380px;')
         self.editing_node_id: Optional[str] = None
@@ -49,6 +55,17 @@ class PropertyPanel:
                 val = values.get(key, field.get('default', ''))
                 if field['kind'] == 'choice':
                     inp = ui.select(field['options'], label=field['label'], value=val)
+                elif field['kind'] == 'file' and self.file_options is not None:
+                    options = list(self.file_options())
+                    if val and val not in options:
+                        options = [val] + options
+                    inp = ui.select(
+                        options,
+                        label=field['label'],
+                        value=val,
+                        with_input=True,
+                        new_value_mode='add-unique',
+                    )
                 else:
                     inp = ui.input(field['label'], value=val)
                 inp.classes('w-full mb-2')

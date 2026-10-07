@@ -91,17 +91,17 @@ def create_etl_editor_page():
         refresh_file_list()
 
     # --- Gestione File Dati Progetto ----------------------------------------------------
-    def handle_upload(e):
+    async def handle_upload(e):
         pid = project_manager.project_id
         if not pid:
             ui.notify('Seleziona o crea prima un progetto.', type='warning')
             return
 
         try:
-            content = e.content.read() if hasattr(e.content, 'read') else e.content
-            file_path = default_storage.save_uploaded_file(pid, e.name, content)
-            log_container.push(f'[Upload] File "{e.name}" salvato in: {file_path}')
-            ui.notify(f'File "{e.name}" importato con successo!', type='positive')
+            content = await e.file.read()
+            file_path = default_storage.save_uploaded_file(pid, e.file.name, content)
+            log_container.push(f'[Upload] File "{e.file.name}" salvato in: {file_path}')
+            ui.notify(f'File "{e.file.name}" importato con successo!', type='positive')
             refresh_file_list()
         except Exception as err:
             ui.notify(f'Errore durante il salvataggio: {err}', type='negative')
@@ -197,7 +197,7 @@ def create_etl_editor_page():
             ).props('accept=.csv,.parquet,.json,.sqlite').classes('flex-grow')
 
         with ui.column().classes('w-full q-mt-sm'):
-            ui.label('File disponibili per i nodi "Data Source" (usa il percorso relativo o assoluto):').classes('text-sm font-bold q-mb-xs')
+            ui.label('File caricati: compaiono nel menu "Data file" del nodo Data Source (senza scrivere percorsi).').classes('text-sm font-bold q-mb-xs')
             file_list_container = ui.column().classes('w-full')
 
     # Inizializza la lista al caricamento della pagina
@@ -249,7 +249,11 @@ def create_etl_editor_page():
             log_container.push(f'[Node Deleted] {node_id} "{removed.get("label", "")}"')
         status_label.set_text('State: Pipeline modified, save to persist')
 
-    property_panel = PropertyPanel(on_save=on_property_save, on_delete=on_property_delete)
+    property_panel = PropertyPanel(
+        on_save=on_property_save,
+        on_delete=on_property_delete,
+        file_options=lambda: default_storage.list_project_files(project_manager.project_id),
+    )
 
     # --- Canvas event handlers --------------------------------------------
     def handle_node_click(e):
@@ -310,7 +314,11 @@ def create_etl_editor_page():
         status_label.set_text('State: Executing DAG...')
 
         dag_data = {'nodes': flow.nodes, 'edges': flow.edges}
-        result = execute_dag(dag_data, duckdb_conn=default_binder.duckdb_conn)
+        try:
+            base_dir = default_storage.get_project_data_dir(project_manager.project_id)
+        except Exception:
+            base_dir = None
+        result = execute_dag(dag_data, duckdb_conn=default_binder.duckdb_conn, base_dir=base_dir)
 
         for log in result.logs:
             log_container.push(f'[Engine Log] {log}')

@@ -31,10 +31,10 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
             },
             {
                 "key": "file_path",
-                "label": "File path",
-                "kind": "text",
+                "label": "Data file",
+                "kind": "file",
                 "default": "sales_data.csv",
-                "help": "Path relative to the app working directory, or absolute.",
+                "help": "Pick a file uploaded in this project's data folder, or type a path (absolute, or relative to the app folder).",
             },
             {
                 "key": "query",

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import graphlib
+import os
 import re
 from typing import Any, Dict, List, Optional, Union
 
@@ -17,6 +18,40 @@ from .connectors import (
     write_sqlite,
 )
 from .node_factory import JOIN_TYPES
+
+
+def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
+    """Resolve a data file path against the project data folder.
+
+    Resolution order:
+
+    1. An existing absolute path, as given.
+    2. ``base_dir/<filepath>``, then ``base_dir/<basename>`` when either exists,
+       so a bare file name picked from the project data folder always resolves.
+    3. The path as given (absolute, or relative to the process working directory).
+
+    Returns the original path when nothing matches, so error messages keep the
+    value the user typed.
+
+    Args:
+        filepath: Path or file name from the DataSource node.
+        base_dir: Project data directory (see ``FileProjectStorage.get_project_data_dir``).
+
+    Returns:
+        The resolved path to read from.
+    """
+    if not filepath or not base_dir:
+        return filepath
+    if os.path.isabs(filepath) and os.path.exists(filepath):
+        return filepath
+    candidates = []
+    if not os.path.isabs(filepath):
+        candidates.append(os.path.join(base_dir, filepath))
+    candidates.append(os.path.join(base_dir, os.path.basename(filepath)))
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return filepath
 
 
 def _as_key_list(value: Any) -> List[str]:
@@ -54,13 +89,19 @@ class ETLResult:
 class ETLExecutor:
     """ETLExecutor parses a visual Vue Flow DAG (nodes & edges) and executes it using Polars and DuckDB."""
 
-    def __init__(self, duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> None:
+    def __init__(
+        self,
+        duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
+        base_dir: Optional[str] = None,
+    ) -> None:
         """Initialize ETLExecutor.
 
         Args:
             duckdb_conn: Optional DuckDB connection instance.
+            base_dir: Project data directory used to resolve DataSource file paths.
         """
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
+        self.base_dir = base_dir
 
     def execute(self, dag: Dict[str, Any]) -> ETLResult:
         """Execute a DAG defined by nodes and edges.
@@ -203,6 +244,8 @@ class ETLExecutor:
 
             if not filepath:
                 raise ValueError(f"No file path provided for DataSource node '{node_id}'")
+
+            filepath = resolve_data_path(filepath, self.base_dir)
 
             if source_type == "sqlite":
                 query_or_table = data.get("query") or data.get("table_name") or data.get("table")
@@ -365,15 +408,20 @@ class ETLExecutor:
                 return pl.DataFrame(), f"Unrecognized node category '{category}' with no parents", None
 
 
-def execute_dag(dag: Dict[str, Any], duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> ETLResult:
+def execute_dag(
+    dag: Dict[str, Any],
+    duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
+    base_dir: Optional[str] = None,
+) -> ETLResult:
     """Convenience function to execute an ETL DAG.
 
     Args:
         dag: Dict representing the DAG (nodes and edges).
         duckdb_conn: Optional DuckDB connection.
+        base_dir: Project data directory used to resolve DataSource file paths.
 
     Returns:
         ETLResult instance.
     """
-    executor = ETLExecutor(duckdb_conn=duckdb_conn)
+    executor = ETLExecutor(duckdb_conn=duckdb_conn, base_dir=base_dir)
     return executor.execute(dag)

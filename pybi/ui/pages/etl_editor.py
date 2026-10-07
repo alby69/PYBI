@@ -19,6 +19,7 @@ from pybi.ui.components.flow_editor import FlowEditor
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.property_panel import PropertyPanel
 from pybi.ui.components.search_bar import SearchBar
+from pybi.ui.components.navbar import render_navbar
 from pybi.ui.shortcuts import render_shortcuts_help_button
 from pybi.ui.theme import NODE_COLORS, default_theme
 from pybi.ui.table_utils import build_preview_table
@@ -28,6 +29,7 @@ NEW_NODE_Y_STEP = 90
 
 
 def create_etl_editor_page():
+    render_navbar(active='/etl-editor')
     ui.label('ETL Editor - Pipeline DAG Builder').classes('text-2xl font-bold q-mb-sm')
     ui.label('Build a pipeline by adding nodes, editing their parameters, then connecting them left to right.').classes('text-gray-600 q-mb-md')
 

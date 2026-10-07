@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional, Union
 
 DEFAULT_STORAGE_DIR = "pybi_data"
 ID_SAFE_CHARS = ("-", "_")
+DEFAULT_DASHBOARD_ID = "dash_1"
+DEFAULT_DASHBOARD_NAME = "Dashboard 1"
 
 
 def sanitize_project_id(project_id: str) -> str:
@@ -45,6 +47,21 @@ class ProjectStorage(ABC):
     """Abstract base class defining the interface for PyBI project storage backends."""
 
     @abstractmethod
+    def list_dashboards(self, project_id: str) -> List[Dict[str, Any]]:
+        """List the dashboards saved for a project."""
+        pass
+
+    @abstractmethod
+    def load_dashboard(self, project_id: str, dashboard_id: str) -> Any:
+        """Load a named dashboard's layout for a project."""
+        pass
+
+    @abstractmethod
+    def save_dashboard(self, project_id: str, dashboard_id: str, name: str, layout: Any) -> None:
+        """Create or update a named dashboard for a project."""
+        pass
+
+    @abstractmethod
     def get_project_data_dir(self, project_id: str) -> str:
         """Returns and creates (if it does not exist) the 'data' directory for the project.
 
@@ -63,6 +80,7 @@ class ProjectStorage(ABC):
         etl_dag: Optional[Dict[str, Any]] = None,
         dashboard_layout: Optional[Any] = None,
         name: str = "",
+        dashboards: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Save project configuration."""
         pass
@@ -113,6 +131,31 @@ class FileProjectStorage(ProjectStorage):
         """
         return os.path.join(self.projects_dir, f"{sanitize_project_id(project_id)}.json")
 
+    def _make_dashboard(self, dashboard_id: str, name: str, layout: Any, now_str: str) -> Dict[str, Any]:
+        """Build a dashboard entry for the project's dashboards list."""
+        return {
+            "id": dashboard_id,
+            "name": name or dashboard_id,
+            "layout": layout,
+            "created_at": now_str,
+            "updated_at": now_str,
+        }
+
+    def _project_dashboards(self, project_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return the dashboards list of a project, migrating the legacy single layout.
+
+        Legacy projects only store ``dashboard_layout``; they are treated as a single
+        dashboard named "Dashboard 1".
+        """
+        dashboards = project_data.get("dashboards")
+        if dashboards is not None:
+            return dashboards
+        layout = project_data.get("dashboard_layout")
+        if layout is not None:
+            now_str = project_data.get("updated_at") or datetime.now(timezone.utc).isoformat()
+            return [self._make_dashboard(DEFAULT_DASHBOARD_ID, DEFAULT_DASHBOARD_NAME, layout, now_str)]
+        return []
+
     def get_project_data_dir(self, project_id: str) -> str:
         """Returns and creates (if it does not exist) the 'data' directory for the project.
 
@@ -133,14 +176,18 @@ class FileProjectStorage(ProjectStorage):
         etl_dag: Optional[Dict[str, Any]] = None,
         dashboard_layout: Optional[Any] = None,
         name: str = "",
+        dashboards: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Save project configuration to filesystem JSON file.
 
         Args:
             project_id: Identifier for the project.
             etl_dag: Optional ETL DAG dictionary (nodes and edges).
-            dashboard_layout: Optional dashboard layout list or dictionary.
+            dashboard_layout: Optional legacy dashboard layout list or dictionary
+                (treated as the primary dashboard).
             name: Optional human-readable project name.
+            dashboards: Optional full dashboards list; when provided it wins over
+                ``dashboard_layout``. When omitted, existing dashboards are preserved.
 
         Returns:
             Dict[str, Any]: Saved project dictionary.
@@ -157,11 +204,29 @@ class FileProjectStorage(ProjectStorage):
 
         now_str = datetime.now(timezone.utc).isoformat()
 
+        if dashboards is not None:
+            if dashboard_layout is not None:
+                # Legacy param still overrides the primary (first) dashboard layout.
+                if dashboards:
+                    dashboards = list(dashboards)
+                    dashboards[0]["layout"] = dashboard_layout
+                else:
+                    dashboards = [self._make_dashboard(DEFAULT_DASHBOARD_ID, DEFAULT_DASHBOARD_NAME, dashboard_layout, now_str)]
+        elif dashboard_layout is not None:
+            dashboards = [self._make_dashboard(DEFAULT_DASHBOARD_ID, DEFAULT_DASHBOARD_NAME, dashboard_layout, now_str)]
+        elif "dashboards" in existing_data:
+            dashboards = existing_data["dashboards"]
+        elif existing_data.get("dashboard_layout") is not None:
+            dashboards = self._project_dashboards(existing_data)
+        else:
+            dashboards = []
+
         project_data = {
             "project_id": project_id,
             "name": name or existing_data.get("name") or project_id,
             "etl_dag": etl_dag if etl_dag is not None else existing_data.get("etl_dag", {"nodes": [], "edges": []}),
-            "dashboard_layout": dashboard_layout if dashboard_layout is not None else existing_data.get("dashboard_layout"),
+            "dashboards": dashboards,
+            "dashboard_layout": dashboards[0].get("layout") if dashboards else (dashboard_layout if dashboard_layout is not None else existing_data.get("dashboard_layout")),
             "created_at": existing_data.get("created_at", now_str),
             "updated_at": now_str,
         }
@@ -312,7 +377,7 @@ class FileProjectStorage(ProjectStorage):
         self.save_project(
             project_id=target_id,
             etl_dag=source.get("etl_dag", {"nodes": [], "edges": []}),
-            dashboard_layout=source.get("dashboard_layout", []),
+            dashboards=source.get("dashboards") or self._project_dashboards(source),
             name=name if name is not None else source.get("name", ""),
         )
         self.delete_project(project_id)
@@ -327,9 +392,83 @@ class FileProjectStorage(ProjectStorage):
         proj = self.load_project(project_id)
         return proj.get("etl_dag", {"nodes": [], "edges": []})
 
+    def list_dashboards(self, project_id: str) -> List[Dict[str, Any]]:
+        """List the dashboards saved for a project.
+
+        Returns:
+            List[Dict[str, Any]]: A list of ``{"id", "name"}`` summaries, or an
+            empty list when the project has no saved dashboards.
+        """
+        if not self.project_exists(project_id):
+            return []
+        proj = self.load_project(project_id)
+        return [{"id": d["id"], "name": d.get("name") or d["id"]} for d in self._project_dashboards(proj)]
+
+    def load_dashboard(self, project_id: str, dashboard_id: str) -> Any:
+        """Load the layout of a named dashboard for a project.
+
+        Returns:
+            The dashboard layout list (possibly empty), or None when either the
+            project or the dashboard does not exist.
+        """
+        if not self.project_exists(project_id):
+            return None
+        proj = self.load_project(project_id)
+        for dashboard in self._project_dashboards(proj):
+            if dashboard["id"] == dashboard_id:
+                return dashboard.get("layout")
+        return None
+
+    def save_dashboard(self, project_id: str, dashboard_id: str, name: str, layout: Any) -> None:
+        """Create or update a named dashboard for a project.
+
+        The ETL DAG and other dashboards are preserved.
+        """
+        now_str = datetime.now(timezone.utc).isoformat()
+        if self.project_exists(project_id):
+            proj = self.load_project(project_id)
+        else:
+            proj = {"project_id": project_id}
+
+        dashboards = {d["id"]: dict(d) for d in self._project_dashboards(proj)}
+        entry = dashboards.get(dashboard_id)
+        if entry is None:
+            dashboards[dashboard_id] = self._make_dashboard(dashboard_id, name, layout, now_str)
+        else:
+            entry["name"] = name or entry.get("name") or dashboard_id
+            entry["layout"] = layout
+            entry["updated_at"] = now_str
+
+        self.save_project(
+            project_id=project_id,
+            etl_dag=proj.get("etl_dag"),
+            name=proj.get("name", ""),
+            dashboards=list(dashboards.values()),
+        )
+
+    def delete_dashboard(self, project_id: str, dashboard_id: str) -> bool:
+        """Delete a named dashboard from a project.
+
+        Returns:
+            bool: True when the dashboard was removed, False when it did not exist.
+        """
+        if not self.project_exists(project_id):
+            return False
+        proj = self.load_project(project_id)
+        dashboards = [d for d in self._project_dashboards(proj) if d["id"] != dashboard_id]
+        if len(dashboards) == len(self._project_dashboards(proj)):
+            return False
+        self.save_project(
+            project_id=project_id,
+            etl_dag=proj.get("etl_dag"),
+            name=proj.get("name", ""),
+            dashboards=dashboards,
+        )
+        return True
+
     def save_dashboard_layout(self, project_id: str, layout: Any) -> None:
-        """Convenience method to save only the Dashboard Layout for a project."""
-        self.save_project(project_id=project_id, dashboard_layout=layout)
+        """Convenience method to save only the primary Dashboard Layout for a project."""
+        self.save_dashboard(project_id, DEFAULT_DASHBOARD_ID, DEFAULT_DASHBOARD_NAME, layout)
 
     def load_dashboard_layout(self, project_id: str) -> Any:
         """Load the saved Dashboard Layout for a project.
@@ -339,7 +478,10 @@ class FileProjectStorage(ProjectStorage):
             saved an empty dashboard), or None when no layout was ever saved.
         """
         proj = self.load_project(project_id)
-        layout = proj.get("dashboard_layout")
+        dashboards = self._project_dashboards(proj)
+        if not dashboards:
+            return None
+        layout = dashboards[0].get("layout")
         return None if layout is None else layout
 
 

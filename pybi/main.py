@@ -2,6 +2,10 @@
 
 from nicegui import ui
 import click
+from fastapi import Request
+
+from pybi.ui.components.navbar import render_navbar
+
 
 def setup_routes():
     @ui.page('/')
@@ -9,7 +13,9 @@ def setup_routes():
         from pybi.ui.onboarding import WelcomeWizard
         wizard = WelcomeWizard()
 
-        with ui.row().classes('w-full justify-between items-center q-mb-md'):
+        render_navbar(active='/')
+
+        with ui.row().classes('w-full justify-between items-center q-mb-md q-mt-md'):
             ui.label('Welcome to OpenBI / PyBI').classes('text-2xl font-bold')
             wizard.render_button()
 
@@ -32,9 +38,9 @@ def setup_routes():
         create_dashboard_editor_page()
 
     @ui.page('/viewer')
-    def viewer_page():
+    def viewer_page(request: Request):
         from pybi.ui.pages.viewer import create_viewer_page
-        create_viewer_page()
+        create_viewer_page(initial_project=str(request.query_params.get('project', '')))
 
 @click.command()
 @click.option('--port', default=8080, help='Port to run NiceGUI server on')

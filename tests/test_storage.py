@@ -197,6 +197,80 @@ def test_delete_project_returns_false_when_missing(temp_storage):
     assert temp_storage.delete_project("never_saved") is False
 
 
+def test_list_dashboards_empty_for_missing_project(temp_storage):
+    assert temp_storage.list_dashboards("missing_proj") == []
+
+
+def test_save_and_list_multiple_dashboards(temp_storage):
+    temp_storage.save_dashboard("multi", "dash_a", "Sales", [{"i": "w1", "type": "kpi"}])
+    temp_storage.save_dashboard("multi", "dash_b", "Marketing", [{"i": "w2", "type": "chart"}])
+
+    dashboards = temp_storage.list_dashboards("multi")
+    assert [d["id"] for d in dashboards] == ["dash_a", "dash_b"]
+    assert [d["name"] for d in dashboards] == ["Sales", "Marketing"]
+
+    assert temp_storage.load_dashboard("multi", "dash_a") == [{"i": "w1", "type": "kpi"}]
+    assert temp_storage.load_dashboard("multi", "dash_b") == [{"i": "w2", "type": "chart"}]
+
+
+def test_save_dashboard_preserves_etl_dag_and_existing_dashboards(temp_storage):
+    dag = {"nodes": [{"id": "n1"}], "edges": []}
+    temp_storage.save_etl_dag("keep_multi", dag)
+    temp_storage.save_dashboard("keep_multi", "dash_1", "First", [{"i": "w1"}])
+    temp_storage.save_dashboard("keep_multi", "dash_2", "Second", [{"i": "w2"}])
+
+    reloaded = temp_storage.load_project("keep_multi")
+    assert reloaded["etl_dag"] == dag
+    assert [d["id"] for d in reloaded["dashboards"]] == ["dash_1", "dash_2"]
+
+
+def test_update_dashboard_overwrites_layout_keeping_order(temp_storage):
+    temp_storage.save_dashboard("upd", "dash_1", "First", [{"i": "w1"}])
+    temp_storage.save_dashboard("upd", "dash_2", "Second", [{"i": "w2"}])
+    temp_storage.save_dashboard("upd", "dash_1", "Renamed First", [{"i": "w1", "x": 4}])
+
+    assert temp_storage.list_dashboards("upd") == [{"id": "dash_1", "name": "Renamed First"}, {"id": "dash_2", "name": "Second"}]
+    assert temp_storage.load_dashboard("upd", "dash_1") == [{"i": "w1", "x": 4}]
+
+
+def test_delete_dashboard_removes_only_named_dashboard(temp_storage):
+    temp_storage.save_dashboard("del", "dash_1", "First", [{"i": "w1"}])
+    temp_storage.save_dashboard("del", "dash_2", "Second", [{"i": "w2"}])
+
+    assert temp_storage.delete_dashboard("del", "dash_1") is True
+    assert temp_storage.list_dashboards("del") == [{"id": "dash_2", "name": "Second"}]
+    assert temp_storage.load_dashboard("del", "dash_1") is None
+    assert temp_storage.delete_dashboard("del", "dash_1") is False
+    assert temp_storage.delete_dashboard("del", "missing") is False
+    assert temp_storage.delete_dashboard("missing_proj", "dash_1") is False
+
+
+def test_legacy_dashboard_layout_migrates_to_single_dashboard(temp_storage):
+    layout = [{"i": "w1", "x": 0, "y": 0, "w": 4, "h": 3}]
+    temp_storage.save_project("legacy", etl_dag={"nodes": []}, dashboard_layout=layout, name="Legacy")
+
+    assert temp_storage.load_dashboard_layout("legacy") == layout
+    dashboards = temp_storage.list_dashboards("legacy")
+    assert len(dashboards) == 1
+    assert dashboards[0]["id"] == "dash_1"
+    assert dashboards[0]["name"] == "Dashboard 1"
+    assert temp_storage.load_dashboard("legacy", "dash_1") == layout
+
+
+def test_rename_project_copies_multiple_dashboards(temp_storage):
+    temp_storage.save_dashboard("src_multi", "dash_a", "Sales", [{"i": "w1"}])
+    temp_storage.save_dashboard("src_multi", "dash_b", "Docs", [{"i": "w2"}])
+
+    temp_storage.rename_project("src_multi", "dst_multi")
+
+    assert temp_storage.list_dashboards("dst_multi") == [{"id": "dash_a", "name": "Sales"}, {"id": "dash_b", "name": "Docs"}]
+    assert temp_storage.load_dashboard("dst_multi", "dash_b") == [{"i": "w2"}]
+
+
+def test_delete_project_returns_false_when_missing(temp_storage):
+    assert temp_storage.delete_project("never_saved") is False
+
+
 def test_project_data_directory_and_file_operations(temp_storage):
     pid = "test_data_proj"
 

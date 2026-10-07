@@ -1,24 +1,33 @@
 """Dashboard Editor page implementation using DashboardGrid and ChartWidget with DataBinder."""
 
 import copy
-import math
 
 from nicegui import ui
 import polars as pl
+
 from pybi.core.storage import default_storage
 from pybi.dashboard import default_binder
 from pybi.core.history import HistoryManager
 from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
+from pybi.ui.components.dashboard_manager import DashboardManager
 from pybi.ui.components.project_manager import ProjectManager
+from pybi.ui.components.navbar import render_navbar
 from pybi.export.dashboard_exporter import render_export_dialog
 from pybi.ui.components.search_bar import SearchBar
 from pybi.ui.components.widget_configurator import WidgetConfigurator, render_data_status_badge
+from pybi.ui.components.widget_data import (
+    available_sources,
+    bind_widget_data,
+    sample_layout,
+    strip_widget_data,
+)
 from pybi.ui.shortcuts import render_shortcuts_help_button
 from pybi.ui.theme import default_theme
 
 
 def create_dashboard_editor_page():
+    render_navbar(active='/dashboard-editor')
     ui.label('Dashboard Editor - Canvas & Chart Binding').classes('text-2xl font-bold q-mb-sm')
     ui.label('Interactive dashboard layout builder using Vue Grid Layout with live DataBinder chart widgets.').classes('text-gray-600 q-mb-md')
 
@@ -33,185 +42,57 @@ def create_dashboard_editor_page():
         })
         default_binder.register_source('regional_sales', sample_df)
 
-    # Initial sample dashboard widgets layout
-    sample_layout = [
-        {
-            'i': 'w1',
-            'x': 0, 'y': 0, 'w': 4, 'h': 3,
-            'title': '📊 Quarterly Revenue',
-            'type': 'kpi',
-            'metric': 'sum',
-            'source': 'regional_sales'
-        },
-        {
-            'i': 'w2',
-            'x': 4, 'y': 0, 'w': 8, 'h': 4,
-            'title': '📈 Regional Sales Bar Chart',
-            'type': 'chart',
-            'chartType': 'Sales distribution across regions',
-            'source': 'regional_sales'
-        },
-        {
-            'i': 'w3',
-            'x': 0, 'y': 3, 'w': 4, 'h': 4,
-            'title': '📋 Top Performing Regions',
-            'type': 'table',
-            'source': 'regional_sales'
-        }
-    ]
+    def reset_layout():
+        grid.layout = bind_widget_data(sample_layout())
+        log_container.push('[Reset] Layout restored to default configuration.')
+        status_label.set_text('State: Layout reset completed')
 
-    MAX_TABLE_ROWS = 50
-    MAX_CHART_POINTS = 60
-    MAX_CHART_SERIES = 3
-    KPI_METRICS = ('sum', 'avg', 'min', 'max', 'count')
-    KPI_METHODS = {'sum': 'sum', 'avg': 'mean', 'min': 'min', 'max': 'max'}
-    WIDGET_DATA_KEYS = ('columns', 'rows', 'row_count', 'truncated', 'data_error', 'chart', 'kpi')
-
-    def available_sources():
-        """Registered data source names usable as widget bindings."""
+    def load_current_dashboard(notify: bool = True):
+        """Load the selected dashboard's saved layout, or demo widgets when none saved."""
+        pid = project_manager.project_id
+        dash_id = dashboard_manager.dashboard_id
+        if not dash_id:
+            grid.layout = bind_widget_data(sample_layout())
+            if notify:
+                log_container.push(f'[Storage] "{pid}" has no saved dashboard - demo widgets shown.')
+                status_label.set_text(f'State: "{pid}" has no saved dashboard yet (demo widgets shown)')
+            return
         try:
-            names = default_binder.list_sources()
+            layout_data = default_storage.load_dashboard(pid, dash_id)
         except Exception:
-            names = []
-        return names or ['regional_sales']
-
-    def _cell(value):
-        """Make a DataFrame value JSON serializable for the browser."""
-        if value is None or isinstance(value, (int, float, bool)):
-            return value
-        return str(value)
-
-    def _number(value):
-        """Coerce a numeric cell to a JSON-safe float, or None when not plottable."""
-        if isinstance(value, bool) or value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return value if math.isfinite(value) else None
-        return None
-
-    def _format_number(value):
-        """Pretty-print an aggregated metric value."""
-        if value is None:
-            return None
-        if isinstance(value, int):
-            return f'{value:,}'
-        as_float = float(value)
-        if as_float == int(as_float):
-            return f'{int(as_float):,}'
-        return f'{as_float:,.2f}'
-
-    def _source_frame(item):
-        """Fetch the widget's bound DataFrame, or return (None, error message)."""
-        source = item.get('source')
-        if not source:
-            return None, 'No data source selected'
-        try:
-            return default_binder.get_source_data(source), None
-        except KeyError:
-            return None, f'Unknown source "{source}" - run the ETL pipeline first'
-        except Exception as err:
-            return None, f'Failed to load source "{source}": {err}'
-
-    def _bind_table_data(item, df, error):
-        if error is not None:
-            item['columns'] = []
-            item['data_error'] = error
-            return item
-        view = df.head(MAX_TABLE_ROWS)
-        item['columns'] = [str(c) for c in view.columns]
-        item['rows'] = [[_cell(v) for v in row] for row in view.rows()]
-        item['row_count'] = df.height
-        item['truncated'] = df.height > MAX_TABLE_ROWS
-        return item
-
-    def _bind_chart_data(item, df, error):
-        kind = item.get('chartType')
-        kind = kind if kind in ('bar', 'line', 'pie') else 'bar'
-        chart = {'kind': kind, 'labels': [], 'series': [], 'max': 0}
-        item['chart'] = chart
-        if error is not None:
-            chart['error'] = error
-            return item
-        view = df.head(MAX_CHART_POINTS)
-        if view.is_empty():
-            chart['error'] = 'Source is empty'
-            return item
-        numeric = [c for c in view.columns if view[c].dtype.is_numeric()]
-        if not numeric:
-            chart['error'] = f'Source has no numeric column to plot ({", ".join(view.columns)})'
-            return item
-        label_col = next((c for c in view.columns if c not in numeric), None)
-        if label_col is not None:
-            chart['labels'] = [str(v) for v in view[label_col].to_list()]
+            layout_data = None
+        if layout_data is None:
+            grid.layout = bind_widget_data(sample_layout())
+            if notify:
+                log_container.push(f'[Storage] "{pid}" has no saved layout yet - demo widgets shown.')
+                status_label.set_text(f'State: "{pid}" has no saved layout yet (demo widgets shown)')
         else:
-            chart['labels'] = [str(i) for i in range(view.height)]
-        for name in numeric[:MAX_CHART_SERIES]:
-            values = [_number(v) for v in view[name].to_list()]
-            chart['series'].append({'name': name, 'values': values})
-        plottable = [v for s in chart['series'] for v in s['values'] if v is not None]
-        chart['max'] = max(plottable) if plottable else 0
-        if chart['max'] <= 0:
-            chart['max'] = 1
-        if view.height > MAX_CHART_POINTS:
-            chart['truncated'] = True
-        return item
-
-    def _bind_kpi_data(item, df, error):
-        metric = item.get('metric') if item.get('metric') in KPI_METRICS else 'sum'
-        source = item.get('source')
-        if error is not None:
-            item['kpi'] = {'value': None, 'subtitle': error, 'error': True}
-            return item
-        if metric == 'count':
-            item['kpi'] = {'value': _format_number(df.height), 'subtitle': f'rows from {source}'}
-            return item
-        numeric = [c for c in df.columns if df[c].dtype.is_numeric()]
-        if not numeric:
-            item['kpi'] = {'value': None, 'subtitle': f'No numeric column in {source} for {metric}', 'error': True}
-            return item
-        column = numeric[0]
-        raw = getattr(df[column], KPI_METHODS[metric])()
-        value = _format_number(raw)
-        item['kpi'] = {'value': value, 'subtitle': f'{metric} of {column} from {source}'}
-        return item
-
-    def _bind_widget_data(widget):
-        """Attach live data pulled from the widget's bound source."""
-        item = {k: v for k, v in widget.items() if k not in WIDGET_DATA_KEYS}
-        widget_type = item.get('type')
-        if widget_type not in ('table', 'chart', 'kpi'):
-            return item
-        df, error = _source_frame(item)
-        if widget_type == 'table':
-            return _bind_table_data(item, df, error)
-        if widget_type == 'chart':
-            return _bind_chart_data(item, df, error)
-        return _bind_kpi_data(item, df, error)
-
-    def bind_widget_data(layout):
-        """Return a copy of the layout with live data attached to every widget."""
-        return [_bind_widget_data(item) for item in layout]
-
-    def strip_widget_data(layout):
-        """Return a copy of the layout without the live data (for storage/export)."""
-        return [{k: v for k, v in item.items() if k not in WIDGET_DATA_KEYS} for item in layout]
+            grid.layout = bind_widget_data(layout_data)
+            if notify:
+                log_container.push(f'[Storage] "{pid}" layout loaded ({len(layout_data)} widget(s)).')
+                status_label.set_text(f'State: "{pid}" layout loaded ({len(layout_data)} widget(s))')
 
     def handle_project_switch(pid, action):
         if action == 'delete':
-            reset_layout()
+            dashboard_manager.set_project(pid, select_first=True)
+            load_current_dashboard(notify=True)
             status_label.set_text(f'State: Switched to "{pid}"')
             return
-        try:
-            layout_data = default_storage.load_dashboard_layout(pid)
-        except Exception:
-            layout_data = None
-        grid.layout = bind_widget_data(copy.deepcopy(sample_layout) if layout_data is None else layout_data)
-        if layout_data is None:
-            log_container.push(f'[Storage] "{pid}" has no saved layout yet - demo widgets shown.')
-            status_label.set_text(f'State: "{pid}" has no saved layout yet (demo widgets shown)')
-        else:
-            log_container.push(f'[Storage] "{pid}" layout loaded ({len(layout_data)} widget(s)).')
-            status_label.set_text(f'State: "{pid}" layout loaded ({len(layout_data)} widget(s))')
+        dashboard_manager.set_project(pid, select_first=True)
+        load_current_dashboard(notify=True)
+        status_label.set_text(f'State: Switched to "{pid}"')
+
+    def handle_dashboard_select(info):
+        dashboard_manager.select.value = info.get('dashboard_id')
+        dashboard_manager.select.update()
+        load_current_dashboard(notify=True)
+
+    def handle_dashboards_changed(info):
+        dashboard_manager.refresh()
+        if info.get('dashboard_id'):
+            dashboard_manager.select.value = info.get('dashboard_id')
+            dashboard_manager.select.update()
+        load_current_dashboard(notify=True)
 
     history = HistoryManager()
 
@@ -232,13 +113,18 @@ def create_dashboard_editor_page():
             log_container.push('[Redo] Restored next layout state.')
             status_label.set_text('State: Layout redo applied')
 
-    with ui.row().classes('w-full items-center gap-4 q-mb-md'):
+    with ui.row().classes('w-full items-center gap-4 q-mb-md q-mt-md'):
         project_manager = ProjectManager(value='default', on_switch=handle_project_switch)
+        dashboard_manager = DashboardManager(
+            project_id=project_manager.project_id,
+            on_select=handle_dashboard_select,
+            on_changed=handle_dashboards_changed,
+        )
         ui.space()
         render_data_status_badge('fresh')
         status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
 
-    grid = DashboardGrid(layout=bind_widget_data(copy.deepcopy(sample_layout)), is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
+    grid = DashboardGrid(layout=bind_widget_data(sample_layout()), is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
 
     def next_widget_id(layout):
         used = set()
@@ -365,7 +251,15 @@ def create_dashboard_editor_page():
 
     def save_layout():
         pid = project_manager.project_id
-        default_storage.save_dashboard_layout(pid, strip_widget_data(grid.layout))
+        dash_id = dashboard_manager.dashboard_id
+        if not dash_id:
+            dash_id = 'dash_1'
+        name = dashboard_manager._current_name() or dash_id
+        default_storage.save_dashboard(pid, dash_id, name, strip_widget_data(grid.layout))
+        dashboard_manager.refresh()
+        if dashboard_manager.dashboard_id == dash_id:
+            dashboard_manager.select.value = dash_id
+            dashboard_manager.select.update()
         log_container.push(f'[Storage] Saved Dashboard layout for project "{pid}".')
         status_label.set_text(f'State: Layout saved to "{pid}"')
         ui.notify(f'Layout saved for project "{pid}"', type='positive')
@@ -373,10 +267,17 @@ def create_dashboard_editor_page():
 
     def load_layout():
         pid = project_manager.project_id
+        dash_id = dashboard_manager.dashboard_id
+        if not dash_id:
+            grid.layout = bind_widget_data(sample_layout())
+            log_container.push(f'[Storage] No saved dashboard for "{pid}" - demo widgets shown.')
+            status_label.set_text(f'State: "{pid}" has no saved dashboard yet')
+            ui.notify(f'No saved dashboard for "{pid}" - demo widgets shown', type='warning')
+            return
         try:
-            layout_data = default_storage.load_dashboard_layout(pid)
+            layout_data = default_storage.load_dashboard(pid, dash_id)
             if layout_data is None:
-                grid.layout = bind_widget_data(copy.deepcopy(sample_layout))
+                grid.layout = bind_widget_data(sample_layout())
                 log_container.push(f'[Storage] No saved layout for "{pid}" - demo widgets shown.')
                 status_label.set_text(f'State: "{pid}" has no saved layout yet')
                 ui.notify(f'No saved layout for "{pid}" - demo widgets shown', type='warning')
@@ -389,24 +290,9 @@ def create_dashboard_editor_page():
             log_container.push(f'[Storage Error] Could not load project "{pid}": {e}')
             ui.notify(f'Failed to load project: {e}', type='negative')
 
-    def reset_layout():
-        grid.layout = bind_widget_data(copy.deepcopy(sample_layout))
-        log_container.push('[Reset] Layout restored to default configuration.')
-        status_label.set_text('State: Layout reset completed')
-
     if default_storage.project_exists(project_manager.project_id):
-        try:
-            saved_layout = default_storage.load_dashboard_layout(project_manager.project_id)
-        except Exception:
-            saved_layout = None
-        if saved_layout is None:
-            log_container.push(f'[Storage] "{project_manager.project_id}" has no saved layout - demo widgets shown. Use "Add Widget" to build your dashboard.')
-            status_label.set_text(f'State: "{project_manager.project_id}" has no saved layout yet')
-        else:
-            grid.layout = bind_widget_data(saved_layout)
-            if saved_layout:
-                log_container.push(f'[Storage] Layout for "{project_manager.project_id}" restored on open ({len(saved_layout)} widget(s)).')
-                status_label.set_text(f'State: Layout loaded from "{project_manager.project_id}"')
-            else:
-                log_container.push(f'[Storage] "{project_manager.project_id}" has an empty dashboard - use "Add Widget" to add widgets.')
-                status_label.set_text(f'State: "{project_manager.project_id}" dashboard is empty')
+        dashboard_manager.set_project(project_manager.project_id, select_first=True)
+        load_current_dashboard(notify=False)
+    else:
+        log_container.push(f'[Storage] "{project_manager.project_id}" has no saved dashboard - demo widgets shown. Use "Add Widget" to build your dashboard.')
+        status_label.set_text(f'State: "{project_manager.project_id}" has no saved dashboard yet')

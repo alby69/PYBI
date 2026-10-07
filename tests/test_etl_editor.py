@@ -1,5 +1,6 @@
 """Test for ETL Editor page and FlowEditor Vue component."""
 
+import json
 import os
 import time
 import socket
@@ -12,6 +13,11 @@ def get_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
+
+def etl_editor_status(port):
+    """GET /etl-editor and return its HTTP status code."""
+    req = urllib.request.Request(f'http://127.0.0.1:{port}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+    return urllib.request.urlopen(req).status
 
 def test_etl_editor_page():
     port = get_free_port()
@@ -67,6 +73,54 @@ def test_etl_editor_page():
     finally:
         proc.terminate()
         proc.wait()
+
+def test_etl_editor_renders_project_data_files():
+    """The project data file list must not break the page.
+
+    Rendering the per-file delete button used to pass flat=True and size='sm'
+    to ui.button (they are Quasar props, not constructor arguments), which
+    raised TypeError -> HTTP 500 on /etl-editor -> NiceGUI reload loop.
+    """
+    data_dir = tempfile.mkdtemp()
+    project_dir = os.path.join(data_dir, 'projects', 'demo')
+    os.makedirs(os.path.join(project_dir, 'data'), exist_ok=True)
+    with open(os.path.join(data_dir, 'projects', 'demo.json'), 'w', encoding='utf-8') as fh:
+        json.dump({'project_id': 'demo', 'name': 'demo',
+                   'etl_dag': {'nodes': [], 'edges': []},
+                   'dashboard_layout': []}, fh)
+    with open(os.path.join(project_dir, 'data', 'sales.csv'), 'w', encoding='utf-8') as fh:
+        fh.write('region,sales\nEU,100\n')
+
+    port = get_free_port()
+    env = os.environ.copy()
+    env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    env['DATA_DIR'] = data_dir
+    log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+    proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
+    try:
+        status = None
+        for _ in range(30):
+            try:
+                status = etl_editor_status(port)
+                if status == 200:
+                    break
+            except Exception:
+                status = None
+            time.sleep(0.5)
+
+        if status != 200:
+            with open(log_f.name) as fh:
+                log = fh.read()
+            assert status == 200, f'/etl-editor returned {status}. Server log:\n{log}'
+
+        html = urllib.request.urlopen(
+            urllib.request.Request(f'http://127.0.0.1:{port}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+        ).read().decode('utf-8')
+        assert 'sales.csv' in html, 'The project data file was not rendered in the file list.'
+    finally:
+        proc.terminate()
+        proc.wait()
+
 
 if __name__ == '__main__':
     test_etl_editor_page()

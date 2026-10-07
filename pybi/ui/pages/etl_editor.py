@@ -122,11 +122,8 @@ def create_etl_editor_page():
                         ui.label(f).classes('text-sm flex-grow').style('word-break: break-all;')
                         ui.button(
                             icon='delete',
-                            color='negative',
-                            flat=True,
-                            size='sm',
                             on_click=lambda fn=f: delete_file(fn)
-                        ).props('dense').tooltip('Elimina file')
+                        ).props('color=negative flat size=sm dense').tooltip('Elimina file')
 
     def delete_file(filename: str):
         pid = project_manager.project_id

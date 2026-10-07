@@ -44,8 +44,15 @@ export default {
                     <!-- Widget Content Types -->
                     <div class="flex-grow flex items-center justify-center overflow-auto p-1 text-center">
                         <div v-if="item.type === 'kpi'" class="flex flex-col items-center">
-                            <span class="text-3xl font-extrabold text-blue-600">{{ item.value || '$124,500' }}</span>
-                            <span class="text-xs text-emerald-600 font-medium">{{ item.subtitle || '▲ +12.5% vs last month' }}</span>
+                            <span v-if="item.kpi && item.kpi.error" class="text-amber-600 italic text-xs">{{ item.kpi.subtitle }}</span>
+                            <template v-else-if="item.kpi">
+                                <span class="text-3xl font-extrabold text-blue-600">{{ item.kpi.value }}</span>
+                                <span class="text-xs text-emerald-600 font-medium">{{ item.kpi.subtitle }}</span>
+                            </template>
+                            <template v-else>
+                                <span class="text-3xl font-extrabold text-blue-600">{{ item.value || '$124,500' }}</span>
+                                <span class="text-xs text-emerald-600 font-medium">{{ item.subtitle || '▲ +12.5% vs last month' }}</span>
+                            </template>
                         </div>
                         <div v-else-if="item.type === 'chart'" class="w-full h-full flex flex-col">
                             <div class="text-xs text-gray-500 mb-1 font-mono truncate">{{ item.chartType || 'Bar Chart' }}</div>

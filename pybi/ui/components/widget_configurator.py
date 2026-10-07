@@ -72,10 +72,15 @@ class WidgetConfigurator:
                 value=self.current_widget.get('source', sources[0] if sources else '')
             ).classes('w-full mb-3')
 
-            val_inp = sub_inp = chart_type_select = None
+            val_inp = sub_inp = chart_type_select = metric_select = None
             if w_type == 'kpi':
                 val_inp = ui.input('Value', value=str(self.current_widget.get('value', ''))).classes('w-full mb-2')
                 sub_inp = ui.input('Subtitle', value=str(self.current_widget.get('subtitle', ''))).classes('w-full mb-2')
+                metric_select = ui.select(
+                    options=['sum', 'avg', 'min', 'max', 'count'],
+                    label='Metric',
+                    value=self.current_widget.get('metric', 'sum')
+                ).classes('w-full mb-2')
             elif w_type == 'chart':
                 chart_type_select = ui.select(
                     options=['bar', 'line', 'pie'],
@@ -95,7 +100,8 @@ class WidgetConfigurator:
                     source_select.value,
                     val_inp.value if val_inp is not None else None,
                     sub_inp.value if sub_inp is not None else None,
-                    chart_type_select.value if chart_type_select is not None else None
+                    chart_type_select.value if chart_type_select is not None else None,
+                    metric_select.value if metric_select is not None else None
                 )).props('color=primary dense')
 
         self.drawer.set_value(True)
@@ -110,7 +116,7 @@ class WidgetConfigurator:
         self.current_widget['type'] = new_type
         self._render(self._sources)
 
-    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style):
+    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric):
         self.current_widget['title'] = title
         self.current_widget['type'] = w_type
         self.current_widget['source'] = source
@@ -120,6 +126,8 @@ class WidgetConfigurator:
             self.current_widget['subtitle'] = kpi_sub
         if chart_style is not None:
             self.current_widget['chartType'] = chart_style
+        if metric is not None:
+            self.current_widget['metric'] = metric
 
         self.on_save(self.current_widget)
         self.close()

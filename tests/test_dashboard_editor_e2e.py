@@ -86,6 +86,7 @@ def configurator_drawer(page, marker):
 def test_demo_widgets_shown_when_nothing_was_saved(page):
     expect(widget_items(page)).to_have_count(3)
     expect(widget(page, 'Quarterly Revenue')).to_be_visible()
+    expect(widget(page, 'Quarterly Revenue').get_by_text('4,420')).to_be_visible()
 
 
 def test_add_widget_appends_a_new_item(page):
@@ -196,6 +197,36 @@ def test_pie_chart_widget_renders_slices(page):
     expect(pie.get_by_text('Latin America')).to_be_visible()
 
 
+def test_kpi_widget_shows_aggregate_of_bound_source(page):
+    page.get_by_role('button', name='Add Widget').click()
+    drawer = configurator_drawer(page, 'Add Widget')
+    expect(drawer).to_be_visible()
+
+    drawer.get_by_label('Widget Title').fill('Revenue Sum')
+    drawer.get_by_role('button', name='Apply').click()
+
+    expect(drawer).not_to_be_visible()
+    kpi = widget(page, 'Revenue Sum')
+    expect(kpi.get_by_text('4,420')).to_be_visible()
+    expect(kpi.get_by_text('sum of revenue')).to_be_visible()
+
+
+def test_kpi_avg_metric_uses_the_binding(page):
+    page.get_by_role('button', name='Add Widget').click()
+    drawer = configurator_drawer(page, 'Add Widget')
+    expect(drawer).to_be_visible()
+
+    drawer.get_by_label('Widget Title').fill('Revenue Avg')
+    drawer.locator('.q-select', has_text='Metric').click()
+    page.get_by_role('option', name='avg').click()
+    drawer.get_by_role('button', name='Apply').click()
+
+    expect(drawer).not_to_be_visible()
+    avg = widget(page, 'Revenue Avg')
+    expect(avg.get_by_text('1,105')).to_be_visible()
+    expect(avg.get_by_text('avg of revenue')).to_be_visible()
+
+
 def test_save_layout_does_not_persist_rendered_widget_data(page, data_dir):
     page.get_by_role('button', name='Save Layout').click()
     page.wait_for_timeout(700)
@@ -205,7 +236,9 @@ def test_save_layout_does_not_persist_rendered_widget_data(page, data_dir):
 
     assert 'Bound Regions Table' in saved
     assert 'Sales Pie' in saved
+    assert 'Revenue Avg' in saved
     assert '"columns"' not in saved
     assert '"rows"' not in saved
     assert '"data_error"' not in saved
     assert '"chart":' not in saved
+    assert '"kpi":' not in saved

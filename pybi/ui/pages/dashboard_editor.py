@@ -40,8 +40,8 @@ def create_dashboard_editor_page():
             'x': 0, 'y': 0, 'w': 4, 'h': 3,
             'title': '📊 Quarterly Revenue',
             'type': 'kpi',
-            'value': '$248,900',
-            'subtitle': '▲ +18.4% vs Q2'
+            'metric': 'sum',
+            'source': 'regional_sales'
         },
         {
             'i': 'w2',
@@ -63,7 +63,9 @@ def create_dashboard_editor_page():
     MAX_TABLE_ROWS = 50
     MAX_CHART_POINTS = 60
     MAX_CHART_SERIES = 3
-    WIDGET_DATA_KEYS = ('columns', 'rows', 'row_count', 'truncated', 'data_error', 'chart')
+    KPI_METRICS = ('sum', 'avg', 'min', 'max', 'count')
+    KPI_METHODS = {'sum': 'sum', 'avg': 'mean', 'min': 'min', 'max': 'max'}
+    WIDGET_DATA_KEYS = ('columns', 'rows', 'row_count', 'truncated', 'data_error', 'chart', 'kpi')
 
     def available_sources():
         """Registered data source names usable as widget bindings."""
@@ -86,6 +88,17 @@ def create_dashboard_editor_page():
         if isinstance(value, (int, float)):
             return value if math.isfinite(value) else None
         return None
+
+    def _format_number(value):
+        """Pretty-print an aggregated metric value."""
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return f'{value:,}'
+        as_float = float(value)
+        if as_float == int(as_float):
+            return f'{int(as_float):,}'
+        return f'{as_float:,.2f}'
 
     def _source_frame(item):
         """Fetch the widget's bound DataFrame, or return (None, error message)."""
@@ -143,15 +156,37 @@ def create_dashboard_editor_page():
             chart['truncated'] = True
         return item
 
+    def _bind_kpi_data(item, df, error):
+        metric = item.get('metric') if item.get('metric') in KPI_METRICS else 'sum'
+        source = item.get('source')
+        if error is not None:
+            item['kpi'] = {'value': None, 'subtitle': error, 'error': True}
+            return item
+        if metric == 'count':
+            item['kpi'] = {'value': _format_number(df.height), 'subtitle': f'rows from {source}'}
+            return item
+        numeric = [c for c in df.columns if df[c].dtype.is_numeric()]
+        if not numeric:
+            item['kpi'] = {'value': None, 'subtitle': f'No numeric column in {source} for {metric}', 'error': True}
+            return item
+        column = numeric[0]
+        raw = getattr(df[column], KPI_METHODS[metric])()
+        value = _format_number(raw)
+        item['kpi'] = {'value': value, 'subtitle': f'{metric} of {column} from {source}'}
+        return item
+
     def _bind_widget_data(widget):
         """Attach live data pulled from the widget's bound source."""
         item = {k: v for k, v in widget.items() if k not in WIDGET_DATA_KEYS}
-        if item.get('type') not in ('table', 'chart'):
+        widget_type = item.get('type')
+        if widget_type not in ('table', 'chart', 'kpi'):
             return item
         df, error = _source_frame(item)
-        if item['type'] == 'table':
+        if widget_type == 'table':
             return _bind_table_data(item, df, error)
-        return _bind_chart_data(item, df, error)
+        if widget_type == 'chart':
+            return _bind_chart_data(item, df, error)
+        return _bind_kpi_data(item, df, error)
 
     def bind_widget_data(layout):
         """Return a copy of the layout with live data attached to every widget."""

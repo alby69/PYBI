@@ -17,6 +17,7 @@ def test_dashboard_editor_page():
     port = get_free_port()
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
+    env['DATA_DIR'] = tempfile.mkdtemp()
     log_f = tempfile.NamedTemporaryFile(mode='w+', delete=False)
     proc = subprocess.Popen(['python3', '-m', 'pybi.main', '--port', str(port)], env=env, stdout=log_f, stderr=log_f)
     try:
@@ -47,10 +48,10 @@ def test_dashboard_editor_page():
             page.goto(f'http://127.0.0.1:{port}/dashboard-editor')
             page.wait_for_selector('.dashboard-grid-container', timeout=10000)
 
-            # Wait for grid items to be rendered
-            page.wait_for_selector('.vgl-item', timeout=15000)
+            # Wait for grid items to be rendered (grid layout also renders a hidden placeholder)
+            page.wait_for_selector('.vgl-item:not(.vgl-item--placeholder)', timeout=15000)
 
-            items = page.query_selector_all('.vgl-item')
+            items = page.query_selector_all('.vgl-item:not(.vgl-item--placeholder)')
             print(f"Found {len(items)} Grid items rendered on canvas.")
             assert len(items) >= 3, f"Expected at least 3 grid items, found {len(items)}"
 

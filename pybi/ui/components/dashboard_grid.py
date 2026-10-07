@@ -43,3 +43,7 @@ class DashboardGrid(ui.element, component='dashboard_grid.js'):
     def on_change(self, handler: Callable) -> 'DashboardGrid':
         self.on('change', handler)
         return self
+
+    def on_edit_widget(self, handler: Callable) -> 'DashboardGrid':
+        self.on('edit_widget', handler)
+        return self

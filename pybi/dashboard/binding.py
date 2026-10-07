@@ -114,6 +114,14 @@ class DataBinder:
         binding = self._bindings[widget_id]
         return self.get_source_data(binding.source_name, binding.query)
 
+    def list_sources(self) -> list:
+        """List the names of all registered data sources.
+
+        Returns:
+            Sorted source names available for widget binding.
+        """
+        return sorted(self._sources.keys())
+
     def update_source(self, source_name: str, new_data: Union[pl.DataFrame, duckdb.DuckDBPyRelation]) -> None:
         """Update a registered data source and trigger reactive callbacks for all bound widgets.
 

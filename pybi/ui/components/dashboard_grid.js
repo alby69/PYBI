@@ -30,7 +30,15 @@ export default {
                 >
                     <div class="font-semibold text-sm border-b pb-1 mb-2 flex items-center justify-between text-gray-800">
                         <span>{{ item.title || 'Widget ' + item.i }}</span>
-                        <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">{{ item.type || 'card' }}</span>
+                        <span class="flex items-center gap-1">
+                            <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">{{ item.type || 'card' }}</span>
+                            <button
+                                type="button"
+                                class="edit-widget-btn text-xs px-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                title="Edit widget"
+                                @mousedown.stop
+                                @click.stop="$emit('edit_widget', { widget: item })">✏️</button>
+                        </span>
                     </div>
 
                     <!-- Widget Content Types -->

@@ -15,22 +15,44 @@ WIDGET_GALLERY = [
 
 
 class WidgetConfigurator:
-    """Side drawer for configuring dashboard widget options."""
+    """Side drawer for creating and configuring dashboard widget options."""
 
-    def __init__(self, on_save: Callable[[Dict[str, Any]], None]):
+    def __init__(self, on_save: Callable[[Dict[str, Any]], None], on_delete: Optional[Callable[[Dict[str, Any]], None]] = None):
         self.on_save = on_save
+        self.on_delete = on_delete
         self.drawer = ui.right_drawer(value=False).classes('bg-gray-50 border-l border-gray-200 p-4')
         self.drawer.style('width: 380px;')
         self.current_widget: Dict[str, Any] = {}
+        self._is_new = False
 
     def open_widget(self, widget: Dict[str, Any], available_sources: Optional[List[str]] = None):
-        """Open configurator drawer for a specific widget item."""
+        """Open configurator drawer to edit an existing widget item."""
         self.current_widget = dict(widget)
+        self._is_new = False
+        self._render(available_sources)
+
+    def open_new_widget(self, available_sources: Optional[List[str]] = None):
+        """Open configurator drawer to create a brand new widget item."""
         sources = available_sources or ['regional_sales']
+        gallery = {g['type']: g for g in WIDGET_GALLERY}
+        default_type = 'kpi'
+        self.current_widget = {
+            'title': gallery[default_type]['label'],
+            'type': default_type,
+            'source': sources[0],
+            'value': '0',
+            'subtitle': 'New metric',
+        }
+        self._is_new = True
+        self._render(available_sources)
+
+    def _render(self, available_sources: Optional[List[str]] = None):
+        sources = available_sources or ['regional_sales']
+        header = 'Add Widget' if self._is_new else f"Configure: {self.current_widget.get('title', 'Widget')}"
 
         self.drawer.clear()
         with self.drawer:
-            ui.label(f"Configure: {self.current_widget.get('title', 'Widget')}").classes('text-xl font-bold mb-4')
+            ui.label(header).classes('text-xl font-bold mb-4')
 
             title_inp = ui.input('Widget Title', value=self.current_widget.get('title', '')).classes('w-full mb-3')
 
@@ -47,6 +69,7 @@ class WidgetConfigurator:
                 value=self.current_widget.get('source', sources[0] if sources else '')
             ).classes('w-full mb-3')
 
+            val_inp = sub_inp = chart_type_select = None
             if w_type == 'kpi':
                 val_inp = ui.input('Value', value=str(self.current_widget.get('value', ''))).classes('w-full mb-2')
                 sub_inp = ui.input('Subtitle', value=str(self.current_widget.get('subtitle', ''))).classes('w-full mb-2')
@@ -57,15 +80,19 @@ class WidgetConfigurator:
                     value=self.current_widget.get('chartType', 'bar')
                 ).classes('w-full mb-2')
 
-            with ui.row().classes('w-full justify-end gap-2 mt-6'):
+            with ui.row().classes('w-full justify-between items-center mt-6'):
+                if not self._is_new and self.on_delete is not None:
+                    ui.button('Delete', on_click=self._delete).props('flat dense color=negative icon=delete')
+                else:
+                    ui.space()
                 ui.button('Cancel', on_click=self.close).props('flat dense')
                 ui.button('Apply', on_click=lambda: self._apply(
                     title_inp.value,
                     type_select.value,
                     source_select.value,
-                    val_inp.value if w_type == 'kpi' else None,
-                    sub_inp.value if w_type == 'kpi' else None,
-                    chart_type_select.value if w_type == 'chart' else None
+                    val_inp.value if val_inp is not None else None,
+                    sub_inp.value if sub_inp is not None else None,
+                    chart_type_select.value if chart_type_select is not None else None
                 )).props('color=primary dense')
 
         self.drawer.set_value(True)
@@ -86,6 +113,12 @@ class WidgetConfigurator:
             self.current_widget['chartType'] = chart_style
 
         self.on_save(self.current_widget)
+        self.close()
+
+    def _delete(self):
+        widget_id = self.current_widget.get('i')
+        if self.on_delete is not None and widget_id is not None:
+            self.on_delete(dict(self.current_widget))
         self.close()
 
 

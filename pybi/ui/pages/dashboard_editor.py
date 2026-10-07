@@ -57,6 +57,14 @@ def create_dashboard_editor_page():
         }
     ]
 
+    def available_sources():
+        """Registered data source names usable as widget bindings."""
+        try:
+            names = default_binder.list_sources()
+        except Exception:
+            names = []
+        return names or ['regional_sales']
+
     def handle_project_switch(pid, action):
         if action == 'delete':
             reset_layout()
@@ -65,9 +73,14 @@ def create_dashboard_editor_page():
         try:
             layout_data = default_storage.load_dashboard_layout(pid)
         except Exception:
-            layout_data = []
-        grid.layout = layout_data if layout_data else copy.deepcopy(sample_layout)
-        status_label.set_text(f'State: "{pid}" layout loaded' if layout_data else f'State: "{pid}" has no saved layout yet')
+            layout_data = None
+        grid.layout = copy.deepcopy(sample_layout) if layout_data is None else layout_data
+        if layout_data is None:
+            log_container.push(f'[Storage] "{pid}" has no saved layout yet - demo widgets shown.')
+            status_label.set_text(f'State: "{pid}" has no saved layout yet (demo widgets shown)')
+        else:
+            log_container.push(f'[Storage] "{pid}" layout loaded ({len(layout_data)} widget(s)).')
+            status_label.set_text(f'State: "{pid}" layout loaded ({len(layout_data)} widget(s))')
 
     history = HistoryManager()
 
@@ -96,17 +109,46 @@ def create_dashboard_editor_page():
 
     grid = DashboardGrid(layout=sample_layout, is_draggable=True, is_resizable=True).style('min-height: 400px; width: 100%;')
 
+    def next_widget_id(layout):
+        used = set()
+        for item in layout:
+            raw = str(item.get('i', ''))
+            if raw.startswith('w') and raw[1:].isdigit():
+                used.add(int(raw[1:]))
+        n = 1
+        while n in used:
+            n += 1
+        return f'w{n}'
+
     def on_widget_configured(updated_widget):
         record_history()
         layout = list(grid.layout)
-        for idx, item in enumerate(layout):
-            if item.get('i') == updated_widget.get('i'):
-                layout[idx] = updated_widget
-                break
+        if updated_widget.get('i'):
+            for idx, item in enumerate(layout):
+                if item.get('i') == updated_widget.get('i'):
+                    layout[idx] = updated_widget
+                    break
+            log_container.push(f"[Config] Updated widget {updated_widget.get('i')} ({updated_widget.get('title')})")
+        else:
+            widget = dict(updated_widget)
+            widget['i'] = next_widget_id(layout)
+            widget['x'] = 0
+            widget['y'] = max((int(item.get('y', 0)) + int(item.get('h', 1))) for item in layout) if layout else 0
+            widget['w'] = int(widget.get('w', 4))
+            widget['h'] = int(widget.get('h', 3))
+            layout.append(widget)
+            log_container.push(f"[Config] Added widget {widget['i']} ({widget['title']}, {widget['type']})")
         grid.layout = layout
-        log_container.push(f"[Config] Updated widget {updated_widget.get('i')} ({updated_widget.get('title')})")
+        status_label.set_text(f'State: {len(layout)} widget(s) on canvas')
 
-    configurator = WidgetConfigurator(on_save=on_widget_configured)
+    def on_widget_deleted(widget):
+        record_history()
+        layout = [item for item in grid.layout if item.get('i') != widget.get('i')]
+        grid.layout = layout
+        log_container.push(f"[Config] Deleted widget {widget.get('i')} ({widget.get('title')})")
+        status_label.set_text(f'State: {len(layout)} widget(s) on canvas')
+
+    configurator = WidgetConfigurator(on_save=on_widget_configured, on_delete=on_widget_deleted)
 
     def get_search_items():
         return [{'id': item.get('i'), 'title': item.get('title'), 'type': item.get('type')} for item in grid.layout]
@@ -114,11 +156,19 @@ def create_dashboard_editor_page():
     def on_search_select(item):
         found = next((w for w in grid.layout if w.get('i') == item.get('id')), None)
         if found:
-            configurator.open_widget(found)
+            configurator.open_widget(found, available_sources=available_sources())
 
     search_bar = SearchBar(items_provider=get_search_items, on_select=on_search_select)
 
+    def on_grid_edit(e):
+        widget = (e.args or {}).get('widget')
+        if widget:
+            configurator.open_widget(widget, available_sources=available_sources())
+
+    grid.on_edit_widget(on_grid_edit)
+
     with ui.row().classes('w-full gap-2 items-center q-mb-md'):
+        ui.button('Add Widget', on_click=lambda: configurator.open_new_widget(available_sources=available_sources())).props('color=primary icon=add')
         ui.button('Save Layout', on_click=lambda: save_layout()).props('color=positive icon=save')
         ui.button('Load Layout', on_click=lambda: load_layout()).props('color=info icon=folder_open')
         ui.button('Reset Layout', on_click=lambda: reset_layout()).props('color=secondary icon=refresh')
@@ -160,7 +210,7 @@ def create_dashboard_editor_page():
     with ui.card().classes('w-full q-mt-md p-4'):
         ui.label('Live Event & Layout State Log').classes('font-bold text-lg q-mb-xs')
         log_container = ui.log(max_lines=20).classes('w-full h-32 bg-gray-900 text-blue-400 font-mono text-xs')
-        log_container.push('Dashboard Editor initialized with 3 resizable/draggable widgets.')
+        log_container.push('Dashboard Editor initialized - drag, resize widgets and use "Add Widget" to build your layout.')
 
     def handle_layout_updated(e):
         record_history()
@@ -193,11 +243,16 @@ def create_dashboard_editor_page():
         pid = project_manager.project_id
         try:
             layout_data = default_storage.load_dashboard_layout(pid)
-            if layout_data:
+            if layout_data is None:
+                grid.layout = copy.deepcopy(sample_layout)
+                log_container.push(f'[Storage] No saved layout for "{pid}" - demo widgets shown.')
+                status_label.set_text(f'State: "{pid}" has no saved layout yet')
+                ui.notify(f'No saved layout for "{pid}" - demo widgets shown', type='warning')
+            else:
                 grid.layout = layout_data
-            log_container.push(f'[Storage] Loaded Dashboard layout for project "{pid}".')
-            status_label.set_text(f'State: Layout loaded from "{pid}"')
-            ui.notify(f'Layout loaded for project "{pid}"', type='positive')
+                log_container.push(f'[Storage] Loaded Dashboard layout for project "{pid}" ({len(layout_data)} widget(s)).')
+                status_label.set_text(f'State: Layout loaded from "{pid}"')
+                ui.notify(f'Layout loaded for project "{pid}"', type='positive')
         except Exception as e:
             log_container.push(f'[Storage Error] Could not load project "{pid}": {e}')
             ui.notify(f'Failed to load project: {e}', type='negative')
@@ -211,8 +266,15 @@ def create_dashboard_editor_page():
         try:
             saved_layout = default_storage.load_dashboard_layout(project_manager.project_id)
         except Exception:
-            saved_layout = []
-        if saved_layout:
+            saved_layout = None
+        if saved_layout is None:
+            log_container.push(f'[Storage] "{project_manager.project_id}" has no saved layout - demo widgets shown. Use "Add Widget" to build your dashboard.')
+            status_label.set_text(f'State: "{project_manager.project_id}" has no saved layout yet')
+        else:
             grid.layout = saved_layout
-            log_container.push(f'[Storage] Layout for "{project_manager.project_id}" restored on open.')
-            status_label.set_text(f'State: Layout loaded from "{project_manager.project_id}"')
+            if saved_layout:
+                log_container.push(f'[Storage] Layout for "{project_manager.project_id}" restored on open ({len(saved_layout)} widget(s)).')
+                status_label.set_text(f'State: Layout loaded from "{project_manager.project_id}"')
+            else:
+                log_container.push(f'[Storage] "{project_manager.project_id}" has an empty dashboard - use "Add Widget" to add widgets.')
+                status_label.set_text(f'State: "{project_manager.project_id}" dashboard is empty')

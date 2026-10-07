@@ -161,7 +161,7 @@ class FileProjectStorage(ProjectStorage):
             "project_id": project_id,
             "name": name or existing_data.get("name") or project_id,
             "etl_dag": etl_dag if etl_dag is not None else existing_data.get("etl_dag", {"nodes": [], "edges": []}),
-            "dashboard_layout": dashboard_layout if dashboard_layout is not None else existing_data.get("dashboard_layout", []),
+            "dashboard_layout": dashboard_layout if dashboard_layout is not None else existing_data.get("dashboard_layout"),
             "created_at": existing_data.get("created_at", now_str),
             "updated_at": now_str,
         }
@@ -332,9 +332,15 @@ class FileProjectStorage(ProjectStorage):
         self.save_project(project_id=project_id, dashboard_layout=layout)
 
     def load_dashboard_layout(self, project_id: str) -> Any:
-        """Convenience method to load only the Dashboard Layout for a project."""
+        """Load the saved Dashboard Layout for a project.
+
+        Returns:
+            The saved layout list (possibly empty when the user intentionally
+            saved an empty dashboard), or None when no layout was ever saved.
+        """
         proj = self.load_project(project_id)
-        return proj.get("dashboard_layout", [])
+        layout = proj.get("dashboard_layout")
+        return None if layout is None else layout
 
 
 # Default singleton instance for general application storage

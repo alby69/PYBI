@@ -87,6 +87,30 @@ def test_partial_updates(temp_storage):
     assert reloaded["dashboard_layout"] == layout1
 
 
+def test_load_dashboard_layout_distinguishes_never_saved_from_empty(temp_storage):
+    """A project that never saved a layout reports None; a saved empty list reports []."""
+    with pytest.raises(FileNotFoundError):
+        temp_storage.load_dashboard_layout("never_saved")
+
+    temp_storage.save_project("no_layout", name="No Layout")
+    assert temp_storage.load_dashboard_layout("no_layout") is None
+
+    # ETL-only saves must not fabricate a dashboard layout
+    temp_storage.save_etl_dag("etl_only", {"nodes": [], "edges": []})
+    assert temp_storage.load_dashboard_layout("etl_only") is None
+
+    temp_storage.save_dashboard_layout("etl_only", [])
+    assert temp_storage.load_dashboard_layout("etl_only") == []
+
+    layout = [{"i": "w1", "x": 0, "y": 0, "w": 4, "h": 3}]
+    temp_storage.save_dashboard_layout("etl_only", layout)
+    assert temp_storage.load_dashboard_layout("etl_only") == layout
+
+    # An ETL-only update must preserve the previously saved layout
+    temp_storage.save_etl_dag("etl_only", {"nodes": [{"id": "a"}], "edges": []})
+    assert temp_storage.load_dashboard_layout("etl_only") == layout
+
+
 def test_sanitize_project_id():
     assert sanitize_project_id("my project") == "myproject"
     assert sanitize_project_id("sales-2024_q1") == "sales-2024_q1"

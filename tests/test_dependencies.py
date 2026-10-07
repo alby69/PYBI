@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 STDLIB_AND_LOCAL = {
     'abc', 'ast', 'asyncio', 'collections', 'contextlib', 'copy', 'csv', 'dataclasses',
     'datetime', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
-    'math', 'os', 'pathlib', 'random', 're', 'socket', 'sqlite3', 'string', 'subprocess',
+    'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
     'pybi',
 }
@@ -50,16 +50,22 @@ def declared_pyproject():
 
 def imported_top_level_modules():
     """Collect top-level modules imported by the pybi package."""
+    # Mapping for PyPI packages where import name differs from package name
+    MODULE_MAP = {
+        'jwt': 'pyjwt',
+    }
     modules = set()
     for path in (ROOT / 'pybi').rglob('*.py'):
         tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    modules.add(alias.name.split('.')[0])
+                    m = alias.name.split('.')[0]
+                    modules.add(MODULE_MAP.get(m, m))
             elif isinstance(node, ast.ImportFrom):
                 if node.level == 0 and node.module:
-                    modules.add(node.module.split('.')[0])
+                    m = node.module.split('.')[0]
+                    modules.add(MODULE_MAP.get(m, m))
     return modules - STDLIB_AND_LOCAL
 
 

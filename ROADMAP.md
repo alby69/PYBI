@@ -3,9 +3,9 @@
 Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaforma BI open-source 100% Python, pensata come alternativa moderna e leggera a PowerBI Desktop.
 
 ## 📌 Stato Attuale
-- **Fasi Completate:** Fase 1 (Foundation & Scaffolding) e Fase 2 (Core Data Engine & Visual Binding)
-- **Fase In Corso:** Fase 2.5 (Advanced Analytics & Excel-like UX)
-- **Prossima Fase:** Fase 3 (Persistence, Auth & Advanced Features)
+- **Fasi Completate:** Fase 1 (Foundation & Scaffolding), Fase 2 (Core Data Engine & Visual Binding), Fase 2.5 (Advanced Analytics & Excel-like UX) e Fase 3 (Persistence, Auth & Advanced Features)
+- **Fase In Corso:** Fase 4 (Production Readiness & Polish)
+- **Prossima Fase:** Release 1.0 Candidate
 
 ---
 
@@ -31,25 +31,25 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 
 ---
 
-## 📊 Fase 2.5: Advanced Analytics & Excel-like UX (🔄 IN CORSO)
+## 📊 Fase 2.5: Advanced Analytics & Excel-like UX (✅ COMPLETATA)
 **Obiettivo:** Arricchire la piattaforma con strumenti avanzati di analisi ed esperienze interattive stile foglio di calcolo.
-- [ ] **Pivot Table Widget:** Implementazione del widget Pivot Table interattivo con drag & drop di campi (righe, colonne, valori).
-- [ ] **Multiple Aggregations:** Supporto a funzioni di aggregazione dinamiche (Somma, Conteggio, Media, Min, Max).
-- [ ] **CSV Export:** Esportazione dei dati pivotati in formato CSV.
-- [ ] **Server-side Fallback:** Aggregazione dinamica lato server con DuckDB per dataset di grandi dimensioni (>50k righe).
+- [x] **Pivot Table Widget:** Implementazione del widget Pivot Table interattivo con drag & drop di campi (righe, colonne, valori).
+- [x] **Multiple Aggregations:** Supporto a funzioni di aggregazione dinamiche (Somma, Conteggio, Media, Min, Max).
+- [x] **CSV Export:** Esportazione dei dati pivotati in formato CSV.
+- [x] **Server-side Fallback:** Aggregazione dinamica lato server con DuckDB per dataset di grandi dimensioni (>50k righe).
 
 ---
 
-## 🔐 Fase 3: Persistence, Auth & Advanced Features
+## 🔐 Fase 3: Persistence, Auth & Advanced Features (✅ COMPLETATA)
 **Obiettivo:** Aggiungere persistenza dei progetti, sicurezza e funzionalità avanzate.
-- [ ] **Auth & RBAC:** Implementare autenticazione completa con PyJWT e controllo degli accessi con Casbin.
-- [ ] **Project Serialization:** Salvataggio e caricamento di pipeline ETL e layout dashboard su database (SQLite/PostgreSQL) o file system.
-- [ ] **Advanced ETL Nodes:** Aggiungere nodi per Join, Merge, Pivot e aggregazioni complesse.
-- [ ] **Scheduled Execution:** Supporto per l'esecuzione programmata di pipeline ETL (background tasks con FastAPI/Celery o asyncio).
+- [x] **Auth & RBAC:** Implementare autenticazione completa con PyJWT e controllo degli accessi con Casbin.
+- [x] **Project Serialization:** Salvataggio e caricamento di pipeline ETL e layout dashboard su database (SQLite/PostgreSQL) o file system.
+- [x] **Advanced ETL Nodes:** Aggiungere nodi per Join, Merge, Pivot e aggregazioni complesse.
+- [x] **Scheduled Execution:** Supporto per l'esecuzione programmata di pipeline ETL (background tasks con FastAPI/Celery o asyncio).
 
 ---
 
-## 🏆 Fase 4: Production Readiness & Polish
+## 🏆 Fase 4: Production Readiness & Polish (🔄 IN CORSO)
 **Obiettivo:** Preparare il progetto per il rilascio pubblico e l'uso in produzione.
 - [ ] **Performance Optimization:** Ottimizzare le query DuckDB e la gestione della memoria per dataset di medie dimensioni (>1M righe).
 - [ ] **Documentation:** Scrivere documentazione completa (README, guide per gli sviluppatori, tutorial per gli utenti finali).

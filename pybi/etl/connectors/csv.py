@@ -14,4 +14,5 @@ def read_csv(filepath: str, **kwargs: Any) -> pl.DataFrame:
     Returns:
         pl.DataFrame: The loaded DataFrame.
     """
+    kwargs.setdefault("truncate_ragged_lines", True)
     return pl.read_csv(filepath, **kwargs)

@@ -7,6 +7,7 @@ WIDGET_GALLERY = [
     {'type': 'kpi', 'icon': 'trending_up', 'label': 'KPI Card', 'description': 'Single key metric'},
     {'type': 'chart', 'icon': 'bar_chart', 'label': 'Chart', 'description': 'Bar, Line, Pie ECharts'},
     {'type': 'table', 'icon': 'table_chart', 'label': 'Data Table', 'description': 'Tabular data display'},
+    {'type': 'pivot', 'icon': 'pivot_table_chart', 'label': 'Pivot Table', 'description': 'Excel-like drag & drop pivot table'},
     {'type': 'map', 'icon': 'map', 'label': 'Geographic Map', 'description': 'Geospatial visualization'},
     {'type': 'gauge', 'icon': 'speed', 'label': 'Gauge', 'description': 'Radial gauge metric'},
     {'type': 'text', 'icon': 'text_fields', 'label': 'Text Block', 'description': 'Formatted text / markdown'},
@@ -73,6 +74,8 @@ class WidgetConfigurator:
             ).classes('w-full mb-3')
 
             val_inp = sub_inp = chart_type_select = metric_select = None
+            pivot_rows_inp = pivot_cols_inp = pivot_vals_inp = pivot_agg_select = None
+
             if w_type == 'kpi':
                 val_inp = ui.input('Value', value=str(self.current_widget.get('value', ''))).classes('w-full mb-2')
                 sub_inp = ui.input('Subtitle', value=str(self.current_widget.get('subtitle', ''))).classes('w-full mb-2')
@@ -86,6 +89,23 @@ class WidgetConfigurator:
                     options=['bar', 'line', 'pie'],
                     label='Chart Style',
                     value=self.current_widget.get('chartType', 'bar')
+                ).classes('w-full mb-2')
+            elif w_type == 'pivot':
+                rows_val = self.current_widget.get('rows', [])
+                rows_str = ", ".join(rows_val) if isinstance(rows_val, list) else str(rows_val or '')
+                cols_val = self.current_widget.get('cols', [])
+                cols_str = ", ".join(cols_val) if isinstance(cols_val, list) else str(cols_val or '')
+                vals_val = self.current_widget.get('vals', [])
+                vals_str = ", ".join(vals_val) if isinstance(vals_val, list) else str(vals_val or '')
+                agg_val = self.current_widget.get('aggregator_name') or self.current_widget.get('aggregatorName') or 'Sum'
+
+                pivot_rows_inp = ui.input('Rows Fields (comma-separated)', value=rows_str).classes('w-full mb-2')
+                pivot_cols_inp = ui.input('Columns Fields (comma-separated)', value=cols_str).classes('w-full mb-2')
+                pivot_vals_inp = ui.input('Values Fields (comma-separated)', value=vals_str).classes('w-full mb-2')
+                pivot_agg_select = ui.select(
+                    options=['Sum', 'Count', 'Average', 'Min', 'Max'],
+                    label='Aggregator',
+                    value=agg_val
                 ).classes('w-full mb-2')
 
             with ui.row().classes('w-full justify-between items-center mt-6'):
@@ -101,7 +121,11 @@ class WidgetConfigurator:
                     val_inp.value if val_inp is not None else None,
                     sub_inp.value if sub_inp is not None else None,
                     chart_type_select.value if chart_type_select is not None else None,
-                    metric_select.value if metric_select is not None else None
+                    metric_select.value if metric_select is not None else None,
+                    pivot_rows_inp.value if pivot_rows_inp is not None else None,
+                    pivot_cols_inp.value if pivot_cols_inp is not None else None,
+                    pivot_vals_inp.value if pivot_vals_inp is not None else None,
+                    pivot_agg_select.value if pivot_agg_select is not None else None,
                 )).props('color=primary dense')
 
         self.drawer.set_value(True)
@@ -116,7 +140,7 @@ class WidgetConfigurator:
         self.current_widget['type'] = new_type
         self._render(self._sources)
 
-    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric):
+    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric, pivot_rows=None, pivot_cols=None, pivot_vals=None, pivot_agg=None):
         self.current_widget['title'] = title
         self.current_widget['type'] = w_type
         self.current_widget['source'] = source
@@ -128,6 +152,21 @@ class WidgetConfigurator:
             self.current_widget['chartType'] = chart_style
         if metric is not None:
             self.current_widget['metric'] = metric
+
+        if w_type == 'pivot':
+            def _parse_list(s):
+                if not s:
+                    return []
+                return [x.strip() for x in str(s).split(',') if x.strip()]
+
+            if pivot_rows is not None:
+                self.current_widget['rows'] = _parse_list(pivot_rows)
+            if pivot_cols is not None:
+                self.current_widget['cols'] = _parse_list(pivot_cols)
+            if pivot_vals is not None:
+                self.current_widget['vals'] = _parse_list(pivot_vals)
+            if pivot_agg is not None:
+                self.current_widget['aggregator_name'] = pivot_agg
 
         self.on_save(self.current_widget)
         self.close()

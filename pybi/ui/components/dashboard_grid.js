@@ -54,6 +54,7 @@ export default {
                                 <span class="text-xs text-emerald-600 font-medium">{{ item.subtitle || '▲ +12.5% vs last month' }}</span>
                             </template>
                         </div>
+
                         <div v-else-if="item.type === 'chart'" class="w-full h-full flex flex-col">
                             <div class="text-xs text-gray-500 mb-1 font-mono truncate">{{ item.chartType || 'Bar Chart' }}</div>
                             <div v-if="item.chart && item.chart.error" class="flex-grow flex items-center text-amber-600 italic text-xs">{{ item.chart.error }}</div>
@@ -104,6 +105,7 @@ export default {
                             </div>
                             <div v-else class="flex-grow flex items-center text-gray-500 italic text-xs">No data source bound yet</div>
                         </div>
+
                         <div v-else-if="item.type === 'table'" class="w-full h-full overflow-auto text-xs text-left">
                             <template v-if="item.columns && item.columns.length">
                                 <table class="w-full border-collapse">
@@ -113,18 +115,103 @@ export default {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-for="(row, ri) in item.rows || []" :key="ri">
+                                        <tr v-for="(row, ri) in item.rows_data || []" :key="ri">
                                             <td v-for="(cell, ci) in row" :key="ci" class="p-1 border">{{ cell === null || cell === undefined ? '—' : cell }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
                                 <div v-if="item.truncated" class="text-[9px] text-gray-400 text-right mt-1">
-                                    showing first {{ (item.rows || []).length }} of {{ item.row_count }} rows
+                                    showing first {{ (item.rows_data || []).length }} of {{ item.row_count }} rows
                                 </div>
                             </template>
                             <div v-else-if="item.data_error" class="text-amber-600 italic">{{ item.data_error }}</div>
                             <div v-else class="text-gray-500 italic">No data source bound yet</div>
                         </div>
+
+                        <!-- Pivot Table Widget -->
+                        <div v-else-if="item.type === 'pivot'" class="w-full h-full flex flex-col text-left overflow-auto text-xs">
+                            <div class="flex items-center justify-between pb-1 mb-1 border-b text-[10px]">
+                                <div class="flex items-center gap-1">
+                                    <span class="font-semibold text-gray-600">Agg:</span>
+                                    <span class="font-mono bg-gray-100 px-1 rounded text-blue-700 font-bold">{{ item.aggregator_name || 'Sum' }}</span>
+                                    <span class="text-gray-400 font-mono ml-1">({{ (item.rows || []).join(', ') || 'Rows' }})</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click.stop="exportPivotCSV(item)"
+                                    class="px-1.5 py-0.5 rounded bg-emerald-600 text-white font-medium hover:bg-emerald-700 text-[10px] cursor-pointer"
+                                    title="Export CSV"
+                                >📥 CSV</button>
+                            </div>
+
+                            <template v-if="getPivotMatrix(item) && getPivotMatrix(item).rows.length">
+                                <div class="flex-grow overflow-auto border rounded">
+                                    <table class="w-full border-collapse font-mono text-[10px]">
+                                        <thead>
+                                            <tr class="bg-gray-100 border-b text-gray-700 font-bold">
+                                                <th class="p-1 border-r bg-gray-200 text-gray-800 sticky top-0 left-0 z-10">
+                                                    {{ (item.rows || []).join(' / ') || 'Row Labels' }}
+                                                </th>
+                                                <th
+                                                    v-for="colKey in getPivotMatrix(item).colKeys"
+                                                    :key="colKey.join('::')"
+                                                    class="p-1 border-r text-center bg-gray-100 sticky top-0"
+                                                >
+                                                    {{ colKey.join(' - ') || 'Total' }}
+                                                </th>
+                                                <th class="p-1 bg-gray-300 text-gray-900 font-bold text-center sticky top-0 right-0">
+                                                    Grand Total
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr
+                                                v-for="(rowItem, rIdx) in getPivotMatrix(item).rows"
+                                                :key="rIdx"
+                                                :class="rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'"
+                                                class="hover:bg-blue-50/50 border-b"
+                                            >
+                                                <td class="p-1 border-r font-semibold text-gray-700 bg-gray-50/80 sticky left-0">
+                                                    {{ rowItem.rowKey.join(' / ') || 'Total' }}
+                                                </td>
+                                                <td
+                                                    v-for="(cellVal, cIdx) in rowItem.cells"
+                                                    :key="cIdx"
+                                                    class="p-1 border-r text-right"
+                                                >
+                                                    {{ formatCell(cellVal) }}
+                                                </td>
+                                                <td class="p-1 font-bold text-right bg-gray-100/80 text-blue-900 sticky right-0">
+                                                    {{ formatCell(rowItem.rowTotal) }}
+                                                </td>
+                                            </tr>
+                                            <tr class="bg-gray-200 font-bold border-t-2 border-gray-400 text-gray-900 sticky bottom-0">
+                                                <td class="p-1 border-r bg-gray-300 sticky left-0">
+                                                    Grand Total
+                                                </td>
+                                                <td
+                                                    v-for="(colTotal, cIdx) in getPivotMatrix(item).colTotals"
+                                                    :key="cIdx"
+                                                    class="p-1 border-r text-right bg-gray-200"
+                                                >
+                                                    {{ formatCell(colTotal) }}
+                                                </td>
+                                                <td class="p-1 text-right bg-gray-300 font-extrabold text-blue-950 sticky right-0">
+                                                    {{ formatCell(getPivotMatrix(item).grandTotal) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                            <div v-else-if="item.data_error" class="text-amber-600 italic text-[10px] p-2 bg-amber-50 rounded border border-amber-200">
+                                {{ item.data_error }}
+                            </div>
+                            <div v-else class="text-amber-700 italic text-[10px] p-2 bg-amber-50 rounded border border-amber-200">
+                                ⚠️ No Pivot Data. Select row and value fields in widget configurator.
+                            </div>
+                        </div>
+
                         <div v-else class="text-sm text-gray-600">
                             {{ item.content || 'Sample Widget Content' }}
                         </div>
@@ -238,6 +325,134 @@ export default {
                 const y = (typeof v === 'number' && isFinite(v)) ? (100 - Math.min(100, (v / max) * 100)).toFixed(2) : '100';
                 return `${x},${y}`;
             }).join(' '));
+        },
+        formatCell(val) {
+            if (val === null || val === undefined || isNaN(val)) return '—';
+            if (Number.isInteger(val)) return val.toLocaleString();
+            return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        getPivotMatrix(item) {
+            if (item.server_pivot_data && item.server_pivot_data.rows) {
+                return item.server_pivot_data;
+            }
+            if (!item.data || !item.data.length) return null;
+
+            const rows = item.rows || [];
+            const cols = item.cols || [];
+            const vals = item.vals || [];
+            if (!rows.length && !cols.length) return null;
+
+            const agg = item.aggregator_name || 'Sum';
+
+            const rowKeysSet = new Set();
+            const colKeysSet = new Set();
+
+            const getTupleKey = (row, fields) => fields.map(f => row[f] === undefined || row[f] === null ? '' : String(row[f]));
+
+            item.data.forEach(row => {
+                rowKeysSet.add(JSON.stringify(getTupleKey(row, rows)));
+                colKeysSet.add(JSON.stringify(getTupleKey(row, cols)));
+            });
+
+            const rowKeys = Array.from(rowKeysSet).map(s => JSON.parse(s));
+            const colKeys = Array.from(colKeysSet).map(s => JSON.parse(s));
+
+            const cellMap = {};
+            item.data.forEach(row => {
+                const rKeyStr = JSON.stringify(getTupleKey(row, rows));
+                const cKeyStr = JSON.stringify(getTupleKey(row, cols));
+
+                if (!cellMap[rKeyStr]) cellMap[rKeyStr] = {};
+                if (!cellMap[rKeyStr][cKeyStr]) cellMap[rKeyStr][cKeyStr] = [];
+
+                if (vals.length) {
+                    vals.forEach(vCol => {
+                        const val = parseFloat(row[vCol]);
+                        if (!isNaN(val)) cellMap[rKeyStr][cKeyStr].push(val);
+                    });
+                } else {
+                    cellMap[rKeyStr][cKeyStr].push(1);
+                }
+            });
+
+            const calcAgg = (values) => {
+                if (!values || !values.length) return null;
+                if (agg === 'Count') return values.length;
+                if (agg === 'Sum') return values.reduce((a, b) => a + b, 0);
+                if (agg === 'Average') return values.reduce((a, b) => a + b, 0) / values.length;
+                if (agg === 'Min') return Math.min(...values);
+                if (agg === 'Max') return Math.max(...values);
+                return values.reduce((a, b) => a + b, 0);
+            };
+
+            const matrixRows = [];
+            const colAllValues = colKeys.map(() => []);
+            const grandAllValues = [];
+
+            rowKeys.forEach(rKey => {
+                const rKeyStr = JSON.stringify(rKey);
+                const rowAllValues = [];
+                const cells = colKeys.map((cKey, cIdx) => {
+                    const cKeyStr = JSON.stringify(cKey);
+                    const values = cellMap[rKeyStr] ? cellMap[rKeyStr][cKeyStr] || [] : [];
+                    const aggregated = calcAgg(values);
+
+                    if (values.length) {
+                        rowAllValues.push(...values);
+                        colAllValues[cIdx].push(...values);
+                        grandAllValues.push(...values);
+                    }
+                    return aggregated;
+                });
+
+                const rowTotal = calcAgg(rowAllValues);
+                matrixRows.push({
+                    rowKey: rKey,
+                    cells,
+                    rowTotal
+                });
+            });
+
+            const colTotals = colAllValues.map(vals => calcAgg(vals));
+            const grandTotal = calcAgg(grandAllValues);
+
+            return {
+                colKeys,
+                rows: matrixRows,
+                colTotals,
+                grandTotal
+            };
+        },
+        exportPivotCSV(item) {
+            const matrix = this.getPivotMatrix(item);
+            if (!matrix) return;
+
+            const rows = [];
+            const headerRow = [
+                (item.rows || []).join(' / ') || 'Row Labels',
+                ...matrix.colKeys.map(ck => ck.join(' - ') || 'Total'),
+                'Grand Total'
+            ];
+            rows.push(headerRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','));
+
+            matrix.rows.forEach(r => {
+                const rowLabel = r.rowKey.length ? r.rowKey.join(' / ') : 'Total';
+                const cells = r.cells.map(v => v === null || v === undefined ? '' : v);
+                const csvRow = [rowLabel, ...cells, r.rowTotal === null ? '' : r.rowTotal];
+                rows.push(csvRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','));
+            });
+
+            const grandTotalCells = matrix.colTotals.map(v => v === null || v === undefined ? '' : v);
+            const grandTotalRow = ['Grand Total', ...grandTotalCells, matrix.grandTotal === null ? '' : matrix.grandTotal];
+            rows.push(grandTotalRow.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','));
+
+            const csvContent = 'data:text/csv;charset=utf-8,' + encodeURIComponent(rows.join('\n'));
+            const link = document.createElement('a');
+            link.setAttribute('href', csvContent);
+            link.setAttribute('download', 'pivot_table_export.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     }
 };

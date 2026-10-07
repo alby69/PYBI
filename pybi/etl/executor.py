@@ -253,7 +253,7 @@ class ETLExecutor:
             elif source_type == "parquet":
                 df = read_parquet(filepath)
             else:
-                df = read_csv(filepath)
+                df = read_csv(filepath, separator=data.get("csv_separator") or "auto")
 
             return df, f"Loaded {len(df)} rows from {source_type.upper()} file '{filepath}'", None
 

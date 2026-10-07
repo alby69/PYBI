@@ -30,6 +30,20 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
                 "help": "csv, parquet or sqlite.",
             },
             {
+                "key": "csv_separator",
+                "label": "CSV separator",
+                "kind": "choice",
+                "options": {
+                    "auto": "Auto-detect",
+                    "comma": "Comma ( , )",
+                    "semicolon": "Semicolon ( ; )",
+                    "tab": "Tab",
+                    "pipe": "Pipe ( | )",
+                },
+                "default": "auto",
+                "help": "Delimiter used by the CSV file. Auto-detect sniffs the first rows.",
+            },
+            {
                 "key": "file_path",
                 "label": "Data file",
                 "kind": "file",
@@ -260,7 +274,10 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
 
     if kind == "DataSource":
         source_type = data.get("source_type", "csv")
-        return f"{icon} {source_type.upper()} Source ({data.get('file_path', '')})"
+        separators = {"comma": ",", "semicolon": ";", "tab": "tab", "pipe": "|"}
+        sep = separators.get(data.get("csv_separator"))
+        suffix = f" [{sep}]" if sep else ""
+        return f"{icon} {source_type.upper()} Source ({data.get('file_path', '')}{suffix})"
     if kind == "Filter":
         return f"{icon} Filter Rows ({data.get('condition', '')})"
     if kind == "Select":
@@ -311,6 +328,8 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
             "source_type": source_type,
             "file_path": file_path,
         }
+        if source_type == "csv":
+            data["csv_separator"] = values.get("csv_separator") or "auto"
         query = (values.get("query") or "").strip()
         if source_type == "sqlite" and query:
             data["query"] = query
@@ -452,6 +471,7 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "source_type": data.get("source_type") or "csv",
             "file_path": data.get("file_path") or data.get("path") or "",
+            "csv_separator": data.get("csv_separator") or "auto",
             "query": data.get("query") or data.get("table_name") or data.get("table") or "",
         }
     if kind == "Filter":

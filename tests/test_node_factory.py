@@ -32,7 +32,12 @@ def test_every_kind_exposes_a_palette_entry_and_fields():
 
 def test_build_data_source_csv():
     data = build_node_data("DataSource", {"source_type": "csv", "file_path": "sales_data.csv", "query": ""})
-    assert data == {"node_type": "DataSource", "source_type": "csv", "file_path": "sales_data.csv"}
+    assert data == {
+        "node_type": "DataSource",
+        "source_type": "csv",
+        "file_path": "sales_data.csv",
+        "csv_separator": "auto",
+    }
 
 
 def test_build_data_source_sqlite_keeps_query():

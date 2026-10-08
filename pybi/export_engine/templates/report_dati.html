@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{{ title | default("PyBI Data Report") }}</title>
+    <style>
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 32px; background: #f8fafc; color: #0f172a; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .header { border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 24px; }
+        .header h1 { margin: 0 0 8px 0; color: #1e3a8a; font-size: 28px; }
+        .meta { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: #64748b; }
+        .badge { background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 9999px; font-weight: 600; font-size: 12px; }
+        .section-title { font-size: 18px; font-weight: 700; color: #334155; margin-top: 24px; margin-bottom: 12px; border-left: 4px solid #2563eb; padding-left: 10px; }
+        .filters-box { background: #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+        .card-title { font-size: 14px; font-weight: 600; color: #64748b; margin-bottom: 8px; }
+        .card-value { font-size: 24px; font-weight: 700; color: #0f172a; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+        th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
+        th { background: #f1f5f9; font-weight: 600; color: #334155; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{ title | default("PyBI Data Report") }}</h1>
+            <div class="meta">
+                <span><strong>Project:</strong> {{ snapshot.project_id if snapshot and snapshot.project_id else (project_id | default("default")) }}</span>
+                <span><strong>Export ID:</strong> {{ snapshot.export_id if snapshot and snapshot.export_id else "N/A" }}</span>
+                <span><strong>Timestamp:</strong> {{ snapshot.timestamp if snapshot and snapshot.timestamp else "N/A" }}</span>
+                <span class="badge">Hash: {{ snapshot.active_filters_hash[:12] if snapshot and snapshot.active_filters_hash else "SHA256" }}</span>
+            </div>
+        </div>
+
+        {% if active_filters %}
+        <div class="filters-box">
+            <strong>Active Filter Context:</strong>
+            <ul>
+            {% for f in active_filters %}
+                <li>
+                    <code>{{ f['table'] if 'table' in f else f.table }}.{{ f['column'] if 'column' in f else f.column }}</code>
+                    {{ f['operator'] if 'operator' in f else f.operator }}
+                    {% set vals = f['values'] if 'values' in f else f.values %}
+                    {% if vals is iterable and vals is not string %}
+                        {{ vals | join(', ') }}
+                    {% else %}
+                        {{ vals }}
+                    {% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if ai_compilation_prompt %}
+        <div class="card" style="background: #faf5ff; border-color: #e9d5ff; margin-bottom: 24px;">
+            <div class="card-title" style="color: #6b21a8;">🤖 AI Compilation Context / Prompt</div>
+            <p style="margin: 0; font-size: 14px; color: #581c87;">{{ ai_compilation_prompt }}</p>
+        </div>
+        {% endif %}
+
+        {% if widgets %}
+        <div class="section-title">Dashboard Widgets & Metrics</div>
+        <div class="grid">
+            {% for widget in widgets %}
+            <div class="card">
+                <div class="card-title">{{ widget.title if widget.title else widget.i }} ({{ widget.type | upper if widget.type else 'WIDGET' }})</div>
+                <div class="card-value">{{ widget.value if widget.value is defined else "Active" }}</div>
+                {% if widget.subtitle %}
+                <p style="margin: 4px 0 0 0; font-size: 12px; color: #64748b;">{{ widget.subtitle }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if tables %}
+        <div class="section-title">Data Source Extracts</div>
+        {% for table_name, rows in tables.items() %}
+            <h3>Table: {{ table_name }}</h3>
+            {% if rows and rows is iterable and rows | length > 0 %}
+            <table>
+                <thead>
+                    <tr>
+                        {% for col in rows[0] %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        {% for col, val in row.items() %}
+                        <td>{{ val }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p><em>No rows match active filters.</em></p>
+            {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        <div class="footer">
+            Generated by PyBI Publishing & Export Engine • Snapshot Hash: {{ snapshot.active_filters_hash if snapshot and snapshot.active_filters_hash else "N/A" }}
+        </div>
+    </div>
+</body>
+</html>

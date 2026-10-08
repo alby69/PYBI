@@ -10,6 +10,7 @@
 - **ETL Visual Canvas:** [Vue Flow (`@vue-flow/core`)](https://vueflow.dev/) wrapped as a custom NiceGUI `ui.element`
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom NiceGUI `ui.element`
 - **Analytical Engine:** DuckDB + Polars
+- **Publishing & Export Engine:** Jinja2 + WeasyPrint / Async Worker Queue
 - **API & Server:** FastAPI + Uvicorn
 - **Auth & RBAC:** Casbin + PyJWT
 
@@ -89,6 +90,7 @@ pybi --port 8080 --host 0.0.0.0
   - Drag-and-drop & resizable widget grid powered by Vue Grid Layout.
   - Supports KPI cards, bar charts, data tables, and custom cards.
   - Real-time layout updates emitted to Python backend.
+  - **Publish & Export Dialog:** Asynchronous multi-format export (PDF, HTML, Markdown, CSV) with template support and SHA-256 snapshot immutability.
 - **`/viewer` (Public Read-Only Viewer):**
   - Read-only dashboard view (`is_draggable=False`, `is_resizable=False`) for end-user consultation.
 
@@ -111,6 +113,25 @@ overwrites the dashboard layout and vice versa. Switching projects reloads both.
 
 Project ids are sanitized to filesystem-safe names (alphanumerics, `-` and `_` only),
 so `my project` is stored as `myproject.json`.
+
+---
+
+## 📄 Publishing & Export Engine (Phase 5)
+
+PyBI includes a robust Publishing & Export Engine (`pybi.export_engine`) for freezing and sharing dynamic reports:
+- **Multi-Format Output:** Generate static PDF, HTML, Markdown, or raw CSV data extracts.
+- **Jinja2 Templating:** Customize output layouts using templates like `report_dati.html` and `documento_knowledge.md`.
+- **Snapshot Immutability:** Every export generates a `snapshot.json` metadata file containing a unique `export_id`, timestamp, project version, and a SHA-256 hash of active filter rules (`active_filters_hash`).
+- **FilterContext Binding:** Automatically applies active cross-filtering parameters to data queries prior to rendering.
+- **AI-Assisted Compilation:** Accepts `ai_compilation_prompt` directives for guided document synthesis.
+- **REST API Endpoints:**
+  - `POST /api/projects/{id}/export`: Initiate background export task.
+  - `POST /api/projects/{id}/export/pdf`: PDF shortcut endpoint.
+  - `POST /api/projects/{id}/export/data`: CSV shortcut endpoint.
+  - `GET /api/exports/{export_id}/status`: Poll background task status and snapshot metadata.
+  - `GET /api/exports/{export_id}/download`: Download generated artifact file.
+
+See [`docs/PHASE5_EXPORT_SPEC.md`](docs/PHASE5_EXPORT_SPEC.md) for detailed developer documentation and custom template guidelines.
 
 ---
 

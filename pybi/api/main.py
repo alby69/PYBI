@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from pybi.api.v1.auth import router as v1_auth_router
 from pybi.api.v1.projects import router as v1_projects_router
+from pybi.api.v1.files import router as v1_files_router
 from pybi.api.v1.etl import router as v1_etl_router
 from pybi.api.v1.dashboards import router as v1_dashboards_router
 from pybi.api.v1.exports import router as v1_exports_router
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
         openapi_tags=[
             {"name": "Auth", "description": "Authentication and user session management"},
             {"name": "Projects", "description": "Project management, storage, and file upload operations"},
+            {"name": "Files", "description": "Data source file management for projects"},
             {"name": "ETL", "description": "ETL pipeline DAG definition, execution, and data preview"},
             {"name": "Dashboards", "description": "Interactive dashboard layout grid and widget operations"},
             {"name": "Exports", "description": "Async multi-format export and snapshot generation"},
@@ -62,6 +64,7 @@ def create_app() -> FastAPI:
     # Include versioned v1 REST API routers
     app.include_router(v1_auth_router)
     app.include_router(v1_projects_router)
+    app.include_router(v1_files_router)
     app.include_router(v1_etl_router)
     app.include_router(v1_dashboards_router)
     app.include_router(v1_exports_router)

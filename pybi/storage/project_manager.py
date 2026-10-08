@@ -1,22 +1,207 @@
-"""SQLite-backed project management module for saving and loading PyBI projects."""
+"""SQLite and File-backed project management module for PyBI projects."""
 
 import json
 import os
 import sqlite3
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+from pybi.core.storage import default_storage, sanitize_project_id
 
 DEFAULT_DB_PATH = os.path.join("pybi_data", "projects.db")
 
 
-def _get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
-    """Ensure parent directory exists and return SQLite connection.
+# ==========================================================
+# Granular File/Default Storage API Functions
+# ==========================================================
 
-    Args:
-        db_path: Path to SQLite database file.
+def list_projects() -> List[Dict[str, Any]]:
+    """List summary details for all saved projects.
 
     Returns:
-        sqlite3.Connection: Database connection instance.
+        List[Dict[str, Any]]: List of project metadata dictionaries.
     """
+    pids = default_storage.list_projects()
+    results = []
+    for pid in pids:
+        try:
+            p = default_storage.load_project(pid)
+            results.append({
+                "id": pid,
+                "project_id": pid,
+                "name": p.get("name") or pid,
+                "description": p.get("description"),
+                "updated_at": p.get("updated_at"),
+                "created_at": p.get("created_at"),
+            })
+        except Exception:
+            results.append({"id": pid, "project_id": pid, "name": pid})
+    return results
+
+
+def create_project(name: str, project_id: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
+    """Create a new project.
+
+    Args:
+        name: Project display name.
+        project_id: Optional explicit project ID.
+        description: Optional project description.
+
+    Returns:
+        Dict[str, Any]: Created project dictionary.
+    """
+    if not name or not name.strip():
+        raise ValueError("Project name cannot be empty.")
+
+    pid = sanitize_project_id(project_id or name)
+    if default_storage.project_exists(pid):
+        raise ValueError(f"Project with ID '{pid}' already exists.")
+
+    saved = default_storage.save_project(
+        project_id=pid,
+        name=name.strip(),
+        etl_dag={"nodes": [], "edges": []},
+        dashboards=[],
+    )
+    if description:
+        saved["description"] = description
+    return saved
+
+
+def get_project(project_id: str) -> Dict[str, Any]:
+    """Get project configuration by project_id.
+
+    Args:
+        project_id: Project identifier.
+
+    Returns:
+        Dict[str, Any]: Loaded project configuration.
+    """
+    if not default_storage.project_exists(project_id):
+        raise FileNotFoundError(f"Project '{project_id}' not found.")
+    return default_storage.load_project(project_id)
+
+
+def update_project(
+    project_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Update project name or description.
+
+    Args:
+        project_id: Project identifier.
+        name: Optional new display name.
+        description: Optional new description.
+
+    Returns:
+        Dict[str, Any]: Updated project configuration.
+    """
+    existing = get_project(project_id)
+    new_name = name if name is not None else existing.get("name", project_id)
+    updated = default_storage.save_project(
+        project_id=project_id,
+        name=new_name,
+        etl_dag=existing.get("etl_dag"),
+        dashboards=existing.get("dashboards"),
+    )
+    if description is not None:
+        updated["description"] = description
+    return updated
+
+
+def delete_project(project_id: str) -> bool:
+    """Delete a project and its associated files.
+
+    Args:
+        project_id: Project identifier.
+
+    Returns:
+        bool: True if project was deleted.
+    """
+    return default_storage.delete_project(project_id)
+
+
+def save_dag(project_id: str, dag: Dict[str, Any]) -> None:
+    """Save ETL pipeline DAG for a project.
+
+    Args:
+        project_id: Project identifier.
+        dag: ETL DAG dictionary containing nodes and edges.
+    """
+    default_storage.save_etl_dag(project_id, dag)
+
+
+def load_dag(project_id: str) -> Dict[str, Any]:
+    """Load ETL pipeline DAG for a project.
+
+    Args:
+        project_id: Project identifier.
+
+    Returns:
+        Dict[str, Any]: ETL DAG dictionary.
+    """
+    return default_storage.load_etl_dag(project_id)
+
+
+def save_dashboard_layout(
+    project_id: str,
+    layout: Any,
+    dashboard_id: str = "dash_1",
+    name: str = "Main Dashboard",
+    bindings: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Save or update dashboard grid layout and bindings.
+
+    Args:
+        project_id: Project identifier.
+        layout: List of layout widget items.
+        dashboard_id: Dashboard identifier.
+        name: Display name of dashboard.
+        bindings: Optional widget bindings dictionary.
+    """
+    default_storage.save_dashboard(
+        project_id=project_id,
+        dashboard_id=dashboard_id,
+        name=name,
+        layout=layout,
+    )
+
+
+def load_dashboard_layout(project_id: str, dashboard_id: str = "dash_1") -> Dict[str, Any]:
+    """Load dashboard layout and bindings for a project.
+
+    Args:
+        project_id: Project identifier.
+        dashboard_id: Dashboard identifier.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing 'layout' and 'bindings'.
+    """
+    layout = default_storage.load_dashboard(project_id, dashboard_id)
+    if layout is None:
+        return {"layout": [], "bindings": {}}
+    return {"layout": layout, "bindings": {}}
+
+
+def delete_dashboard(project_id: str, dashboard_id: str) -> bool:
+    """Delete specific dashboard from a project.
+
+    Args:
+        project_id: Project identifier.
+        dashboard_id: Dashboard identifier.
+
+    Returns:
+        bool: True if deleted.
+    """
+    return default_storage.delete_dashboard(project_id, dashboard_id)
+
+
+# ==========================================================
+# Legacy SQLite Storage Functions (Backward Compatibility)
+# ==========================================================
+
+def _get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    """Ensure parent directory exists and return SQLite connection."""
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -41,18 +226,7 @@ def save_project(
     bindings: Optional[Dict[str, Any]] = None,
     db_path: str = DEFAULT_DB_PATH,
 ) -> bool:
-    """Save or update project pipeline, dashboard layout, and bindings into SQLite.
-
-    Args:
-        name: Unique project name identifier.
-        dag: Dict representing ETL DAG (nodes and edges).
-        dashboard_layout: Dict or List representing dashboard layout.
-        bindings: Dict representing DataBinder widget bindings.
-        db_path: Optional path to SQLite database file.
-
-    Returns:
-        bool: True if project saved successfully.
-    """
+    """Save or update project pipeline, dashboard layout, and bindings into SQLite."""
     if not name or not name.strip():
         raise ValueError("Project name cannot be empty.")
 
@@ -83,19 +257,7 @@ def save_project(
 
 
 def load_project(name: str, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
-    """Load project pipeline, dashboard layout, and bindings from SQLite database.
-
-    Args:
-        name: Unique project name identifier.
-        db_path: Optional path to SQLite database file.
-
-    Returns:
-        Dict[str, Any]: Project configuration dictionary containing 'name', 'dag',
-            'dashboard_layout', and 'bindings'.
-
-    Raises:
-        FileNotFoundError: If no project with given name exists in database.
-    """
+    """Load project pipeline, dashboard layout, and bindings from SQLite database."""
     if not name or not name.strip():
         raise ValueError("Project name cannot be empty.")
 
@@ -124,7 +286,6 @@ def load_project(name: str, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Manual standalone test
     print("Testing pybi/storage/project_manager.py standalone...")
     test_db = os.path.join("pybi_data", "test_projects.db")
     if os.path.exists(test_db):

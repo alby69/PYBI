@@ -1,6 +1,6 @@
 # PyBI — Tutorial Completo
 
-Guida aggiornata alla piattaforma PyBI (Python Business Intelligence), inclusa l'architettura API REST disaccoppiata (`/api/v1/`), la gestione multi-dashboard, l'autenticazione ed il motore di export.
+Guida aggiornata alla piattaforma PyBI (Python Business Intelligence), inclusa l'architettura API REST disaccoppiata (`/api/v1/`), la gestione del modello semantico, le regole RLS, l'autenticazione ed il motore di export.
 
 ---
 
@@ -44,7 +44,7 @@ PyBI offre router FastAPI dedicati per la gestione completa delle risorse:
 
 ---
 
-## 3. Avvio Rapido
+## 3. Avvio Rapido & Configurazione
 
 ### Metodo Docker
 ```bash
@@ -57,4 +57,71 @@ Accedi a: http://localhost:8080
 ```bash
 pip install -r requirements.txt
 python3 -m pybi.main
+```
+
+---
+
+### 3.5 Configurazione del Modello Semantico e RLS
+
+Il Modello Semantico permette di definire relazioni tra tabelle, dimensioni, misure e regole di Row-Level Security (RLS) in un file YAML versionato (`semantic_model.yaml`).
+
+#### Esempio Pratico: `semantic_model.yaml`
+
+```yaml
+name: enterprise_sales_model
+tables:
+  - name: sales
+    source_table: sales_data
+    columns:
+      - name: sale_id
+        column_name: sale_id
+        data_type: integer
+        is_key: true
+      - name: region
+        column_name: region
+        data_type: string
+      - name: amount
+        column_name: amount
+        data_type: float
+    measures:
+      - name: total_sales
+        expression: "SUM(amount)"
+        agg_func: "SUM"
+        label: "Total Sales Amount"
+      - name: avg_sale
+        expression: "AVG(amount)"
+        agg_func: "AVG"
+        label: "Average Sale Amount"
+
+  - name: customers
+    source_table: customer_dim
+    columns:
+      - name: customer_id
+        column_name: customer_id
+        data_type: integer
+        is_key: true
+      - name: customer_name
+        column_name: customer_name
+        data_type: string
+
+relationships:
+  - from_table: sales
+    from_column: customer_id
+    to_table: customers
+    to_column: customer_id
+    cardinality: "*:1"
+    join_type: LEFT
+
+rls_rules:
+  - name: restrict_user_region
+    target_table: sales
+    filter_expression: "region = '{user_allowed_region}'"
+```
+
+In Docker, le opzioni di connessione enterprise (es. Redis caching, credenziali Snowflake/BigQuery) possono essere configurate tramite le variabili d'ambiente nel file `.env`:
+```env
+REDIS_HOST=localhost
+REDIS_PORT=6379
+SNOWFLAKE_ACCOUNT=xy12345.eu-central-1
+BIGQUERY_PROJECT_ID=my-gcp-project
 ```

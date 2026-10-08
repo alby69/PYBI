@@ -54,6 +54,7 @@ def imported_top_level_modules():
     MODULE_MAP = {
         'jwt': 'pyjwt',
         'ibis': 'ibis-framework',
+        'yaml': 'pyyaml',
     }
     modules = set()
     for path in (ROOT / 'pybi').rglob('*.py'):

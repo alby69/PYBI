@@ -103,14 +103,32 @@ def _format_number(value):
 
 
 def _source_frame(item: Dict[str, Any]) -> Tuple[Optional[pl.DataFrame], Optional[str]]:
-    """Fetch the widget's bound DataFrame, or return (None, error message)."""
+    """Fetch the widget's bound DataFrame or execute semantic query if semantic fields are provided."""
     source = item.get('source')
     if not source:
         return None, 'No data source selected'
     try:
+        dimensions = item.get('dimensions', [])
+        measures = item.get('measures', [])
+        filters = item.get('filters_context', {}) or item.get('filters', {})
+        if isinstance(filters, list):
+            filters = {}
+
+        is_semantic_model = default_binder.semantic_resolver.get_model(source) is not None
+        if dimensions or measures or is_semantic_model:
+            from pybi.semantic.models import SemanticQueryRequest
+            req = SemanticQueryRequest(
+                model_name=source if is_semantic_model else None,
+                source_table=source if not is_semantic_model else None,
+                dimensions=dimensions if isinstance(dimensions, list) else [],
+                measures=measures if isinstance(measures, list) else [],
+                filters=filters if isinstance(filters, dict) else {},
+            )
+            return default_binder.query_semantic(req), None
+
         return default_binder.get_source_data(source), None
     except KeyError:
-        return None, f'Unknown source "{source}" - run the ETL pipeline first'
+        return None, f'Unknown source or semantic model "{source}" - run the ETL pipeline first'
     except Exception as err:
         return None, f'Failed to load source "{source}": {err}'
 
@@ -429,9 +447,9 @@ def _bind_pivot_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
 
 
 def _bind_widget_data(widget: Dict[str, Any]) -> Dict[str, Any]:
-    """Attach live data pulled from the widget's bound source."""
+    """Attach live data pulled from the widget's bound source or semantic model."""
     item = {k: v for k, v in widget.items() if k not in WIDGET_DATA_KEYS}
-    for key in ('rows', 'cols', 'vals', 'aggregator_name'):
+    for key in ('rows', 'cols', 'vals', 'aggregator_name', 'dimensions', 'measures'):
         if key in widget:
             item[key] = widget[key]
 

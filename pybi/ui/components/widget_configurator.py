@@ -69,9 +69,15 @@ class WidgetConfigurator:
 
             source_select = ui.select(
                 options=sources,
-                label='Data Source',
+                label='Data Source / Semantic Model',
                 value=self.current_widget.get('source', sources[0] if sources else '')
             ).classes('w-full mb-3')
+
+            dims_str = ", ".join(self.current_widget.get('dimensions', [])) if isinstance(self.current_widget.get('dimensions'), list) else str(self.current_widget.get('dimensions', ''))
+            meas_str = ", ".join(self.current_widget.get('measures', [])) if isinstance(self.current_widget.get('measures'), list) else str(self.current_widget.get('measures', ''))
+
+            dims_inp = ui.input('Dimensions (comma-separated)', value=dims_str).classes('w-full mb-2')
+            meas_inp = ui.input('Measures (comma-separated)', value=meas_str).classes('w-full mb-2')
 
             val_inp = sub_inp = chart_type_select = metric_select = None
             pivot_rows_inp = pivot_cols_inp = pivot_vals_inp = pivot_agg_select = pivot_filters_inp = None
@@ -124,6 +130,8 @@ class WidgetConfigurator:
                     title_inp.value,
                     type_select.value,
                     source_select.value,
+                    dims_inp.value,
+                    meas_inp.value,
                     val_inp.value if val_inp is not None else None,
                     sub_inp.value if sub_inp is not None else None,
                     chart_type_select.value if chart_type_select is not None else None,
@@ -147,10 +155,18 @@ class WidgetConfigurator:
         self.current_widget['type'] = new_type
         self._render(self._sources)
 
-    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric, pivot_rows=None, pivot_cols=None, pivot_vals=None, pivot_agg=None, pivot_filters=None):
+    def _apply(self, title, w_type, source, dims_str, meas_str, kpi_val, kpi_sub, chart_style, metric, pivot_rows=None, pivot_cols=None, pivot_vals=None, pivot_agg=None, pivot_filters=None):
+        def _parse_list(s):
+            if not s:
+                return []
+            return [x.strip() for x in str(s).split(',') if x.strip()]
+
         self.current_widget['title'] = title
         self.current_widget['type'] = w_type
         self.current_widget['source'] = source
+        self.current_widget['dimensions'] = _parse_list(dims_str)
+        self.current_widget['measures'] = _parse_list(meas_str)
+
         if kpi_val is not None:
             self.current_widget['value'] = kpi_val
         if kpi_sub is not None:
@@ -161,11 +177,6 @@ class WidgetConfigurator:
             self.current_widget['metric'] = metric
 
         if w_type == 'pivot':
-            def _parse_list(s):
-                if not s:
-                    return []
-                return [x.strip() for x in str(s).split(',') if x.strip()]
-
             if pivot_rows is not None:
                 self.current_widget['rows'] = _parse_list(pivot_rows)
             if pivot_cols is not None:

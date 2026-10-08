@@ -1,37 +1,50 @@
-"""Semantic Layer models for PyBI (Dimensions, Measures, SemanticModel, and Queries)."""
+"""Semantic Layer models for PyBI (Dimensions, Measures, SemanticModel, Queries, and Core Schema Integration)."""
 
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-
-class Dimension(BaseModel):
-    """Semantic dimension representing a categorical or temporal column."""
-
-    name: str = Field(..., description="Unique dimension identifier or column name")
-    column_name: str = Field(..., description="Database column name")
-    data_type: str = Field("string", description="Data type: string, integer, float, date, datetime, etc.")
-    hierarchy: Optional[List[str]] = Field(default=None, description="Drill-down hierarchy (e.g., ['year', 'quarter', 'month'])")
-    label: Optional[str] = Field(default=None, description="Human readable label")
-
-
-class Measure(BaseModel):
-    """Semantic measure representing a numeric aggregation or formula."""
-
-    name: str = Field(..., description="Unique measure identifier")
-    expression: Optional[str] = Field(default=None, description="Aggregation expression e.g. SUM(amount), AVG(price), or formula")
-    agg_func: Optional[str] = Field(default="SUM", description="Aggregation function: SUM, AVG, COUNT, MIN, MAX, CUSTOM")
-    column_name: Optional[str] = Field(default=None, description="Target column name for basic aggregations")
-    format_string: Optional[str] = Field(default=None, description="Formatting template e.g. '${:,.2f}' or '{:,.0f}'")
-    label: Optional[str] = Field(default=None, description="Human readable label")
+from pybi.core.semantic_model import (
+    Cardinality,
+    JoinType,
+    RLSRule,
+    SemanticColumn as Dimension,
+    SemanticMeasure as Measure,
+    SemanticModel as CoreSemanticModel,
+    SemanticRelationship,
+    SemanticTable,
+)
 
 
 class SemanticModel(BaseModel):
-    """Semantic model bundling table source, dimensions, and measures."""
+    """Legacy and single-table / multi-table semantic model wrapper."""
 
     name: str = Field(..., description="Name of the semantic model")
-    source_table: str = Field(..., description="Source table or view name in DuckDB/binder")
-    dimensions: List[Dimension] = Field(default_factory=list, description="Defined dimensions")
+    source_table: str = Field("source_table", description="Source table or view name in DuckDB/binder")
+    dimensions: List[Dimension] = Field(default_factory=list, description="Defined dimensions/columns")
     measures: List[Measure] = Field(default_factory=list, description="Defined measures")
+    tables: List[SemanticTable] = Field(default_factory=list, description="Tables for multi-table models")
+    relationships: List[SemanticRelationship] = Field(default_factory=list, description="Defined table relationships")
+    rls_rules: List[RLSRule] = Field(default_factory=list, description="Row-level security rules")
+
+    def to_core_model(self) -> CoreSemanticModel:
+        """Convert to CoreSemanticModel representation."""
+        tables = list(self.tables)
+        if not tables and self.source_table:
+            tables = [
+                SemanticTable(
+                    name=self.name,
+                    source_table=self.source_table,
+                    columns=self.dimensions,
+                    measures=self.measures,
+                )
+            ]
+        return CoreSemanticModel(
+            name=self.name,
+            tables=tables,
+            relationships=self.relationships,
+            rls_rules=self.rls_rules,
+            default_table=self.source_table,
+        )
 
 
 class SemanticQueryRequest(BaseModel):

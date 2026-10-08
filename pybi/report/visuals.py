@@ -5,6 +5,18 @@ from pybi.core.interfaces import Visual
 from pybi.dashboard.filter_context import FilterContext
 
 
+def _build_where_sql(filter_context: Optional[FilterContext], table_name: str) -> str:
+    """Helper to format WHERE clause SQL fragment."""
+    if not filter_context:
+        return ""
+    where_clause = filter_context.to_sql_where(table_name)
+    if not where_clause:
+        return ""
+    if where_clause.startswith("WHERE"):
+        return f" {where_clause}"
+    return f" WHERE {where_clause}"
+
+
 class BaseVisual(Visual):
     """Base visual representation."""
 
@@ -14,8 +26,7 @@ class BaseVisual(Visual):
         self.config = config
 
     def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
-        where_clause = filter_context.to_sql_where(self.table_name) if filter_context else ""
-        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        where_sql = _build_where_sql(filter_context, self.table_name)
         return f"SELECT * FROM {self.table_name}{where_sql}"
 
 
@@ -27,8 +38,7 @@ class BarChartVisual(BaseVisual):
         y_col = self.config.get("y", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
 
-        where_clause = filter_context.to_sql_where(self.table_name) if filter_context else ""
-        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        where_sql = _build_where_sql(filter_context, self.table_name)
 
         if x_col and y_col:
             return f"SELECT {x_col}, {agg}({y_col}) AS {y_col} FROM {self.table_name}{where_sql} GROUP BY {x_col}"
@@ -43,8 +53,7 @@ class LineChartVisual(BaseVisual):
         y_col = self.config.get("y", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
 
-        where_clause = filter_context.to_sql_where(self.table_name) if filter_context else ""
-        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        where_sql = _build_where_sql(filter_context, self.table_name)
 
         if x_col and y_col:
             return f"SELECT {x_col}, {agg}({y_col}) AS {y_col} FROM {self.table_name}{where_sql} GROUP BY {x_col} ORDER BY {x_col}"
@@ -58,8 +67,7 @@ class TableVisual(BaseVisual):
         cols = self.config.get("columns", [])
         cols_str = ", ".join(cols) if cols else "*"
 
-        where_clause = filter_context.to_sql_where(self.table_name) if filter_context else ""
-        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        where_sql = _build_where_sql(filter_context, self.table_name)
 
         return f"SELECT {cols_str} FROM {self.table_name}{where_sql}"
 
@@ -71,8 +79,7 @@ class KPIVisual(BaseVisual):
         val_col = self.config.get("value", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
 
-        where_clause = filter_context.to_sql_where(self.table_name) if filter_context else ""
-        where_sql = f" WHERE {where_clause}" if where_clause else ""
+        where_sql = _build_where_sql(filter_context, self.table_name)
 
         if val_col:
             return f"SELECT {agg}({val_col}) AS kpi_value FROM {self.table_name}{where_sql}"

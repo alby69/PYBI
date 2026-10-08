@@ -14,6 +14,38 @@ class Measure:
         self.expression = expression
         self.description = description
 
+    def to_sql_fragment(self) -> str:
+        """Translate DAX-like expression into DuckDB SQL query fragment."""
+        expr = self.expression
+        expr = expr.replace("AVERAGE(", "AVG(")
+
+        if expr.startswith("DIVIDE(") and expr.endswith(")"):
+            inner_str = expr[7:-1]
+            parts = []
+            depth = 0
+            curr = []
+            for ch in inner_str:
+                if ch == '(':
+                    depth += 1
+                    curr.append(ch)
+                elif ch == ')':
+                    depth -= 1
+                    curr.append(ch)
+                elif ch == ',' and depth == 0:
+                    parts.append("".join(curr).strip())
+                    curr = []
+                else:
+                    curr.append(ch)
+            if curr:
+                parts.append("".join(curr).strip())
+
+            if len(parts) == 2:
+                num = parts[0].replace("AVERAGE(", "AVG(")
+                den = parts[1].replace("AVERAGE(", "AVG(")
+                return f"COALESCE({num} / NULLIF({den}, 0), 0)"
+
+        return expr
+
 
 class MeasureEvaluator:
     """Evaluates measures against the ModelEngine."""
@@ -25,26 +57,24 @@ class MeasureEvaluator:
     def add_measure(self, measure: Measure) -> None:
         """Register a measure."""
         self.measures[measure.name] = measure
+        self.engine.register_measure(measure)
 
-    def evaluate(self, measure_name: str, group_by: Optional[list[str]] = None, where_clause: Optional[str] = None) -> pl.DataFrame:
-        """Evaluate a measure and return the aggregated Polars DataFrame.
-
-        Args:
-            measure_name: Registered measure name.
-            group_by: Optional list of grouping columns.
-            where_clause: Optional SQL filter condition.
-
-        Returns:
-            pl.DataFrame: Query evaluation result.
-        """
+    def evaluate(
+        self,
+        measure_name: str,
+        group_by: Optional[list[str]] = None,
+        where_clause: Optional[str] = None
+    ) -> pl.DataFrame:
+        """Evaluate a measure and return the aggregated Polars DataFrame."""
         if measure_name not in self.measures:
             raise ValueError(f"Measure '{measure_name}' not found.")
 
         m = self.measures[measure_name]
-        sql = f"SELECT "
+        sql_expr = m.to_sql_fragment()
+        sql = "SELECT "
         if group_by:
             sql += ", ".join(group_by) + ", "
-        sql += f"{m.expression} AS {m.name} FROM {m.table_name}"
+        sql += f"{sql_expr} AS {m.name} FROM {m.table_name}"
 
         if where_clause:
             sql += f" WHERE {where_clause}"

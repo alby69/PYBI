@@ -10,10 +10,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from pybi.ui.theme import NODE_COLORS
 
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
-TRANSFORM_TYPES = ("filter", "select", "groupby", "join")
+TRANSFORM_TYPES = ("filter", "select", "groupby", "join", "pivot")
 OUTPUT_TYPES = ("duckdb", "sqlite")
 AGGREGATIONS = ("sum", "mean", "min", "max", "count", "first", "last", "median", "std", "n_unique")
 JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
+
+# Fallback node styling if Pivot is not in NODE_COLORS
+PIVOT_STYLE = {"background": "#FFF8E1", "border": "2px solid #FFA000", "borderRadius": "8px", "padding": "10px"}
 
 NODE_KINDS: Dict[str, Dict[str, Any]] = {
     "DataSource": {
@@ -137,6 +140,42 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "Pivot": {
+        "label": "Pivot Table",
+        "icon": "🔄",
+        "style": PIVOT_STYLE,
+        "fields": [
+            {
+                "key": "index",
+                "label": "Row index columns",
+                "kind": "text",
+                "default": "region",
+                "help": "Comma separated column names for rows.",
+            },
+            {
+                "key": "on",
+                "label": "Pivot-on columns",
+                "kind": "text",
+                "default": "product",
+                "help": "Comma separated column names whose values become column headers.",
+            },
+            {
+                "key": "values",
+                "label": "Value columns",
+                "kind": "text",
+                "default": "sales",
+                "help": "Comma separated column names to aggregate.",
+            },
+            {
+                "key": "aggregate_function",
+                "label": "Aggregation",
+                "kind": "choice",
+                "options": list(AGGREGATIONS),
+                "default": "sum",
+                "help": "Aggregation function to apply to values.",
+            },
+        ],
+    },
     "Output": {
         "label": "Output Table",
         "icon": NODE_COLORS["Output"]["icon"],
@@ -174,6 +213,7 @@ KIND_PREFIX = {
     "Select": "select",
     "GroupBy": "group",
     "Join": "join",
+    "Pivot": "pivot",
     "Output": "output",
 }
 
@@ -184,6 +224,7 @@ _TRANSFORM_KIND = {
     "group_by": "GroupBy",
     "join": "Join",
     "inner_join": "Join",
+    "pivot": "Pivot",
 }
 
 
@@ -295,6 +336,10 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
         left_label = ", ".join(left_on) if isinstance(left_on, list) else left_on
         right_label = ", ".join(right_on) if isinstance(right_on, list) else right_on
         return f"{icon} {how.upper()} Join ({left_label} = {right_label})"
+    if kind == "Pivot":
+        on_cols = ", ".join(data.get("on", []))
+        val_cols = ", ".join(data.get("values", []))
+        return f"{icon} Pivot ({val_cols} on {on_cols})"
     if kind == "Output":
         table_name = data.get("table_name", "")
         if data.get("output_type") == "sqlite":
@@ -390,6 +435,25 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
             "how": how,
             "left_on": left_on,
             "right_on": right_on,
+        }
+
+    if kind == "Pivot":
+        index = values.get("index")
+        index = parse_columns(index) if isinstance(index, str) else list(index or [])
+        on = values.get("on")
+        on = parse_columns(on) if isinstance(on, str) else list(on or [])
+        val_cols = values.get("values")
+        val_cols = parse_columns(val_cols) if isinstance(val_cols, str) else list(val_cols or [])
+        agg_fn = values.get("aggregate_function") or "sum"
+        if not on:
+            raise ValueError("At least one pivot-on column is required for a Pivot node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "pivot",
+            "index": index,
+            "on": on,
+            "values": val_cols,
+            "aggregate_function": agg_fn,
         }
 
     if kind == "Output":
@@ -495,6 +559,22 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
             right_on = ", ".join(str(c) for c in right_on)
         how = (data.get("how") or "inner").lower()
         return {"left_on": left_on, "right_on": right_on, "how": "inner" if how == "cross" else how}
+    if kind == "Pivot":
+        index = data.get("index") or []
+        on = data.get("on") or []
+        values = data.get("values") or []
+        if isinstance(index, list):
+            index = ", ".join(str(c) for c in index)
+        if isinstance(on, list):
+            on = ", ".join(str(c) for c in on)
+        if isinstance(values, list):
+            values = ", ".join(str(c) for c in values)
+        return {
+            "index": index,
+            "on": on,
+            "values": values,
+            "aggregate_function": data.get("aggregate_function") or "sum",
+        }
     return {
         "table_name": data.get("table_name") or "",
         "output_type": data.get("output_type") or ("sqlite" if data.get("file_path") else "duckdb"),
@@ -569,7 +649,7 @@ def validate_pipeline(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) 
     for node in nodes:
         kind = node_kind(node)
         node_id = node.get("id", "unknown")
-        if kind in ("Filter", "Select", "GroupBy", "Output") and not parents[node_id]:
+        if kind in ("Filter", "Select", "GroupBy", "Pivot", "Output") and not parents[node_id]:
             problems.append(f"Node '{node_id}' ({kind}) needs at least one incoming connection.")
         if kind in ("DataSource",) and parents[node_id]:
             problems.append(f"Node '{node_id}' (Data Source) must not have incoming connections.")

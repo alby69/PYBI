@@ -276,6 +276,8 @@ class ETLExecutor:
                     transform_type = "groupby"
                 elif "join" in label_lower:
                     transform_type = "join"
+                elif "pivot" in label_lower:
+                    transform_type = "pivot"
 
             if not transform_type:
                 transform_type = "filter"  # default transform fallback
@@ -359,6 +361,23 @@ class ETLExecutor:
                 joined_df = left_df.join(right_df, left_on=left_on, right_on=right_on, how=how)
                 keys = ", ".join(left_on)
                 return joined_df, f"{how.upper()} joined on {keys}: {len(joined_df)} rows", None
+
+            elif transform_type == "pivot":
+                index_cols = _as_key_list(data.get("index"))
+                on_cols = _as_key_list(data.get("on"))
+                val_cols = _as_key_list(data.get("values"))
+                agg_fn = data.get("aggregate_function") or "sum"
+
+                if not on_cols:
+                    raise ValueError(f"Pivot node '{node_id}' requires at least one pivot-on column in 'on'.")
+
+                pivoted_df = parent_df.pivot(
+                    on=on_cols,
+                    index=index_cols if index_cols else None,
+                    values=val_cols if val_cols else None,
+                    aggregate_function=agg_fn,
+                )
+                return pivoted_df, f"Pivoted on {on_cols} with aggregate '{agg_fn}': {len(pivoted_df)} rows", None
 
             else:
                 return parent_df, f"Unknown transform '{transform_type}', passing data through", None

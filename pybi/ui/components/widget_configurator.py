@@ -74,7 +74,7 @@ class WidgetConfigurator:
             ).classes('w-full mb-3')
 
             val_inp = sub_inp = chart_type_select = metric_select = None
-            pivot_rows_inp = pivot_cols_inp = pivot_vals_inp = pivot_agg_select = None
+            pivot_rows_inp = pivot_cols_inp = pivot_vals_inp = pivot_agg_select = pivot_filters_inp = None
 
             if w_type == 'kpi':
                 val_inp = ui.input('Value', value=str(self.current_widget.get('value', ''))).classes('w-full mb-2')
@@ -95,16 +95,22 @@ class WidgetConfigurator:
                 rows_str = ", ".join(rows_val) if isinstance(rows_val, list) else str(rows_val or '')
                 cols_val = self.current_widget.get('cols', [])
                 cols_str = ", ".join(cols_val) if isinstance(cols_val, list) else str(cols_val or '')
-                vals_val = self.current_widget.get('vals', [])
-                vals_str = ", ".join(vals_val) if isinstance(vals_val, list) else str(vals_val or '')
+                filters_val = self.current_widget.get('filters', [])
+                filters_str = ", ".join(filters_val) if isinstance(filters_val, list) else str(filters_val or '')
+                vals_val = self.current_widget.get('values') or self.current_widget.get('vals', [])
+                if isinstance(vals_val, list):
+                    vals_str = ", ".join(v.get('field', str(v)) if isinstance(v, dict) else str(v) for v in vals_val)
+                else:
+                    vals_str = str(vals_val or '')
                 agg_val = self.current_widget.get('aggregator_name') or self.current_widget.get('aggregatorName') or 'Sum'
 
+                pivot_filters_inp = ui.input('Report Filters Fields (comma-separated)', value=filters_str).classes('w-full mb-2')
                 pivot_rows_inp = ui.input('Rows Fields (comma-separated)', value=rows_str).classes('w-full mb-2')
                 pivot_cols_inp = ui.input('Columns Fields (comma-separated)', value=cols_str).classes('w-full mb-2')
                 pivot_vals_inp = ui.input('Values Fields (comma-separated)', value=vals_str).classes('w-full mb-2')
                 pivot_agg_select = ui.select(
                     options=['Sum', 'Count', 'Average', 'Min', 'Max'],
-                    label='Aggregator',
+                    label='Default Aggregator',
                     value=agg_val
                 ).classes('w-full mb-2')
 
@@ -126,6 +132,7 @@ class WidgetConfigurator:
                     pivot_cols_inp.value if pivot_cols_inp is not None else None,
                     pivot_vals_inp.value if pivot_vals_inp is not None else None,
                     pivot_agg_select.value if pivot_agg_select is not None else None,
+                    pivot_filters_inp.value if pivot_filters_inp is not None else None,
                 )).props('color=primary dense')
 
         self.drawer.set_value(True)
@@ -140,7 +147,7 @@ class WidgetConfigurator:
         self.current_widget['type'] = new_type
         self._render(self._sources)
 
-    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric, pivot_rows=None, pivot_cols=None, pivot_vals=None, pivot_agg=None):
+    def _apply(self, title, w_type, source, kpi_val, kpi_sub, chart_style, metric, pivot_rows=None, pivot_cols=None, pivot_vals=None, pivot_agg=None, pivot_filters=None):
         self.current_widget['title'] = title
         self.current_widget['type'] = w_type
         self.current_widget['source'] = source
@@ -163,8 +170,13 @@ class WidgetConfigurator:
                 self.current_widget['rows'] = _parse_list(pivot_rows)
             if pivot_cols is not None:
                 self.current_widget['cols'] = _parse_list(pivot_cols)
+            if pivot_filters is not None:
+                self.current_widget['filters'] = _parse_list(pivot_filters)
             if pivot_vals is not None:
-                self.current_widget['vals'] = _parse_list(pivot_vals)
+                parsed_vals = _parse_list(pivot_vals)
+                default_agg = pivot_agg or 'Sum'
+                self.current_widget['vals'] = [{'field': f, 'agg': default_agg, 'showAs': 'None'} for f in parsed_vals]
+                self.current_widget['values'] = self.current_widget['vals']
             if pivot_agg is not None:
                 self.current_widget['aggregator_name'] = pivot_agg
 

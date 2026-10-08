@@ -398,7 +398,11 @@ class ETLExecutor:
             elif transform_type == "pivot":
                 index_cols = _as_key_list(data.get("index"))
                 on_cols = _as_key_list(data.get("on"))
-                val_cols = _as_key_list(data.get("values"))
+                raw_values = data.get("values")
+                if isinstance(raw_values, list) and raw_values and isinstance(raw_values[0], dict):
+                    val_cols = [v.get("field") for v in raw_values if isinstance(v, dict) and v.get("field")]
+                else:
+                    val_cols = _as_key_list(raw_values)
                 agg_fn = data.get("aggregate_function") or "sum"
 
                 if not on_cols:

@@ -93,6 +93,32 @@ def test_compute_server_pivot_duckdb():
     assert matrix['grandTotal'] == 1100.0
 
 
+def test_compute_server_pivot_duckdb_multi_value_and_filters():
+    """Test server-side DuckDB pivot matrix with multi-value specs and report filters."""
+    df = pl.DataFrame({
+        'region': ['Europe', 'Europe', 'North America', 'Asia Pacific'],
+        'channel': ['Online', 'Retail', 'Online', 'Retail'],
+        'revenue': [100.0, 200.0, 300.0, 400.0],
+        'units': [10, 20, 30, 40]
+    })
+    vals = [
+        {'field': 'revenue', 'agg': 'Sum', 'showAs': 'None'},
+        {'field': 'units', 'agg': 'Average', 'showAs': 'None'}
+    ]
+    matrix = _compute_server_pivot_duckdb(
+        df,
+        rows=['region'],
+        cols=['channel'],
+        vals=vals,
+        filters=['region'],
+        filter_values={'region': 'Europe'}
+    )
+    assert len(matrix['rows']) == 1
+    assert matrix['rows'][0]['rowKey'] == ['Europe']
+    assert 'valueSpecs' in matrix
+    assert len(matrix['valueSpecs']) == 2
+
+
 def test_bind_pivot_data_large_dataset_fallback():
     """Test that datasets >50,000 rows automatically trigger DuckDB server-side fallback."""
     n = 50005

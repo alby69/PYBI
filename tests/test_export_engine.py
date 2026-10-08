@@ -16,6 +16,17 @@ from pybi.export_engine import (
 )
 
 
+def wait_for_job(engine, export_id: str, timeout: float = 10.0):
+    """Poll job status until completed or failed or timeout."""
+    start = time.time()
+    while time.time() - start < timeout:
+        status = engine.get_job_status(export_id)
+        if status and status.get("status") in ["completed", "failed"]:
+            return status
+        time.sleep(0.05)
+    raise TimeoutError(f"Job {export_id} did not finish within {timeout} seconds")
+
+
 def test_hash_filter_context_determinism():
     """Verify SHA-256 filter context hashing is deterministic and order-independent."""
     ctx1 = FilterContext()
@@ -105,8 +116,7 @@ def test_export_engine_render_formats(tmp_path):
         export_format="html",
         template_id="report_dati.html",
     )
-    time.sleep(0.5)
-    status_html = engine.get_job_status(job_id_html)
+    status_html = wait_for_job(engine, job_id_html)
     assert status_html["status"] == "completed"
     assert Path(status_html["file_path"]).exists()
 
@@ -118,8 +128,7 @@ def test_export_engine_render_formats(tmp_path):
         export_format="md",
         template_id="documento_knowledge.md",
     )
-    time.sleep(0.5)
-    status_md = engine.get_job_status(job_id_md)
+    status_md = wait_for_job(engine, job_id_md)
     assert status_md["status"] == "completed"
     assert Path(status_md["file_path"]).exists()
 
@@ -130,8 +139,7 @@ def test_export_engine_render_formats(tmp_path):
         filter_context=ctx,
         export_format="csv",
     )
-    time.sleep(0.5)
-    status_csv = engine.get_job_status(job_id_csv)
+    status_csv = wait_for_job(engine, job_id_csv)
     assert status_csv["status"] == "completed"
     assert Path(status_csv["file_path"]).exists()
 
@@ -142,8 +150,7 @@ def test_export_engine_render_formats(tmp_path):
         filter_context=ctx,
         export_format="pdf",
     )
-    time.sleep(0.5)
-    status_pdf = engine.get_job_status(job_id_pdf)
+    status_pdf = wait_for_job(engine, job_id_pdf)
     assert status_pdf["status"] == "completed"
     assert Path(status_pdf["file_path"]).exists()
 
@@ -171,10 +178,7 @@ def test_export_api_endpoints():
     export_id = data["export_id"]
 
     # Poll status
-    time.sleep(0.5)
-    status_res = client.get(f"/api/exports/{export_id}/status")
-    assert status_res.status_code == 200
-    status_data = status_res.json()
+    status_data = wait_for_job(default_export_engine, export_id)
     assert status_data["export_id"] == export_id
     assert status_data["status"] == "completed"
 

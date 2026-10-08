@@ -96,7 +96,9 @@ cp .env.example .env
 |---|---|---|
 | `DATA_DIR` | `pybi_data` | Dove vengono salvati progetti e database locali |
 | `PORT` | `8080` | Porta (usata da Docker) |
-| `JWT_SECRET` | — | Chiave di firma dei token (per le funzioni di auth future) |
+| `JWT_SECRET` | — | Chiave di firma dei token (per le funzioni di auth) |
+| `DUCKDB_THREADS` | auto | Numero di thread allocati a DuckDB per l'elaborazione ETL |
+| `DUCKDB_MAX_MEMORY` | auto | Limite massimo di RAM per DuckDB (es. `4GB`) |
 
 **Attenzione:** il file `.env` contiene segreti ed è già in `.gitignore`. Non va
 mai committato.
@@ -518,8 +520,7 @@ docker run --rm \
 I test E2E usano una cartella `DATA_DIR` temporanea e isolata, quindi non
 toccano i tuoi progetti reali e non serve pulire nulla dopo un test.
 
-Suite attuale: **120 test**, di cui E2E browser, join, PostgreSQL, grafici,
-storage e controllo delle dipendenze.
+Suite attuale: **190+ test**, di cui test di performance, E2E browser (Playwright), join, PostgreSQL, grafici, pivot table, auth/scheduler e storage. CI/CD automatizzata tramite GitHub Actions (`.github/workflows/ci.yml`).
 
 > Attenzione: `pybi_data/` contiene i **dati reali** (progetti, CSV, database) ed
 > è escluso da git. Non usare `rm -rf pybi_data/*` per fare pulizia: per i database

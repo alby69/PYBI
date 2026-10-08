@@ -183,6 +183,8 @@ def _bind_kpi_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str])
 def _compute_server_pivot_duckdb(df: pl.DataFrame, rows: List[str], cols: List[str], vals: List[str], agg: str) -> Dict[str, Any]:
     """Execute server-side DuckDB GROUP BY query for large datasets."""
     conn = duckdb.connect(':memory:')
+    from pybi.etl.executor import configure_duckdb_connection
+    configure_duckdb_connection(conn)
     conn.register('source_tbl', df)
 
     agg_func = agg.upper() if agg else 'SUM'

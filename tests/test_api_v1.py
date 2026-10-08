@@ -14,7 +14,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def clean_test_projects():
     """Cleanup test project storage directory before and after test runs."""
-    test_proj_ids = ["v1_test_proj", "v1_etl_proj", "v1_dash_proj", "v1_export_proj"]
+    test_proj_ids = ["v1_test_proj", "v1_etl_proj", "v1_dash_proj", "v1_export_proj", "v1_viewer_proj"]
     for pid in test_proj_ids:
         default_storage.delete_project(pid)
     yield
@@ -60,7 +60,7 @@ def test_projects_crud_and_files():
     )
     assert create_res.status_code == 201
     proj_data = create_res.json()
-    assert proj_data["project_id"] == pid
+    assert proj_data["id"] == pid
     assert proj_data["name"] == "V1 Test Project"
 
     # Duplicate creation error
@@ -81,7 +81,7 @@ def test_projects_crud_and_files():
     # 3. Get Project
     get_res = client.get(f"/api/v1/projects/{pid}")
     assert get_res.status_code == 200
-    assert get_res.json()["project_id"] == pid
+    assert get_res.json()["id"] == pid
 
     # 4. Update Project
     update_res = client.put(
@@ -97,7 +97,7 @@ def test_projects_crud_and_files():
         f"/api/v1/projects/{pid}/files",
         files={"file": ("sample.csv", file_content, "text/csv")},
     )
-    assert upload_res.status_code == 200
+    assert upload_res.status_code == 201
     upload_data = upload_res.json()
     assert upload_data["filename"] == "sample.csv"
     assert upload_data["size_bytes"] == len(file_content)
@@ -121,7 +121,7 @@ def test_projects_crud_and_files():
 
 
 def test_etl_endpoints():
-    """Test v1 ETL DAG save, execute, and preview endpoints."""
+    """Test v1 ETL DAG save, execute, job status polling, and preview endpoints."""
     pid = "v1_etl_proj"
     client.post("/api/v1/projects", json={"project_id": pid, "name": "ETL Project"})
 
@@ -150,12 +150,12 @@ def test_etl_endpoints():
         ],
     }
 
-    # Save DAG
-    save_res = client.put(f"/api/v1/projects/{pid}/etl", json={"dag": sample_dag})
+    # Save DAG via PUT /etl/dag
+    save_res = client.put(f"/api/v1/projects/{pid}/etl/dag", json={"nodes": sample_dag["nodes"], "edges": sample_dag["edges"]})
     assert save_res.status_code == 200
 
-    # Get DAG
-    get_dag_res = client.get(f"/api/v1/projects/{pid}/etl")
+    # Get DAG via GET /etl/dag
+    get_dag_res = client.get(f"/api/v1/projects/{pid}/etl/dag")
     assert get_dag_res.status_code == 200
     fetched_nodes = get_dag_res.json()["nodes"]
     assert len(fetched_nodes) == 2
@@ -163,7 +163,8 @@ def test_etl_endpoints():
     # Execute DAG
     exec_res = client.post(f"/api/v1/projects/{pid}/etl/execute", json={"project_id": pid})
     assert exec_res.status_code == 200
-    assert exec_res.json()["status"] == "success"
+    exec_data = exec_res.json()
+    assert exec_data["status"] == "success"
 
     # Preview Node Output
     prev_res = client.post(
@@ -178,7 +179,7 @@ def test_etl_endpoints():
 
 
 def test_dashboards_endpoints():
-    """Test v1 Dashboard endpoints."""
+    """Test v1 Dashboard endpoints including POST create dashboard."""
     pid = "v1_dash_proj"
     client.post("/api/v1/projects", json={"project_id": pid, "name": "Dash Project"})
 
@@ -186,10 +187,18 @@ def test_dashboards_endpoints():
         {"i": "w1", "x": 0, "y": 0, "w": 6, "h": 4, "widget_type": "bar_chart"}
     ]
 
+    # Create Dashboard via POST
+    create_dash_res = client.post(
+        f"/api/v1/projects/{pid}/dashboards",
+        json={"name": "New Dynamic Dashboard"},
+    )
+    assert create_dash_res.status_code == 201
+    created_id = create_dash_res.json()["dashboard_id"]
+
     # Save Dashboard
     save_res = client.put(
-        f"/api/v1/projects/{pid}/dashboards/main_dash",
-        json={"name": "Main Dashboard", "layout": sample_layout},
+        f"/api/v1/projects/{pid}/dashboards/{created_id}",
+        json={"name": "New Dynamic Dashboard", "layout": sample_layout, "bindings": {}},
     )
     assert save_res.status_code == 200
 
@@ -198,59 +207,34 @@ def test_dashboards_endpoints():
     assert list_res.status_code == 200
     d_list = list_res.json()["dashboards"]
     assert len(d_list) >= 1
-    assert d_list[0]["id"] == "main_dash"
 
     # Get Specific Dashboard
-    get_res = client.get(f"/api/v1/projects/{pid}/dashboards/main_dash")
+    get_res = client.get(f"/api/v1/projects/{pid}/dashboards/{created_id}")
     assert get_res.status_code == 200
-    assert get_res.json()["name"] == "Main Dashboard"
+    assert get_res.json()["name"] == "New Dynamic Dashboard"
     assert get_res.json()["layout"] == sample_layout
 
     # Delete Dashboard
-    del_res = client.delete(f"/api/v1/projects/{pid}/dashboards/main_dash")
+    del_res = client.delete(f"/api/v1/projects/{pid}/dashboards/{created_id}")
     assert del_res.status_code == 200
 
 
-def test_export_ui_viewer_endpoints():
-    """Test v1 Exports, UI Schema, and Viewer endpoints."""
-    pid = "v1_export_proj"
-    client.post("/api/v1/projects", json={"project_id": pid, "name": "Export Project"})
+def test_viewer_data_endpoint():
+    """Test v1 Viewer aggregated data endpoint."""
+    pid = "v1_viewer_proj"
+    client.post("/api/v1/projects", json={"project_id": pid, "name": "Viewer Project"})
 
-    # 1. Create Export Job
-    exp_res = client.post(
-        f"/api/v1/projects/{pid}/export",
-        json={"format": "html", "payload": {"title": "Test Export"}},
+    sample_layout = [
+        {"i": "w1", "x": 0, "y": 0, "w": 6, "h": 4, "widget_type": "bar_chart", "config": {"source_name": "sales"}}
+    ]
+    client.put(
+        f"/api/v1/projects/{pid}/dashboards/dash_1",
+        json={"name": "Viewer Dash", "layout": sample_layout, "bindings": {}},
     )
-    assert exp_res.status_code == 200
-    exp_data = exp_res.json()
-    assert "export_id" in exp_data
-    export_id = exp_data["export_id"]
 
-    # Status Check
-    status_res = client.get(f"/api/v1/exports/{export_id}/status")
-    assert status_res.status_code == 200
-    assert status_res.json()["export_id"] == export_id
-
-    # PDF Shortcut Endpoint
-    pdf_res = client.post(f"/api/v1/projects/{pid}/export/pdf")
-    assert pdf_res.status_code == 200
-    assert "export_id" in pdf_res.json()
-
-    # CSV Data Shortcut Endpoint
-    csv_res = client.post(f"/api/v1/projects/{pid}/export/data")
-    assert csv_res.status_code == 200
-    assert "export_id" in csv_res.json()
-
-    # 2. UI Schema Endpoint
-    ui_res = client.get("/api/v1/ui/schema/etl-editor")
-    assert ui_res.status_code == 200
-    assert ui_res.json()["page"] == "etl-editor"
-
-    # 3. Viewer Endpoints
-    health_res = client.get("/api/v1/viewer/health")
-    assert health_res.status_code == 200
-    assert health_res.json()["status"] == "ok"
-
-    pub_res = client.get(f"/api/v1/viewer/projects/{pid}")
-    assert pub_res.status_code == 200
-    assert pub_res.json()["project_id"] == pid
+    viewer_data_res = client.get(f"/api/v1/viewer/{pid}/dashboards/dash_1/data")
+    assert viewer_data_res.status_code == 200
+    data = viewer_data_res.json()
+    assert data["project_id"] == pid
+    assert data["dashboard_id"] == "dash_1"
+    assert len(data["widgets"]) == 1

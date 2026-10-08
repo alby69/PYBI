@@ -4,7 +4,8 @@ from typing import Callable, List, Optional
 
 from nicegui import ui
 
-from pybi.core.storage import FileProjectStorage, ProjectStorage, default_storage, sanitize_project_id
+from pybi.core.storage import ProjectStorage, default_storage, sanitize_project_id
+import pybi.storage.project_manager as pm
 
 
 class ProjectManager:
@@ -19,17 +20,17 @@ class ProjectManager:
         """Initialize the project manager.
 
         Args:
-            storage: Project storage backend, defaults to the shared singleton.
+            storage: Optional explicit storage override.
             value: Initially selected project id.
             on_switch: Callback invoked as on_switch(project_id, action) after
                 create, rename, delete or selection changes.
         """
-        self._storage = storage or default_storage
+        self._storage = storage
         self._on_switch = on_switch
         self._current = sanitize_project_id(value)
         self._updating = False
 
-        initial_options = self._storage.list_projects()
+        initial_options = self.projects()
         if initial_options and self._current not in initial_options:
             self._current = initial_options[0]
 
@@ -99,8 +100,11 @@ class ProjectManager:
         return self._current
 
     def projects(self) -> List[str]:
-        """List the stored project ids."""
-        return self._storage.list_projects()
+        """List the stored project ids via storage module."""
+        if self._storage:
+            return self._storage.list_projects()
+        p_list = pm.list_projects()
+        return [p["id"] for p in p_list]
 
     def refresh(self) -> None:
         """Reload the project list, keeping the current selection when possible."""
@@ -175,15 +179,21 @@ class ProjectManager:
         new_id = sanitize_project_id(raw_id)
         if new_id != raw_id:
             ui.notify(f'Using "{new_id}" as project ID.', type='warning')
-        if isinstance(self._storage, FileProjectStorage) and self._storage.project_exists(new_id):
+        if new_id in self.projects():
             ui.notify(f'Project "{new_id}" already exists.', type='warning')
             return
-        self._storage.save_project(new_id, name=(self.create_name_input.value or '').strip())
-        self._current = new_id
-        self.create_dialog.close()
-        self.refresh()
-        ui.notify(f'Created project "{new_id}"', type='positive')
-        self._notify('', 'create')
+        try:
+            if self._storage:
+                self._storage.save_project(new_id, name=(self.create_name_input.value or '').strip())
+            else:
+                pm.create_project(name=(self.create_name_input.value or '').strip() or new_id, project_id=new_id)
+            self._current = new_id
+            self.create_dialog.close()
+            self.refresh()
+            ui.notify(f'Created project "{new_id}"', type='positive')
+            self._notify('', 'create')
+        except Exception as e:
+            ui.notify(f'Error creating project: {e}', type='negative')
 
     def _do_rename(self) -> None:
         raw_id = (self.rename_id_input.value or '').strip()
@@ -194,11 +204,16 @@ class ProjectManager:
         if new_id != raw_id:
             ui.notify(f'Using "{new_id}" as project ID.', type='warning')
         try:
-            result = self._storage.rename_project(
-                self._current,
-                new_id,
-                name=(self.rename_name_input.value or '').strip() or None,
-            )
+            storage = self._storage or default_storage
+            if hasattr(storage, 'rename_project'):
+                result = storage.rename_project(
+                    self._current,
+                    new_id,
+                    name=(self.rename_name_input.value or '').strip() or None,
+                )
+            else:
+                pm.update_project(self._current, name=(self.rename_name_input.value or '').strip() or new_id)
+                result = new_id
         except FileNotFoundError:
             ui.notify(f'Project "{self._current}" has not been saved yet.', type='warning')
             return
@@ -214,7 +229,10 @@ class ProjectManager:
     def _do_delete(self) -> None:
         if not self._current:
             return
-        deleted = self._storage.delete_project(self._current)
+        if self._storage:
+            deleted = self._storage.delete_project(self._current)
+        else:
+            deleted = pm.delete_project(self._current)
         self.delete_dialog.close()
         if not deleted:
             ui.notify(f'Project "{self._current}" was not saved yet.', type='warning')

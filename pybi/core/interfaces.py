@@ -5,18 +5,39 @@ from typing import Any, Dict, List, Optional
 
 
 class ETLNode(ABC):
-    """Abstract Base Class for ETL pipeline nodes."""
+    """Abstract Base Class for ETL pipeline nodes supporting Query Folding via Ibis."""
 
-    @abstractmethod
+    @property
+    def node_id(self) -> str:
+        """Unique node identifier in the DAG."""
+        return getattr(self, "_node_id", getattr(self, "id", "unknown_node"))
+
+    @property
+    def foldable(self) -> bool:
+        """Whether this node can participate in SQL query folding via Ibis."""
+        return True
+
+    def to_ibis_expr(self, input_expr: Any) -> Any:
+        """Translate this node's transformation logic into an Ibis table expression.
+
+        Args:
+            input_expr: Upstream Ibis Table expression.
+
+        Returns:
+            Transformed Ibis Table expression.
+        """
+        raise NotImplementedError(
+            f"Node '{self.node_id}' does not implement to_ibis_expr()"
+        )
+
     def validate(self) -> List[str]:
         """Validate node configuration and input parameters.
 
         Returns:
             List[str]: List of validation error messages (empty if valid).
         """
-        pass
+        return []
 
-    @abstractmethod
     def to_sql_expr(self, input_table: str) -> str:
         """Generate SQL CTE expression for this node given an input table name.
 
@@ -26,9 +47,8 @@ class ETLNode(ABC):
         Returns:
             str: SQL query string representing this transformation.
         """
-        pass
+        return f"SELECT * FROM {input_table}"
 
-    @abstractmethod
     def to_polars_expr(self, input_lazyframe: Any) -> Any:
         """Apply transformation on a Polars LazyFrame.
 
@@ -38,7 +58,7 @@ class ETLNode(ABC):
         Returns:
             Polars LazyFrame with transformation applied.
         """
-        pass
+        return input_lazyframe
 
 
 class Visual(ABC):

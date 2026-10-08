@@ -1,17 +1,30 @@
 """ETL node classes implementation."""
 
 from .base import BaseETLNode
-from .source import DataSourceNode
-from .transform import FilterNode, GroupByNode, JoinNode, PivotNode, SelectNode
+from .custom import CustomPythonNode
 from .output import OutputNode
+from .source import DataSourceNode, SourceNode
+from .transform import (
+    FilterNode,
+    GroupByAggregateNode,
+    GroupByNode,
+    JoinNode,
+    PivotNode,
+    SelectColumnsNode,
+    SelectNode,
+)
 
 __all__ = [
     "BaseETLNode",
     "DataSourceNode",
+    "SourceNode",
     "FilterNode",
     "SelectNode",
+    "SelectColumnsNode",
     "GroupByNode",
+    "GroupByAggregateNode",
     "JoinNode",
     "PivotNode",
+    "CustomPythonNode",
     "OutputNode",
 ]

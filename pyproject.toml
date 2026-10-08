@@ -20,7 +20,9 @@ dependencies = [
     "click>=8.1.0",
     "pyarrow>=14.0.0",
     "sqlalchemy>=2.0.0",
-    "pandas>=2.0.0"
+    "pandas>=2.0.0",
+    "ibis-framework[duckdb,sqlite,postgres]>=9.0",
+    "sqlglot>=25.0"
 ]
 
 [project.scripts]

@@ -15,8 +15,9 @@ MAX_CHART_SERIES = 3
 KPI_METRICS = ('sum', 'avg', 'min', 'max', 'count')
 KPI_METHODS = {'sum': 'sum', 'avg': 'mean', 'min': 'min', 'max': 'max'}
 WIDGET_DATA_KEYS = (
-    'columns', 'rows_data', 'rows', 'cols', 'vals', 'row_count', 'truncated',
-    'data_error', 'chart', 'kpi', 'data', 'server_pivot_data'
+    'columns', 'rows_data', 'rows', 'cols', 'vals', 'values', 'filters', 'filter_values',
+    'showRowSubtotals', 'showColSubtotals', 'showGrandTotals', 'emptyValuePlaceholder',
+    'row_count', 'truncated', 'data_error', 'chart', 'kpi', 'data', 'server_pivot_data'
 )
 
 SAMPLE_LAYOUT = [
@@ -180,45 +181,91 @@ def _bind_kpi_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str])
     return item
 
 
-def _compute_server_pivot_duckdb(df: pl.DataFrame, rows: List[str], cols: List[str], vals: List[str], agg: str) -> Dict[str, Any]:
+def _normalize_value_specs(vals: Any, default_agg: str = 'Sum') -> List[Dict[str, Any]]:
+    """Normalize values config into a list of value spec dicts: [{field, agg, showAs}]."""
+    if not vals:
+        return []
+    if isinstance(vals, list):
+        specs = []
+        for v in vals:
+            if isinstance(v, dict):
+                field = v.get('field') or v.get('col') or v.get('name') or ''
+                agg = v.get('agg') or v.get('aggregatorName') or default_agg
+                show_as = v.get('showAs') or 'None'
+                if field:
+                    specs.append({'field': field, 'agg': agg, 'showAs': show_as})
+            elif isinstance(v, str) and v.strip():
+                specs.append({'field': v.strip(), 'agg': default_agg, 'showAs': 'None'})
+        return specs
+    elif isinstance(vals, str) and vals.strip():
+        return [{'field': vals.strip(), 'agg': default_agg, 'showAs': 'None'}]
+    return []
+
+
+def _compute_server_pivot_duckdb(
+    df: pl.DataFrame,
+    rows: List[str],
+    cols: List[str],
+    vals: Any,
+    agg: str = 'Sum',
+    filters: Optional[List[str]] = None,
+    filter_values: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Execute server-side DuckDB GROUP BY query for large datasets."""
     conn = duckdb.connect(':memory:')
     from pybi.etl.executor import configure_duckdb_connection
     configure_duckdb_connection(conn)
     conn.register('source_tbl', df)
 
-    agg_func = agg.upper() if agg else 'SUM'
-    if agg_func == 'AVERAGE':
-        agg_func = 'AVG'
-    if agg_func not in ('SUM', 'COUNT', 'AVG', 'MIN', 'MAX'):
-        agg_func = 'SUM'
-
     valid_cols = set(df.columns)
-    r_fields = [r for r in rows if r in valid_cols]
-    c_fields = [c for c in cols if c in valid_cols]
-    v_fields = [v for v in vals if v in valid_cols]
+    r_fields = [r for r in (rows or []) if r in valid_cols]
+    c_fields = [c for c in (cols or []) if c in valid_cols]
+    val_specs = _normalize_value_specs(vals, default_agg=agg)
+    val_specs = [v for v in val_specs if v['field'] in valid_cols]
+
+    # Filter conditions
+    where_clauses = []
+    if filter_values and isinstance(filter_values, dict):
+        for f_col, f_val in filter_values.items():
+            if f_col in valid_cols and f_val is not None and str(f_val).strip() != '':
+                safe_val = str(f_val).replace("'", "''")
+                where_clauses.append(f'"{f_col}" = \'{safe_val}\'')
+
+    where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
     group_fields = r_fields + c_fields
 
-    if v_fields and agg_func != 'COUNT':
-        val_expr = f'"{v_fields[0]}"'
-        agg_sql = f"{agg_func}({val_expr})"
-    else:
-        agg_sql = "COUNT(*)"
+    if not val_specs:
+        val_specs = [{'field': valid_cols.pop() if valid_cols else 'val', 'agg': 'Count', 'showAs': 'None'}]
+
+    select_exprs = [f'"{g}"' for g in group_fields]
+    for idx, spec in enumerate(val_specs):
+        v_col = spec['field']
+        v_agg = spec['agg'].upper() if spec['agg'] else 'SUM'
+        if v_agg == 'AVERAGE':
+            v_agg = 'AVG'
+        if v_agg not in ('SUM', 'COUNT', 'AVG', 'MIN', 'MAX'):
+            v_agg = 'SUM'
+
+        if v_agg == 'COUNT':
+            select_exprs.append(f"COUNT(*) AS val_{idx}")
+        else:
+            select_exprs.append(f"{v_agg}(\"{v_col}\") AS val_{idx}")
 
     if not group_fields:
-        q = f"SELECT {agg_sql} AS agg_val FROM source_tbl"
+        q = f"SELECT {', '.join(select_exprs[len(group_fields):])} FROM source_tbl{where_sql}"
         res = conn.execute(q).fetchall()
-        val = float(res[0][0]) if res and res[0][0] is not None else 0.0
+        cells = [float(res[0][i]) if res and res[0][i] is not None else 0.0 for i in range(len(val_specs))]
         return {
+            'valueSpecs': val_specs,
             'colKeys': [[]],
-            'rows': [{'rowKey': [], 'cells': [val], 'rowTotal': val}],
-            'colTotals': [val],
-            'grandTotal': val
+            'rows': [{'rowKey': [], 'cells': cells, 'rowTotal': cells[0]}],
+            'colTotals': cells,
+            'grandTotal': cells[0]
         }
 
     group_str = ", ".join([f'"{g}"' for g in group_fields])
-    q = f"SELECT {group_str}, {agg_sql} AS agg_val FROM source_tbl GROUP BY {group_str}"
+    q = f"SELECT {', '.join(select_exprs)} FROM source_tbl{where_sql} GROUP BY {group_str}"
     res_df = conn.execute(q).pl()
 
     row_keys_set = set()
@@ -237,42 +284,60 @@ def _compute_server_pivot_duckdb(df: pl.DataFrame, rows: List[str], cols: List[s
     for row in res_df.rows():
         r_key = tuple([str(row[i]) if row[i] is not None else '' for i in range(len(r_fields))])
         c_key = tuple([str(row[len(r_fields) + j]) if row[len(r_fields) + j] is not None else '' for j in range(len(c_fields))])
-        val = row[-1]
-        cell_map[(r_key, c_key)] = float(val) if val is not None else None
+        vals_tuple = tuple(float(row[len(group_fields) + k]) if row[len(group_fields) + k] is not None else None for k in range(len(val_specs)))
+        cell_map[(r_key, c_key)] = vals_tuple
+
+    # Expand colKeys for multi-value specs if val_specs > 1 or c_fields > 0
+    expanded_col_keys = []
+    if c_fields and len(val_specs) > 1:
+        for c_key in col_keys:
+            for spec in val_specs:
+                expanded_col_keys.append(list(c_key) + [f"{spec['field']} ({spec['agg']})"])
+    elif c_fields:
+        expanded_col_keys = [list(ck) for ck in col_keys]
+    elif len(val_specs) > 1:
+        expanded_col_keys = [[f"{spec['field']} ({spec['agg']})"] for spec in val_specs]
+    else:
+        expanded_col_keys = [[]]
 
     matrix_rows = []
-    col_totals_sum = [0.0] * len(col_keys)
-    col_totals_count = [0] * len(col_keys)
-    grand_sum = 0.0
-    grand_count = 0
-
     for r_key in row_keys:
         cells = []
-        row_sum = 0.0
-        row_count = 0
-        for c_idx, c_key in enumerate(col_keys):
-            cell_val = cell_map.get((r_key, c_key))
-            cells.append(cell_val)
-            if cell_val is not None:
-                row_sum += cell_val
-                row_count += 1
-                col_totals_sum[c_idx] += cell_val
-                col_totals_count[c_idx] += 1
-                grand_sum += cell_val
-                grand_count += 1
+        if c_fields and len(val_specs) > 1:
+            for c_key in col_keys:
+                vals_tuple = cell_map.get((r_key, c_key), (None,) * len(val_specs))
+                cells.extend(vals_tuple)
+        elif c_fields:
+            for c_key in col_keys:
+                vals_tuple = cell_map.get((r_key, c_key), (None,))
+                cells.append(vals_tuple[0])
+        elif len(val_specs) > 1:
+            vals_tuple = cell_map.get((r_key, ()), (None,) * len(val_specs))
+            cells.extend(vals_tuple)
+        else:
+            vals_tuple = cell_map.get((r_key, ()), (None,))
+            cells.append(vals_tuple[0])
 
-        row_total = row_sum if row_count > 0 else None
+        valid_cells = [c for c in cells if c is not None]
+        row_total = sum(valid_cells) if valid_cells else None
         matrix_rows.append({
             'rowKey': list(r_key),
             'cells': cells,
             'rowTotal': row_total
         })
 
-    col_totals = [col_totals_sum[i] if col_totals_count[i] > 0 else None for i in range(len(col_keys))]
-    grand_total = grand_sum if grand_count > 0 else None
+    col_totals = []
+    num_cols = len(matrix_rows[0]['cells']) if matrix_rows else 0
+    for c_i in range(num_cols):
+        col_vals = [r['cells'][c_i] for r in matrix_rows if r['cells'][c_i] is not None]
+        col_totals.append(sum(col_vals) if col_vals else None)
+
+    valid_col_totals = [ct for ct in col_totals if ct is not None]
+    grand_total = sum(valid_col_totals) if valid_col_totals else None
 
     return {
-        'colKeys': [list(ck) for ck in col_keys],
+        'valueSpecs': val_specs,
+        'colKeys': expanded_col_keys,
         'rows': matrix_rows,
         'colTotals': col_totals,
         'grandTotal': grand_total
@@ -294,24 +359,27 @@ def _bind_pivot_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     all_cols = [str(c) for c in df.columns]
     rows = item.get('rows') if isinstance(item.get('rows'), list) else []
     cols = item.get('cols') if isinstance(item.get('cols'), list) else []
-    vals = item.get('vals') if isinstance(item.get('vals'), list) else []
+    vals = item.get('values') or item.get('vals') or []
+    filters = item.get('filters') if isinstance(item.get('filters'), list) else []
+    filter_values = item.get('filter_values') if isinstance(item.get('filter_values'), dict) else {}
     agg = item.get('aggregator_name') or item.get('aggregatorName') or 'Sum'
 
     if not rows and not cols and all_cols:
         rows = [all_cols[0]]
-    if not vals:
-        numeric = [c for c in df.columns if df[c].dtype.is_numeric()]
-        if numeric:
-            vals = [numeric[0]]
 
     item['rows'] = rows
     item['cols'] = cols
     item['vals'] = vals
+    item['values'] = vals
+    item['filters'] = filters
+    item['filter_values'] = filter_values
     item['aggregator_name'] = agg
     item['columns'] = all_cols
 
     if df.height > 50000:
-        item['server_pivot_data'] = _compute_server_pivot_duckdb(df, rows, cols, vals, agg)
+        item['server_pivot_data'] = _compute_server_pivot_duckdb(
+            df, rows=rows, cols=cols, vals=vals, agg=agg, filters=filters, filter_values=filter_values
+        )
     else:
         view = df.head(10000)
         item['data'] = [{c: _cell(v) for c, v in zip(all_cols, row)} for row in view.rows()]

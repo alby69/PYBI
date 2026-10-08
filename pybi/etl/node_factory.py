@@ -337,8 +337,12 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
         right_label = ", ".join(right_on) if isinstance(right_on, list) else right_on
         return f"{icon} {how.upper()} Join ({left_label} = {right_label})"
     if kind == "Pivot":
-        on_cols = ", ".join(data.get("on", []))
-        val_cols = ", ".join(data.get("values", []))
+        on_cols = ", ".join(data.get("on", [])) if isinstance(data.get("on"), list) else str(data.get("on") or "")
+        vals = data.get("values", [])
+        if isinstance(vals, list):
+            val_cols = ", ".join(v.get("field", str(v)) if isinstance(v, dict) else str(v) for v in vals)
+        else:
+            val_cols = str(vals)
         return f"{icon} Pivot ({val_cols} on {on_cols})"
     if kind == "Output":
         table_name = data.get("table_name", "")
@@ -442,8 +446,8 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
         index = parse_columns(index) if isinstance(index, str) else list(index or [])
         on = values.get("on")
         on = parse_columns(on) if isinstance(on, str) else list(on or [])
-        val_cols = values.get("values")
-        val_cols = parse_columns(val_cols) if isinstance(val_cols, str) else list(val_cols or [])
+        raw_vals = values.get("values")
+        val_cols = parse_columns(raw_vals) if isinstance(raw_vals, str) else list(raw_vals or [])
         agg_fn = values.get("aggregate_function") or "sum"
         if not on:
             raise ValueError("At least one pivot-on column is required for a Pivot node.")

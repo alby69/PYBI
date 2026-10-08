@@ -339,44 +339,74 @@ export default {
 
             const rows = item.rows || [];
             const cols = item.cols || [];
-            const vals = item.vals || [];
+            const rawVals = item.values || item.vals || [];
+            const filters = item.filters || [];
+            const filterValues = item.filter_values || item.filterValues || {};
             if (!rows.length && !cols.length) return null;
 
-            const agg = item.aggregator_name || 'Sum';
+            // Apply report filters
+            let dataToPivot = item.data;
+            if (filters.length) {
+                dataToPivot = dataToPivot.filter(r => {
+                    for (const fCol of filters) {
+                        const fVal = filterValues[fCol];
+                        if (fVal !== undefined && fVal !== null && fVal !== '') {
+                            if (String(r[fCol]) !== String(fVal)) return false;
+                        }
+                    }
+                    return true;
+                });
+            }
+
+            if (!dataToPivot.length) return null;
+
+            // Normalize valSpecs
+            let valSpecs = [];
+            if (Array.isArray(rawVals)) {
+                valSpecs = rawVals.map(v => {
+                    if (typeof v === 'object' && v !== null) {
+                        return { field: v.field || v.col || '', agg: v.agg || item.aggregator_name || 'Sum', showAs: v.showAs || 'None' };
+                    }
+                    return { field: String(v), agg: item.aggregator_name || 'Sum', showAs: 'None' };
+                }).filter(v => v.field);
+            } else if (typeof rawVals === 'string' && rawVals.trim()) {
+                valSpecs = rawVals.split(',').map(s => ({ field: s.trim(), agg: item.aggregator_name || 'Sum', showAs: 'None' }));
+            }
+
+            if (!valSpecs.length) {
+                valSpecs = [{ field: 'val', agg: item.aggregator_name || 'Sum', showAs: 'None' }];
+            }
 
             const rowKeysSet = new Set();
             const colKeysSet = new Set();
 
             const getTupleKey = (row, fields) => fields.map(f => row[f] === undefined || row[f] === null ? '' : String(row[f]));
 
-            item.data.forEach(row => {
+            dataToPivot.forEach(row => {
                 rowKeysSet.add(JSON.stringify(getTupleKey(row, rows)));
                 colKeysSet.add(JSON.stringify(getTupleKey(row, cols)));
             });
 
             const rowKeys = Array.from(rowKeysSet).map(s => JSON.parse(s));
-            const colKeys = Array.from(colKeysSet).map(s => JSON.parse(s));
+            const baseColKeys = Array.from(colKeysSet).map(s => JSON.parse(s));
 
             const cellMap = {};
-            item.data.forEach(row => {
+            dataToPivot.forEach(row => {
                 const rKeyStr = JSON.stringify(getTupleKey(row, rows));
                 const cKeyStr = JSON.stringify(getTupleKey(row, cols));
 
                 if (!cellMap[rKeyStr]) cellMap[rKeyStr] = {};
-                if (!cellMap[rKeyStr][cKeyStr]) cellMap[rKeyStr][cKeyStr] = [];
+                if (!cellMap[rKeyStr][cKeyStr]) cellMap[rKeyStr][cKeyStr] = valSpecs.map(() => []);
 
-                if (vals.length) {
-                    vals.forEach(vCol => {
-                        const val = parseFloat(row[vCol]);
-                        if (!isNaN(val)) cellMap[rKeyStr][cKeyStr].push(val);
-                    });
-                } else {
-                    cellMap[rKeyStr][cKeyStr].push(1);
-                }
+                valSpecs.forEach((spec, vIdx) => {
+                    const val = parseFloat(row[spec.field]);
+                    if (!isNaN(val)) cellMap[rKeyStr][cKeyStr][vIdx].push(val);
+                });
             });
 
-            const calcAgg = (values) => {
+            const calcAgg = (values, aggName) => {
                 if (!values || !values.length) return null;
+                const agg = aggName || 'Sum';
                 if (agg === 'Count') return values.length;
                 if (agg === 'Sum') return values.reduce((a, b) => a + b, 0);
                 if (agg === 'Average') return values.reduce((a, b) => a + b, 0) / values.length;
@@ -385,43 +415,68 @@ export default {
                 return values.reduce((a, b) => a + b, 0);
             };
 
-            const matrixRows = [];
-            const colAllValues = colKeys.map(() => []);
-            const grandAllValues = [];
+            const expandedColKeys = [];
+            if (baseColKeys.length && valSpecs.length > 1) {
+                baseColKeys.forEach(cKey => {
+                    valSpecs.forEach(spec => expandedColKeys.push([...cKey, `${spec.field} (${spec.agg})`]));
+                });
+            } else if (baseColKeys.length) {
+                baseColKeys.forEach(cKey => expandedColKeys.push(cKey));
+            } else if (valSpecs.length > 1) {
+                valSpecs.forEach(spec => expandedColKeys.push([`${spec.field} (${spec.agg})`]));
+            } else {
+                expandedColKeys.push([]);
+            }
 
+            const matrixRows = [];
             rowKeys.forEach(rKey => {
                 const rKeyStr = JSON.stringify(rKey);
-                const rowAllValues = [];
-                const cells = colKeys.map((cKey, cIdx) => {
-                    const cKeyStr = JSON.stringify(cKey);
-                    const values = cellMap[rKeyStr] ? cellMap[rKeyStr][cKeyStr] || [] : [];
-                    const aggregated = calcAgg(values);
+                const cells = [];
+                const rowAllValues = valSpecs.map(() => []);
 
-                    if (values.length) {
-                        rowAllValues.push(...values);
-                        colAllValues[cIdx].push(...values);
-                        grandAllValues.push(...values);
-                    }
-                    return aggregated;
-                });
+                if (baseColKeys.length && valSpecs.length > 1) {
+                    baseColKeys.forEach(cKey => {
+                        const cKeyStr = JSON.stringify(cKey);
+                        valSpecs.forEach((spec, vIdx) => {
+                            const values = cellMap[rKeyStr] && cellMap[rKeyStr][cKeyStr] ? cellMap[rKeyStr][cKeyStr][vIdx] : [];
+                            const val = calcAgg(values, spec.agg);
+                            cells.push(val);
+                            if (values.length) rowAllValues[vIdx].push(...values);
+                        });
+                    });
+                } else if (baseColKeys.length) {
+                    const spec = valSpecs[0];
+                    baseColKeys.forEach(cKey => {
+                        const cKeyStr = JSON.stringify(cKey);
+                        const values = cellMap[rKeyStr] && cellMap[rKeyStr][cKeyStr] ? cellMap[rKeyStr][cKeyStr][0] : [];
+                        const val = calcAgg(values, spec.agg);
+                        cells.push(val);
+                        if (values.length) rowAllValues[0].push(...values);
+                    });
+                } else {
+                    valSpecs.forEach((spec, vIdx) => {
+                        const values = cellMap[rKeyStr] && cellMap[rKeyStr]['[]'] ? cellMap[rKeyStr]['[]'][vIdx] : [];
+                        const val = calcAgg(values, spec.agg);
+                        cells.push(val);
+                        if (values.length) rowAllValues[vIdx].push(...values);
+                    });
+                }
 
-                const rowTotal = calcAgg(rowAllValues);
-                matrixRows.push({
-                    rowKey: rKey,
-                    cells,
-                    rowTotal
-                });
+                const firstValTotal = calcAgg(rowAllValues[0], valSpecs[0].agg);
+                matrixRows.push({ rowKey: rKey, cells, rowTotal: firstValTotal });
             });
 
-            const colTotals = colAllValues.map(vals => calcAgg(vals));
-            const grandTotal = calcAgg(grandAllValues);
+            const colTotals = expandedColKeys.map((cKey, cIdx) => {
+                const colCells = matrixRows.map(r => r.cells[cIdx]).filter(v => v !== null && v !== undefined);
+                if (!colCells.length) return null;
+                const vIdx = valSpecs.length > 1 ? (cIdx % valSpecs.length) : 0;
+                return calcAgg(colCells, valSpecs[vIdx].agg);
+            });
 
-            return {
-                colKeys,
-                rows: matrixRows,
-                colTotals,
-                grandTotal
-            };
+            const validColTotals = colTotals.filter(ct => ct !== null && ct !== undefined);
+            const grandTotal = validColTotals.length ? validColTotals.reduce((a, b) => a + b, 0) : null;
+
+            return { colKeys: expandedColKeys, rows: matrixRows, colTotals, grandTotal };
         },
         exportPivotCSV(item) {
             const matrix = this.getPivotMatrix(item);

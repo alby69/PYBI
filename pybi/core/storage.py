@@ -170,6 +170,34 @@ class FileProjectStorage(ProjectStorage):
         os.makedirs(data_dir, exist_ok=True)
         return data_dir
 
+    def get_project_cache_dir(self, project_id: str) -> str:
+        """Returns and creates (if it does not exist) the 'cache' directory for the project."""
+        safe_id = sanitize_project_id(project_id)
+        cache_dir = os.path.join(self.storage_dir, "cache", safe_id)
+        os.makedirs(cache_dir, exist_ok=True)
+        return cache_dir
+
+    def get_cached_table(self, project_id: str, cache_key: str) -> Optional[Any]:
+        """Load cached Parquet file if exists."""
+        import polars as pl
+        cache_dir = self.get_project_cache_dir(project_id)
+        file_path = os.path.join(cache_dir, f"{cache_key}.parquet")
+        if os.path.exists(file_path):
+            try:
+                return pl.read_parquet(file_path)
+            except Exception:
+                return None
+        return None
+
+    def save_cached_table(self, project_id: str, cache_key: str, df: Any) -> str:
+        """Save DataFrame as Parquet in the project's cache directory."""
+        import polars as pl
+        cache_dir = self.get_project_cache_dir(project_id)
+        file_path = os.path.join(cache_dir, f"{cache_key}.parquet")
+        if isinstance(df, pl.DataFrame):
+            df.write_parquet(file_path)
+        return file_path
+
     def save_project(
         self,
         project_id: str,

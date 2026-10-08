@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, status
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
 import pybi.storage.project_manager as pm
+from pybi.semantic.engine import SemanticQueryResolver
+from pybi.semantic.models import SemanticQueryRequest, SemanticQueryResponse
 
 router = APIRouter(prefix="/api/v1/viewer", tags=["Viewer"])
 
@@ -79,3 +81,26 @@ def get_viewer_dashboard_data(project_id: str, dashboard_id: str) -> Dict[str, A
         "widgets": widget_data,
         "sources": default_binder.list_sources(),
     }
+
+
+@router.post("/{project_id}/semantic-query", response_model=SemanticQueryResponse)
+def execute_semantic_query(project_id: str, request: SemanticQueryRequest) -> SemanticQueryResponse:
+    """Execute a semantic query against a project's registered data sources or semantic models."""
+    if not default_storage.project_exists(project_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+    resolver = SemanticQueryResolver()
+    source_name = request.source_table or request.model_name
+    source_df = None
+
+    if source_name and source_name in default_binder.list_sources():
+        try:
+            source_df = default_binder.get_source_data(source_name)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Error loading source '{source_name}': {e}")
+
+    try:
+        response = resolver.execute(request, source_df=source_df)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Semantic query execution failed: {e}")

@@ -1,15 +1,21 @@
-"""Public Viewer page implementation for read-only, project/dashboard selection."""
+"""Public Viewer page implementation for read-only, project/dashboard selection using Declarative UI Schema."""
 
 from nicegui import ui
 
 from pybi.core.storage import default_storage
+from pybi.server.ui_schema import get_viewer_schema
 from pybi.ui.components.dashboard_grid import DashboardGrid
+from pybi.ui.components.dynamic_renderer import DynamicRenderer
 from pybi.ui.components.navbar import render_navbar
 from pybi.ui.components.widget_data import bind_widget_data, sample_layout
 
 
 def create_viewer_page(initial_project: str = ''):
     render_navbar(active='/viewer')
+
+    # Declarative UI schema header dynamic renderer
+    schema_data = get_viewer_schema(initial_project).model_dump()
+    DynamicRenderer(schema=schema_data, page_name='viewer')
 
     with ui.row().classes('w-full items-center justify-between border-b pb-3 q-mb-md q-mt-md'):
         with ui.column().classes('gap-0'):
@@ -49,7 +55,7 @@ def create_viewer_page(initial_project: str = ''):
         if e.value:
             load_dashboard(project_select.value, e.value)
 
-    with ui.row().classes('w-full items-center gap-4 q-mb-md'):
+    with ui.row().classes('w-full items-center gap-4 q-mb-md q-mt-md'):
         project_select = (
             ui.select(default_storage.list_projects(), label='Project', with_input=True, on_change=on_project_change)
             .props('dense outlined options-dense')

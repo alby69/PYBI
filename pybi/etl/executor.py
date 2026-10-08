@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional, Union
 import duckdb
 import polars as pl
 
+from pybi.etl.compiler import ETLCompiler
+from pybi.model.engine import ModelEngine
+
 from .connectors import (
     read_csv,
     read_parquet,
@@ -21,25 +24,7 @@ from .node_factory import JOIN_TYPES
 
 
 def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
-    """Resolve a data file path against the project data folder.
-
-    Resolution order:
-
-    1. An existing absolute path, as given.
-    2. ``base_dir/<filepath>``, then ``base_dir/<basename>`` when either exists,
-       so a bare file name picked from the project data folder always resolves.
-    3. The path as given (absolute, or relative to the process working directory).
-
-    Returns the original path when nothing matches, so error messages keep the
-    value the user typed.
-
-    Args:
-        filepath: Path or file name from the DataSource node.
-        base_dir: Project data directory (see ``FileProjectStorage.get_project_data_dir``).
-
-    Returns:
-        The resolved path to read from.
-    """
+    """Resolve a data file path against the project data folder."""
     if not filepath or not base_dir:
         return filepath
     if os.path.isabs(filepath) and os.path.exists(filepath):
@@ -80,10 +65,7 @@ def configure_duckdb_connection(
     threads: Optional[int] = None,
     max_memory: Optional[str] = None,
 ) -> duckdb.DuckDBPyConnection:
-    """Apply performance pragmas to a DuckDB connection.
-
-    Checks explicit parameters or `DUCKDB_THREADS` and `DUCKDB_MAX_MEMORY` environment variables.
-    """
+    """Apply performance pragmas to a DuckDB connection."""
     env_threads = os.environ.get("DUCKDB_THREADS")
     env_memory = os.environ.get("DUCKDB_MAX_MEMORY")
 
@@ -117,28 +99,28 @@ class ETLExecutor:
         base_dir: Optional[str] = None,
         threads: Optional[int] = None,
         max_memory: Optional[str] = None,
+        model_engine: Optional[ModelEngine] = None,
     ) -> None:
-        """Initialize ETLExecutor.
-
-        Args:
-            duckdb_conn: Optional DuckDB connection instance.
-            base_dir: Project data directory used to resolve DataSource file paths.
-            threads: Optional number of threads for DuckDB.
-            max_memory: Optional memory limit for DuckDB (e.g., '4GB').
-        """
+        """Initialize ETLExecutor."""
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
         configure_duckdb_connection(self.duckdb_conn, threads=threads, max_memory=max_memory)
         self.base_dir = base_dir
+        self.compiler = ETLCompiler()
+        self.model_engine = model_engine or ModelEngine(conn=self.duckdb_conn)
 
-    def execute(self, dag: Dict[str, Any]) -> ETLResult:
-        """Execute a DAG defined by nodes and edges.
+    def compile(self, dag: Dict[str, Any]) -> Dict[str, str]:
+        """Compile DAG into folded SQL queries per output table using ETLCompiler.
 
         Args:
-            dag: Dict containing 'nodes' (list) and 'edges' (list).
+            dag: Dict representing DAG.
 
         Returns:
-            ETLResult containing execution status, output DataFrames, and logs.
+            Dict[str, str]: Output table name to compiled SQL query.
         """
+        return self.compiler.compile_to_sql(dag)
+
+    def execute(self, dag: Dict[str, Any]) -> ETLResult:
+        """Execute a DAG defined by nodes and edges."""
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
         logs: List[str] = []
@@ -155,7 +137,6 @@ class ETLExecutor:
             if source in node_map and target in node_map:
                 parents_map[target].append(source)
 
-        # Topological sort
         try:
             ts = graphlib.TopologicalSorter(parents_map)
             execution_order = list(ts.static_order())
@@ -184,6 +165,8 @@ class ETLExecutor:
                 if output_table_info:
                     tbl_name, tbl_df = output_table_info
                     output_tables[tbl_name] = tbl_df
+                    # Register table in Semantic Model Engine
+                    self.model_engine.register_dataframe(tbl_name, tbl_df, source_node_id=node_id)
 
             except Exception as e:
                 err_msg = f"Error executing node '{node_id}': {e}"
@@ -209,16 +192,6 @@ class ETLExecutor:
         parent_ids: List[str],
         node_results: Dict[str, pl.DataFrame],
     ) -> tuple[pl.DataFrame, str, Optional[tuple[str, pl.DataFrame]]]:
-        """Execute an individual node in the DAG.
-
-        Args:
-            node: The node dictionary definition.
-            parent_ids: List of parent node IDs.
-            node_results: Dict mapping completed node IDs to DataFrames.
-
-        Returns:
-            Tuple of (Result DataFrame, Log message, Optional (table_name, DataFrame)).
-        """
         node_id = node.get("id", "unknown")
         data = node.get("data", {})
         label = node.get("label", data.get("label", ""))
@@ -229,7 +202,6 @@ class ETLExecutor:
             or node.get("type")
         )
 
-        # Classify node type if not explicit
         if not node_type or node_type in ("input", "default", "output"):
             if node_type == "input" or any(k in label for k in ("Source", "CSV", "Parquet", "PostgreSQL", "read_")):
                 category = "DataSource"
@@ -245,7 +217,6 @@ class ETLExecutor:
             source_type = (data.get("source_type") or "").lower()
             filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
 
-            # Fallback parsing from label if parameters not explicitly set in data dict
             if not filepath and label:
                 match = re.search(r"\(([^)]+)\)", label)
                 if match:
@@ -292,7 +263,6 @@ class ETLExecutor:
             parent_df = node_results[parent_ids[0]]
             transform_type = data.get("transform_type") or data.get("action")
 
-            # Infer transform type from label if absent
             if not transform_type and label:
                 label_lower = label.lower()
                 if "filter" in label_lower:
@@ -307,7 +277,7 @@ class ETLExecutor:
                     transform_type = "pivot"
 
             if not transform_type:
-                transform_type = "filter"  # default transform fallback
+                transform_type = "filter"
 
             if transform_type == "filter":
                 condition = data.get("condition") or data.get("predicate")
@@ -317,7 +287,6 @@ class ETLExecutor:
                         condition = match.group(1)
 
                 if condition:
-                    # DuckDB SQL evaluation for flexible filter condition support
                     temp_conn = self.duckdb_conn
                     temp_conn.register("source_df", parent_df)
                     try:
@@ -345,7 +314,7 @@ class ETLExecutor:
                 if isinstance(group_cols, str):
                     group_cols = [c.strip() for c in group_cols.split(",")]
 
-                aggs = data.get("aggregations", {})  # e.g. {"sales": "sum"}
+                aggs = data.get("aggregations", {})
                 if group_cols:
                     if aggs:
                         agg_exprs = []
@@ -452,12 +421,10 @@ class ETLExecutor:
             else:
                 log_msg = f"Saved {len(parent_df)} rows to DuckDB table '{table_name}'"
 
-            # Register with DuckDB
             self.duckdb_conn.register(table_name, parent_df)
             return parent_df, log_msg, (table_name, parent_df)
 
         else:
-            # Fallback pass-through
             if parent_ids:
                 return node_results[parent_ids[0]], f"Unrecognized node category '{category}', passing through parent data", None
             else:
@@ -471,18 +438,7 @@ def execute_dag(
     threads: Optional[int] = None,
     max_memory: Optional[str] = None,
 ) -> ETLResult:
-    """Convenience function to execute an ETL DAG.
-
-    Args:
-        dag: Dict representing the DAG (nodes and edges).
-        duckdb_conn: Optional DuckDB connection.
-        base_dir: Project data directory used to resolve DataSource file paths.
-        threads: Optional number of DuckDB threads.
-        max_memory: Optional max memory setting for DuckDB.
-
-    Returns:
-        ETLResult instance.
-    """
+    """Convenience function to execute an ETL DAG."""
     executor = ETLExecutor(
         duckdb_conn=duckdb_conn,
         base_dir=base_dir,

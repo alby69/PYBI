@@ -17,7 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # Modules provided by the standard library or by the project itself.
 STDLIB_AND_LOCAL = {
     'abc', 'ast', 'asyncio', 'collections', 'contextlib', 'copy', 'csv', 'dataclasses',
-    'datetime', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
+    'datetime', 'enum', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
     'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
     'pybi',

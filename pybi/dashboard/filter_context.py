@@ -1,86 +1,114 @@
 """Centralized FilterContext for dashboard interaction and cross-filtering propagation."""
 
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Union
 
 
 @dataclass
-class FilterRule:
-    """Filter rule applied to a table and column."""
+class FilterState:
+    """Filter state applied to a table and column."""
 
     table: str
     column: str
-    value: Any
-    operator: str = "="
+    values: List[Any]
+    operator: str = "IN"
+
+
+# Alias for backward compatibility
+FilterRule = FilterState
 
 
 class FilterContext:
-    """Observer pattern manager for slicers and cross-filtering propagation across visuals."""
+    """Centralized filter state manager and observer pattern subject for cross-filtering."""
 
     def __init__(self) -> None:
-        self.filters: Dict[str, FilterRule] = {}
-        self._subscribers: List[Callable[['FilterContext'], None]] = []
+        self._active_filters: Dict[str, FilterState] = {}
+        self._listeners: List[Callable] = []
+
+    @property
+    def filters(self) -> Dict[str, FilterState]:
+        """Expose active filters mapping."""
+        return self._active_filters
+
+    def set_filter(self, table: str, column: str, values: List[Any], operator: str = "IN") -> None:
+        """Set or update a filter state for a table and column."""
+        key = f"{table}.{column}"
+        self._active_filters[key] = FilterState(table=table, column=column, values=values, operator=operator)
+        self._notify_listeners()
 
     def add_filter(self, table: str, column: str, value: Any, operator: str = "=") -> None:
-        """Add or update a filter rule and notify subscribers.
+        """Add or update a filter rule (backward compatibility method)."""
+        vals = value if isinstance(value, list) else [value]
+        op = "IN" if isinstance(value, list) and operator == "=" else operator
+        self.set_filter(table, column, vals, operator=op)
 
-        Args:
-            table: Target table name.
-            column: Target column name.
-            value: Filter value.
-            operator: SQL comparison operator (default '=').
-        """
+    def clear_filter(self, table: str, column: str) -> None:
+        """Clear a specific filter for a table and column."""
         key = f"{table}.{column}"
-        self.filters[key] = FilterRule(table=table, column=column, value=value, operator=operator)
-        self.notify()
+        if key in self._active_filters:
+            del self._active_filters[key]
+            self._notify_listeners()
 
     def remove_filter(self, table: str, column: str) -> None:
-        """Remove a filter rule for a specific table and column.
-
-        Args:
-            table: Target table name.
-            column: Target column name.
-        """
-        key = f"{table}.{column}"
-        if key in self.filters:
-            del self.filters[key]
-            self.notify()
+        """Remove a specific filter (backward compatibility alias)."""
+        self.clear_filter(table, column)
 
     def clear_filters(self) -> None:
-        """Clear all active filter rules."""
-        if self.filters:
-            self.filters.clear()
-            self.notify()
+        """Clear all active filter states."""
+        if self._active_filters:
+            self._active_filters.clear()
+            self._notify_listeners()
 
-    def subscribe(self, callback: Callable[['FilterContext'], None]) -> None:
-        """Subscribe a listener callback to filter context changes."""
-        if callback not in self._subscribers:
-            self._subscribers.append(callback)
+    def get_active_filters_for_table(self, table_name: str) -> List[FilterState]:
+        """Return active filter states for a specific table."""
+        return [f for key, f in self._active_filters.items() if f.table == table_name]
 
-    def unsubscribe(self, callback: Callable[['FilterContext'], None]) -> None:
+    def to_sql_where(self, table: Optional[Union[Any, str]] = None) -> str:
+        """Generate a SQL WHERE clause for DuckDB/Polars based on active filters."""
+        t_name = None
+        if isinstance(table, str):
+            t_name = table
+        elif table is not None and hasattr(table, "name"):
+            t_name = table.name
+
+        if t_name:
+            filters = self.get_active_filters_for_table(t_name)
+        else:
+            filters = list(self._active_filters.values())
+
+        if not filters:
+            return ""
+
+        conditions = []
+        for f in filters:
+            if f.operator == "IN":
+                vals = ", ".join([f"'{str(v).replace("'", "''")}'" if isinstance(v, str) else str(v) for v in f.values])
+                conditions.append(f"{f.column} IN ({vals})")
+            else:
+                val = f.values[0] if f.values else ""
+                val_repr = f"'{str(val).replace("'", "''")}'" if isinstance(val, str) else str(val)
+                conditions.append(f"{f.column} {f.operator} {val_repr}")
+
+        return "WHERE " + " AND ".join(conditions)
+
+    def subscribe(self, listener: Callable) -> None:
+        """Register a subscriber listener callback."""
+        if listener not in self._listeners:
+            self._listeners.append(listener)
+
+    def unsubscribe(self, listener: Callable) -> None:
         """Unsubscribe a listener callback."""
-        if callback in self._subscribers:
-            self._subscribers.remove(callback)
+        if listener in self._listeners:
+            self._listeners.remove(listener)
+
+    def _notify_listeners(self) -> None:
+        """Notify all subscribed listeners that active filters changed."""
+        for listener in list(self._listeners):
+            try:
+                listener(self._active_filters)
+            except (AttributeError, TypeError):
+                listener(self)
 
     def notify(self) -> None:
-        """Notify all registered subscribers of state updates."""
-        for callback in self._subscribers:
-            callback(self)
-
-    def to_sql_where(self, table_name: Optional[str] = None) -> str:
-        """Build SQL WHERE clause for filters matching the table name.
-
-        Args:
-            table_name: Optional filter table name constraint.
-
-        Returns:
-            str: SQL WHERE conditions joined by AND (empty string if no filters).
-        """
-        clauses = []
-        for rule in self.filters.values():
-            if table_name and rule.table != table_name:
-                continue
-            val_repr = f"'{rule.value}'" if isinstance(rule.value, str) else str(rule.value)
-            clauses.append(f"{rule.column} {rule.operator} {val_repr}")
-
-        return " AND ".join(clauses) if clauses else ""
+        """Explicitly notify listeners."""
+        self._notify_listeners()

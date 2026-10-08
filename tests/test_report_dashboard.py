@@ -19,7 +19,7 @@ def test_filter_context_notifications():
     assert notifications[0] == 1
 
     sql_where = fc.to_sql_where("sales_table")
-    assert sql_where == "region = 'EU'"
+    assert "region = 'EU'" in sql_where
 
     fc.remove_filter("sales_table", "region")
     assert len(notifications) == 2

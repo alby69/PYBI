@@ -1,8 +1,8 @@
 """Semantic Data Model schema definitions for PyBI."""
 
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, List, Literal, Optional, Union
 
 
 class DataType(str, Enum):
@@ -17,14 +17,19 @@ class DataType(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
-class Column(BaseModel):
+@dataclass
+class Column:
     """Semantic model column metadata."""
 
     name: str
-    data_type: DataType = DataType.UNKNOWN
-    is_key: bool = False
+    data_type: Union[str, DataType] = DataType.UNKNOWN
     is_hidden: bool = False
+    is_key: bool = False
     description: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if isinstance(self.data_type, DataType):
+            self.data_type = self.data_type.value
 
 
 class RelationshipCardinality(str, Enum):
@@ -36,30 +41,36 @@ class RelationshipCardinality(str, Enum):
     MANY_TO_MANY = "*:*"
 
 
-class Relationship(BaseModel):
+@dataclass
+class Relationship:
     """Relationship between two semantic model tables."""
 
-    from_table: str
-    from_column: str
-    to_table: str
-    to_column: str
+    name: str = ""
+    from_table: str = ""
+    from_column: str = ""
+    to_table: str = ""
+    to_column: str = ""
+    cross_filter_direction: Literal["Single", "Both"] = "Single"
     cardinality: RelationshipCardinality = RelationshipCardinality.MANY_TO_ONE
 
 
-class Table(BaseModel):
+@dataclass
+class Table:
     """Semantic model table definition."""
 
     name: str
-    columns: List[Column] = Field(default_factory=list)
+    columns: List[Column] = field(default_factory=list)
+    relationships: List[Relationship] = field(default_factory=list)
     primary_key: Optional[List[str]] = None
     source_node_id: Optional[str] = None
 
 
-class SemanticModel(BaseModel):
+@dataclass
+class SemanticModel:
     """Complete semantic model schema representing tables and relationships."""
 
-    tables: Dict[str, Table] = Field(default_factory=dict)
-    relationships: List[Relationship] = Field(default_factory=list)
+    tables: Dict[str, Table] = field(default_factory=dict)
+    relationships: List[Relationship] = field(default_factory=list)
 
     def add_table(self, table: Table) -> None:
         """Add or update a table in the semantic model."""

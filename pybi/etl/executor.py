@@ -2,14 +2,18 @@
 
 from dataclasses import dataclass, field
 import graphlib
+import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import duckdb
+import ibis
 import polars as pl
 
+from pybi.core.interfaces import ETLNode
 from pybi.etl.compiler import ETLCompiler
+from pybi.etl.optimizer import SQLOptimizer
 from pybi.model.engine import ModelEngine
 
 from .connectors import (
@@ -21,6 +25,8 @@ from .connectors import (
     write_sqlite,
 )
 from .node_factory import JOIN_TYPES
+
+log = logging.getLogger(__name__)
 
 
 def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
@@ -91,7 +97,7 @@ class ETLResult:
 
 
 class ETLExecutor:
-    """ETLExecutor parses a visual Vue Flow DAG (nodes & edges) and executes it using Polars and DuckDB."""
+    """ETLExecutor parses visual Vue Flow DAGs or ETLNode chains and executes them using Ibis, SQLGlot, Polars and DuckDB."""
 
     def __init__(
         self,
@@ -105,22 +111,81 @@ class ETLExecutor:
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
         configure_duckdb_connection(self.duckdb_conn, threads=threads, max_memory=max_memory)
         self.base_dir = base_dir
-        self.compiler = ETLCompiler()
+
+        self.ibis_con = ibis.duckdb.connect()
+        self.compiler = ETLCompiler(backend="duckdb", ibis_con=self.ibis_con)
+        self.optimizer = SQLOptimizer(dialect="duckdb")
         self.model_engine = model_engine or ModelEngine(conn=self.duckdb_conn)
 
     def compile(self, dag: Dict[str, Any]) -> Dict[str, str]:
-        """Compile DAG into folded SQL queries per output table using ETLCompiler.
+        """Compile visual DAG dict into folded SQL queries per output table.
 
         Args:
-            dag: Dict representing DAG.
+            dag: Dict representing visual Vue Flow DAG.
 
         Returns:
-            Dict[str, str]: Output table name to compiled SQL query.
+            Dict[str, str]: Output table name to compiled SQL query string.
         """
         return self.compiler.compile_to_sql(dag)
 
+    def execute_nodes(
+        self,
+        dag: Sequence[ETLNode],
+        source_path: str | None = None,
+        source_df: pl.DataFrame | None = None,
+        source_table_name: str = "source_data",
+    ) -> Tuple[pl.DataFrame, str, str]:
+        """Execute a topological list of ETLNodes using Query Folding (compile -> optimize -> execute).
+
+        Args:
+            dag: Sequence of ETLNode instances.
+            source_path: File path for source data.
+            source_df: Polars DataFrame for in-memory source data.
+            source_table_name: Name of the registered source table in DuckDB/Ibis.
+
+        Returns:
+            Tuple[pl.DataFrame, str, str]: (result_df, raw_sql, optimized_sql)
+        """
+        if source_path:
+            source_path = resolve_data_path(source_path, self.base_dir)
+            if source_path.endswith(".parquet"):
+                self.ibis_con.read_parquet(source_path, table_name=source_table_name)
+            else:
+                self.ibis_con.read_csv(source_path, table_name=source_table_name)
+        elif source_df is not None:
+            if hasattr(self.ibis_con, "con") and hasattr(self.ibis_con.con, "register"):
+                self.ibis_con.con.register(source_table_name, source_df)
+            else:
+                self.ibis_con.create_table(source_table_name, source_df.to_arrow(), overwrite=True)
+        else:
+            raise ValueError("Must provide either source_path or source_df to execute_nodes.")
+
+        source_expr = self.ibis_con.table(source_table_name)
+
+        raw_sql = self.compiler.compile(dag, source_expr)
+        optimized_sql = self.optimizer.optimize(raw_sql)
+
+        # Register any intermediate/tmp tables in DuckDB execution connection if needed
+        for table in self.ibis_con.list_tables():
+            if table.startswith("_pybi_tmp_"):
+                df_tmp = self.ibis_con.table(table).execute()
+                self.duckdb_conn.register(table, df_tmp)
+
+        if hasattr(self.ibis_con, "con") and hasattr(self.ibis_con.con, "execute"):
+            try:
+                res_duck = self.ibis_con.con.execute(optimized_sql)
+                result_df = res_duck.pl()
+            except Exception:
+                res_duck = self.duckdb_conn.execute(optimized_sql)
+                result_df = res_duck.pl()
+        else:
+            res_duck = self.duckdb_conn.execute(optimized_sql)
+            result_df = res_duck.pl()
+
+        return result_df, raw_sql, optimized_sql
+
     def execute(self, dag: Dict[str, Any]) -> ETLResult:
-        """Execute a DAG defined by nodes and edges."""
+        """Execute a visual DAG defined by nodes and edges."""
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
         logs: List[str] = []
@@ -165,7 +230,6 @@ class ETLExecutor:
                 if output_table_info:
                     tbl_name, tbl_df = output_table_info
                     output_tables[tbl_name] = tbl_df
-                    # Register table in Semantic Model Engine
                     self.model_engine.register_dataframe(tbl_name, tbl_df, source_node_id=node_id)
 
             except Exception as e:

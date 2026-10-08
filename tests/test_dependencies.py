@@ -40,11 +40,11 @@ def declared_requirements():
 def declared_pyproject():
     """Parse dependency names from the pyproject.toml project.dependencies list."""
     text = (ROOT / 'pyproject.toml').read_text(encoding='utf-8')
-    block = re.search(r'^dependencies\s*=\s*\[(.*?)\]', text, re.MULTILINE | re.DOTALL)
+    block = re.search(r'^dependencies\s*=\s*\[(.*?)\n\]', text, re.MULTILINE | re.DOTALL)
     assert block, 'No dependencies list found in pyproject.toml'
     return {
         match.group(1).lower().replace('_', '-')
-        for match in re.finditer(r'["\']([A-Za-z0-9_.-]+)\s*[><=!~]', block.group(1))
+        for match in re.finditer(r'["\']([A-Za-z0-9_.-]+)(?:\[.*?\])?\s*[><=!~]', block.group(1))
     }
 
 
@@ -53,6 +53,7 @@ def imported_top_level_modules():
     # Mapping for PyPI packages where import name differs from package name
     MODULE_MAP = {
         'jwt': 'pyjwt',
+        'ibis': 'ibis-framework',
     }
     modules = set()
     for path in (ROOT / 'pybi').rglob('*.py'):

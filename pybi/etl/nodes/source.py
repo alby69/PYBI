@@ -1,12 +1,13 @@
 """Data source ETL node implementation."""
 
 from typing import Any, Dict, List, Optional
+import ibis.expr.types as ir
 import polars as pl
 from .base import BaseETLNode
 
 
 class DataSourceNode(BaseETLNode):
-    """Data source node (CSV, Parquet, SQLite)."""
+    """Data source node (CSV, Parquet, SQLite, Postgres)."""
 
     def validate(self) -> List[str]:
         errors = []
@@ -14,6 +15,11 @@ class DataSourceNode(BaseETLNode):
         if not filepath and self.data.get("source_type") != "postgres":
             errors.append(f"DataSource node '{self.node_id}' missing file_path.")
         return errors
+
+    def to_ibis_expr(self, input_expr: Optional[ir.Table] = None) -> ir.Table:
+        if input_expr is not None:
+            return input_expr
+        return super().to_ibis_expr(input_expr)
 
     def to_sql_expr(self, input_table: str = "") -> str:
         source_type = (self.data.get("source_type") or "csv").lower()
@@ -23,11 +29,11 @@ class DataSourceNode(BaseETLNode):
             sep = self.data.get("csv_separator") or "auto"
             if sep == "auto" or sep == "comma" or sep == ",":
                 return f"SELECT * FROM read_csv_auto('{filepath}')"
-            elif sep == "semicolon" or sep == ";":
+            elif sep in ("semicolon", ";"):
                 return f"SELECT * FROM read_csv_auto('{filepath}', delim=';')"
-            elif sep == "tab" or sep == "\t":
+            elif sep in ("tab", "\t"):
                 return f"SELECT * FROM read_csv_auto('{filepath}', delim='\t')"
-            elif sep == "pipe" or sep == "|":
+            elif sep in ("pipe", "|"):
                 return f"SELECT * FROM read_csv_auto('{filepath}', delim='|')"
             return f"SELECT * FROM read_csv_auto('{filepath}')"
         elif source_type == "parquet":
@@ -44,13 +50,16 @@ class DataSourceNode(BaseETLNode):
         if source_type == "csv":
             sep = self.data.get("csv_separator") or "auto"
             delimiter = ","
-            if sep == "semicolon" or sep == ";":
+            if sep in ("semicolon", ";"):
                 delimiter = ";"
-            elif sep == "tab" or sep == "\t":
+            elif sep in ("tab", "\t"):
                 delimiter = "\t"
-            elif sep == "pipe" or sep == "|":
+            elif sep in ("pipe", "|"):
                 delimiter = "|"
             return pl.scan_csv(filepath, separator=delimiter)
         elif source_type == "parquet":
             return pl.scan_parquet(filepath)
         return pl.LazyFrame()
+
+
+SourceNode = DataSourceNode

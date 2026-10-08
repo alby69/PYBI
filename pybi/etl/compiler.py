@@ -1,10 +1,14 @@
 """Query Folding Compiler for PyBI ETL DAGs."""
 
 import graphlib
-from typing import Any, Dict, List, Optional, Tuple, Union
+import logging
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import duckdb
+import ibis
+import ibis.expr.types as ir
 import polars as pl
 
+from pybi.core.exceptions import CompilationError, FoldingError
 from pybi.etl.nodes import (
     DataSourceNode,
     FilterNode,
@@ -15,24 +19,97 @@ from pybi.etl.nodes import (
     SelectNode,
 )
 
-
-class CompilationError(Exception):
-    """Exception raised when DAG compilation/folding fails."""
-
-    pass
+log = logging.getLogger(__name__)
 
 
 class ETLCompiler:
-    """Compiles visual DAGs into single folded DuckDB CTE SQL queries or Polars LazyFrames."""
+    """Compiles visual DAGs or sequence of ETLNodes into folded DuckDB CTE SQL queries using Ibis."""
+
+    def __init__(self, backend: str = "duckdb", ibis_con: Optional[Any] = None):
+        self.backend = backend
+        self._con = ibis_con or ibis.duckdb.connect()
+        self._tmp_counter = 0
+
+    def compile(self, dag: Sequence[Any], source_expr: ir.Table) -> str:
+        """Compile a topologically-sorted sequence of ETLNodes into a single SQL string using Ibis.
+
+        Args:
+            dag: Sequence of ETLNode instances.
+            source_expr: The initial Ibis Table expression.
+
+        Returns:
+            A single optimized SQL string.
+
+        Raises:
+            CompilationError: If DAG translation or compilation fails.
+        """
+        current_expr = source_expr
+
+        for node in dag:
+            if hasattr(node, "validate"):
+                errs = node.validate()
+                if errs:
+                    raise CompilationError(f"Node '{getattr(node, 'node_id', 'unknown')}' validation failed: {errs}")
+
+            is_foldable = getattr(node, "foldable", True)
+
+            if is_foldable:
+                try:
+                    current_expr = node.to_ibis_expr(current_expr)
+                except Exception as e:
+                    node_id = getattr(node, "node_id", "unknown")
+                    raise FoldingError(f"Node '{node_id}' failed to fold into Ibis SQL: {e}") from e
+            else:
+                node_id = getattr(node, "node_id", "unknown")
+                log.warning(
+                    f"⚠️ Folding chain broken at node '{node_id}': materializing intermediate result"
+                )
+                try:
+                    # Materialize upstream expression
+                    intermediate_res = self._con.execute(current_expr)
+                    if hasattr(intermediate_res, "to_polars"):
+                        pl_df = intermediate_res.to_polars()
+                    elif isinstance(intermediate_res, pl.DataFrame):
+                        pl_df = intermediate_res
+                    else:
+                        pl_df = pl.DataFrame(intermediate_res)
+
+                    # Execute non-foldable custom transformation
+                    transform_fn = getattr(node, "transform_fn", None)
+                    if not callable(transform_fn):
+                        raise CompilationError(f"Node '{node_id}' is non-foldable but lacks a callable transform_fn.")
+
+                    result_df = transform_fn(pl_df)
+                    if not isinstance(result_df, pl.DataFrame):
+                        result_df = pl.DataFrame(result_df)
+
+                    tmp_table_name = f"_pybi_tmp_{node_id}_{self._tmp_counter}"
+                    self._tmp_counter += 1
+
+                    if hasattr(self._con, "con") and hasattr(self._con.con, "register"):
+                        self._con.con.register(tmp_table_name, result_df)
+                    elif hasattr(self._con, "register"):
+                        self._con.register(tmp_table_name, result_df)
+                    else:
+                        self._con.create_table(tmp_table_name, result_df.to_pandas(), overwrite=True)
+
+                    current_expr = self._con.table(tmp_table_name)
+                except Exception as e:
+                    raise CompilationError(f"Materialization at node '{node_id}' failed: {e}") from e
+
+        try:
+            return ibis.to_sql(current_expr, dialect=self.backend)
+        except Exception as e:
+            raise CompilationError(f"Ibis SQL generation failed: {e}") from e
 
     def compile_to_sql(self, dag: Dict[str, Any]) -> Dict[str, str]:
-        """Compile DAG into a dictionary mapping output table names to optimized SQL CTE strings.
+        """Compile DAG dict (nodes and edges) into a mapping of output table names to SQL strings.
 
         Args:
             dag: Dict with 'nodes' and 'edges'.
 
         Returns:
-            Dict[str, str]: Map of output table name to complete CTE SQL query string.
+            Dict[str, str]: Map of output table name to SQL query string.
 
         Raises:
             CompilationError: If compilation fails or cycle is detected.
@@ -72,7 +149,6 @@ class ETLCompiler:
             )
             parents = parents_map[node_id]
 
-            # Categorize
             category = self._classify_category(node, node_type)
 
             if category in ("DataSource", "source"):
@@ -85,35 +161,34 @@ class ETLCompiler:
             elif category in ("Transform", "transform"):
                 transform_type = data.get("transform_type") or data.get("action") or "filter"
                 if transform_type == "filter":
-                    node_obj = FilterNode(node_id, data)
+                    node_obj = FilterNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
                 elif transform_type == "select":
-                    node_obj = SelectNode(node_id, data)
+                    node_obj = SelectNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
                 elif transform_type in ("groupby", "group_by"):
-                    node_obj = GroupByNode(node_id, data)
+                    node_obj = GroupByNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
                 elif transform_type == "join":
                     if len(parents) < 2:
                         raise CompilationError(f"Join node '{node_id}' requires two parent inputs.")
-                    node_obj = JoinNode(node_id, data)
+                    node_obj = JoinNode(node_id, data=data)
                     left_sql = f"({cte_queries[parents[0]]})"
                     right_sql = f"({cte_queries[parents[1]]})"
                     cte_queries[node_id] = node_obj.to_sql_expr_two_tables(left_sql, right_sql)
                 elif transform_type == "pivot":
-                    node_obj = PivotNode(node_id, data)
+                    node_obj = PivotNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
 
             elif category in ("Output", "output"):
-                node_obj = OutputNode(node_id, data)
+                node_obj = OutputNode(node_id, data=data)
                 table_name = data.get("table_name") or f"output_{node_id}"
                 if parents:
                     parent_id = parents[0]
-                    # Assemble CTE query chain
                     cte_chain = f"WITH {node_id}_cte AS ({cte_queries[parent_id]})\nSELECT * FROM {node_id}_cte"
                     output_queries[table_name] = cte_chain
 

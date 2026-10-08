@@ -1,4 +1,4 @@
-"""Main UI entry point and page routes for PyBI Phase 0."""
+"""Main UI entry point and page routes for PyBI."""
 
 from nicegui import ui
 import click
@@ -19,11 +19,12 @@ def setup_routes():
             ui.label('Welcome to OpenBI / PyBI').classes('text-2xl font-bold')
             wizard.render_button()
 
-        ui.label('Python Business Intelligence Platform - Phase 0 Prototype').classes('text-gray-600 q-mb-lg')
+        ui.label('Python Business Intelligence Platform - Power BI Style Workspace').classes('text-gray-600 q-mb-lg')
 
-        with ui.row().classes('gap-4'):
-            ui.button('ETL Editor', on_click=lambda: ui.navigate.to('/etl-editor')).props('color=primary icon=account_tree')
-            ui.button('Dashboard Editor', on_click=lambda: ui.navigate.to('/dashboard-editor')).props('color=secondary icon=dashboard')
+        with ui.row().classes('gap-4 flex-wrap'):
+            ui.button('Data (ETL)', on_click=lambda: ui.navigate.to('/etl-editor')).props('color=primary icon=account_tree')
+            ui.button('Model View', on_click=lambda: ui.navigate.to('/model-editor')).props('color=indigo icon=account_tree')
+            ui.button('Report (Dashboard)', on_click=lambda: ui.navigate.to('/dashboard-editor')).props('color=secondary icon=dashboard')
             ui.button('Public Viewer', on_click=lambda: ui.navigate.to('/viewer')).props('color=positive icon=visibility')
             ui.button('Welcome Tour', on_click=wizard.open).props('outline color=info icon=auto_awesome')
 
@@ -31,6 +32,11 @@ def setup_routes():
     def etl_editor_page():
         from pybi.ui.pages.etl_editor import create_etl_editor_page
         create_etl_editor_page()
+
+    @ui.page('/model-editor')
+    def model_editor_page():
+        from pybi.ui.pages.model_editor import create_model_editor_page
+        create_model_editor_page()
 
     @ui.page('/dashboard-editor')
     def dashboard_editor_page():

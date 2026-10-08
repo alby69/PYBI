@@ -128,6 +128,45 @@ def _bind_table_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     return item
 
 
+def _build_vega_lite_spec(kind: str, labels: List[str], series: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate a declarative Vega-Lite specification dict."""
+    data_values = []
+    for idx, label in enumerate(labels):
+        row = {'category': label}
+        for s in series:
+            val = s['values'][idx] if idx < len(s['values']) else None
+            row[s['name']] = val
+        data_values.append(row)
+
+    mark_type = 'bar' if kind == 'bar' else ('line' if kind == 'line' else 'arc')
+
+    if kind == 'pie' and series:
+        val_col = series[0]['name']
+        encoding = {
+            'theta': {'field': val_col, 'type': 'quantitative'},
+            'color': {'field': 'category', 'type': 'nominal'},
+        }
+    elif series and len(series) == 1:
+        val_col = series[0]['name']
+        encoding = {
+            'x': {'field': 'category', 'type': 'nominal'},
+            'y': {'field': val_col, 'type': 'quantitative'},
+        }
+    else:
+        encoding = {
+            'x': {'field': 'category', 'type': 'nominal'},
+            'y': {'field': 'value', 'type': 'quantitative'},
+            'color': {'field': 'series', 'type': 'nominal'},
+        }
+
+    return {
+        '$schema': 'https://vega.github.io/schema/vega-lite/v5.json',
+        'mark': mark_type,
+        'data': {'values': data_values},
+        'encoding': encoding,
+    }
+
+
 def _bind_chart_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str]) -> Dict[str, Any]:
     kind = item.get('chartType')
     kind = kind if kind in ('bar', 'line', 'pie') else 'bar'
@@ -158,6 +197,8 @@ def _bind_chart_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
         chart['max'] = 1
     if view.height > MAX_CHART_POINTS:
         chart['truncated'] = True
+
+    chart['vega_lite_spec'] = _build_vega_lite_spec(kind, chart['labels'], chart['series'])
     return item
 
 

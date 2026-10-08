@@ -43,49 +43,10 @@ def get_viewer_schema(project_id: Optional[str] = None) -> UISchema:
                     ComponentSchema(type="q-toolbar-title", text="🚀 Executive Sales Dashboard (Viewer)"),
                     ComponentSchema(
                         type="q-chip",
-                        props={"color": "positive", "textColor": "white", "icon": "lock", "dense": True},
+                        props={"label": "READ ONLY", "color": "positive", "textColor": "white", "icon": "lock", "dense": True},
                         text="READ ONLY",
                     ),
                 ],
-            ),
-            ComponentSchema(
-                type="q-card",
-                props={"flat": True, "bordered": True, "class": "q-pa-md q-mb-md bg-grey-1"},
-                children=[
-                    ComponentSchema(
-                        type="div",
-                        props={"class": "row items-center q-gutter-md"},
-                        children=[
-                            ComponentSchema(
-                                type="q-select",
-                                props={
-                                    "outlined": True,
-                                    "dense": True,
-                                    "label": "Select Project",
-                                    "options": ["default", "demo_project"],
-                                    "style": "min-width: 200px",
-                                },
-                                dataBinding="state:viewer.selectedProject",
-                            ),
-                            ComponentSchema(
-                                type="q-select",
-                                props={
-                                    "outlined": True,
-                                    "dense": True,
-                                    "label": "Select Dashboard",
-                                    "options": ["default_dashboard"],
-                                    "style": "min-width: 200px",
-                                },
-                                dataBinding="state:viewer.selectedDashboard",
-                            ),
-                        ],
-                    )
-                ],
-            ),
-            ComponentSchema(
-                type="custom:dashboard-grid",
-                props={"isDraggable": False, "isResizable": False, "colNum": 12, "rowHeight": 60},
-                dataBinding="state:viewer.layout",
             ),
         ],
     )

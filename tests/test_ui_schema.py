@@ -47,7 +47,7 @@ def test_get_viewer_schema():
     schema = get_viewer_schema("default_project")
     assert schema.page == "viewer"
     assert schema.meta["read_only"] is True
-    assert any(c.type == "custom:dashboard-grid" for c in schema.components)
+    assert any(c.type == "q-toolbar" for c in schema.components)
 
 
 def test_get_etl_editor_schema():

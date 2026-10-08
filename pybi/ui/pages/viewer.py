@@ -13,11 +13,20 @@ from pybi.ui.components.widget_data import bind_widget_data, sample_layout
 def create_viewer_page(initial_project: str = ''):
     render_navbar(active='/viewer')
 
-    # Declarative UI schema header & layout dynamic renderer
+    # Declarative UI schema header dynamic renderer
     schema_data = get_viewer_schema(initial_project).model_dump()
     DynamicRenderer(schema=schema_data, page_name='viewer')
 
+    with ui.row().classes('w-full items-center justify-between border-b pb-3 q-mb-md q-mt-md'):
+        with ui.column().classes('gap-0'):
+            title_label = ui.label('🚀 Executive Sales Dashboard').classes('text-2xl font-bold text-gray-900')
+            ui.label('Public read-only viewer mode for end-user consultation. Choose a project and dashboard to consult.').classes('text-sm text-gray-500')
+
+        with ui.row().classes('gap-2 items-center'):
+            ui.chip('READ ONLY', color='positive', text_color='white', icon='lock').classes('font-bold text-xs')
+
     def render_demo():
+        title_label.set_text('🚀 Executive Sales Dashboard (demo)')
         grid.layout = bind_widget_data(sample_layout())
 
     def load_dashboard(project_id, dashboard_id):
@@ -35,6 +44,8 @@ def create_viewer_page(initial_project: str = ''):
         target = dashboard_id if dashboard_id in labels else dashboards[0]['id']
         dashboard_select.set_value(target)
         layout = default_storage.load_dashboard(project_id, target)
+        name = labels[target]
+        title_label.set_text(f'📊 {name} - {project_id}')
         grid.layout = bind_widget_data(layout or [])
 
     def on_project_change(e):

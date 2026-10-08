@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from pybi.export_engine.engine import default_export_engine
+from pybi.export.engine import default_export_engine
 
 router = APIRouter(prefix="/api", tags=["export"])
 

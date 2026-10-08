@@ -60,6 +60,18 @@ class ETLNode(ABC):
         """
         return input_lazyframe
 
+    def execute(self, input_data: Any, context: Optional[Dict[str, Any]] = None) -> Any:
+        """Optional direct execution method for fallback or non-foldable node execution.
+
+        Args:
+            input_data: Input data object (DataFrame or raw table name).
+            context: Optional execution context dictionary.
+
+        Returns:
+            Execution result data object.
+        """
+        return input_data
+
 
 class Visual(ABC):
     """Abstract Base Class for individual visual charts and tables."""

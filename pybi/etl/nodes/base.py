@@ -1,6 +1,6 @@
 """Base ETL node class."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import ibis.expr.types as ir
 import polars as pl
 from pybi.core.interfaces import ETLNode
@@ -32,3 +32,6 @@ class BaseETLNode(ETLNode):
 
     def to_polars_expr(self, input_lazyframe: pl.LazyFrame) -> pl.LazyFrame:
         return input_lazyframe
+
+    def execute(self, input_data: Any, context: Optional[Dict[str, Any]] = None) -> Any:
+        return input_data

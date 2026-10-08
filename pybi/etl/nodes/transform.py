@@ -35,7 +35,7 @@ def _parse_condition(cond: str) -> tuple[Optional[str], Optional[str], Any]:
 
 
 class FilterNode(BaseETLNode):
-    """Filter rows transformation node."""
+    """Filter rows transformation node with sequential applied_steps support."""
 
     def __init__(
         self,
@@ -44,6 +44,7 @@ class FilterNode(BaseETLNode):
         operator: Optional[str] = None,
         value: Any = None,
         data: Optional[Dict[str, Any]] = None,
+        applied_steps: Optional[List[Dict[str, Any]]] = None,
     ):
         d = data.copy() if data else {}
         if column is not None:
@@ -52,16 +53,46 @@ class FilterNode(BaseETLNode):
             d["operator"] = operator
         if value is not None:
             d["value"] = value
+        if applied_steps is not None:
+            d["applied_steps"] = applied_steps
         super().__init__(node_id, d)
         self.column = self.data.get("column")
         self.operator = self.data.get("operator")
         self.value = self.data.get("value")
+        self.applied_steps = self.data.get("applied_steps", [])
 
     def validate(self) -> List[str]:
         condition = self.data.get("condition") or self.data.get("predicate")
-        if not condition and not (self.column and self.operator and self.value is not None):
-            return [f"Filter node '{self.node_id}' requires filter column/operator/value or condition."]
+        applied_steps = self.data.get("applied_steps") or self.applied_steps
+        if not condition and not (self.column and self.operator and self.value is not None) and not applied_steps:
+            return [f"Filter node '{self.node_id}' requires filter column/operator/value, condition, or applied_steps."]
         return []
+
+    def execute(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Execute node filters or applied steps sequentially on a Polars DataFrame."""
+        applied_steps = self.data.get("applied_steps") or self.applied_steps
+        if applied_steps:
+            for step in applied_steps:
+                step_type = step.get("type") or "condition"
+                config = step.get("config") or {}
+                cond = config.get("condition") or step.get("condition")
+                if cond:
+                    c, op, v = _parse_condition(cond)
+                    if c and op:
+                        if op in ("==", "="):
+                            df = df.filter(pl.col(c) == v)
+                        elif op == "!=":
+                            df = df.filter(pl.col(c) != v)
+                        elif op == ">":
+                            df = df.filter(pl.col(c) > v)
+                        elif op == "<":
+                            df = df.filter(pl.col(c) < v)
+                        elif op == ">=":
+                            df = df.filter(pl.col(c) >= v)
+                        elif op == "<=":
+                            df = df.filter(pl.col(c) <= v)
+            return df
+        return df
 
     def to_ibis_expr(self, input_expr: ir.Table) -> ir.Table:
         column = self.column or self.data.get("column")

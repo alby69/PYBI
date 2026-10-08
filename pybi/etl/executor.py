@@ -331,6 +331,25 @@ class ETLExecutor:
         parent_df = node_results[parent_ids[0]]
         transform_type = data.get("transform_type") or data.get("action")
 
+        # Process applied_steps if provided
+        applied_steps = data.get("applied_steps", [])
+        if applied_steps:
+            curr_df = parent_df
+            for step in applied_steps:
+                config = step.get("config", {})
+                cond = config.get("condition") or step.get("condition")
+                if cond:
+                    temp_conn = self.duckdb_conn
+                    temp_conn.register("source_df", curr_df)
+                    try:
+                        curr_df = temp_conn.query(f"SELECT * FROM source_df WHERE {cond}").pl()
+                    finally:
+                        try:
+                            temp_conn.unregister("source_df")
+                        except Exception:
+                            pass
+            return curr_df, f"Applied {len(applied_steps)} steps sequentially: {len(curr_df)} rows remaining"
+
         if not transform_type and label:
             label_lower = label.lower()
             if "filter" in label_lower:

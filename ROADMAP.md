@@ -3,8 +3,8 @@
 Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaforma BI open-source 100% Python, pensata come alternativa moderna e leggera a PowerBI Desktop.
 
 ## 📌 Stato Attuale
-- **Fasi Completate:** Fase 1 (Foundation & Scaffolding), Fase 2 (Core Data Engine & Visual Binding), Fase 2.5 (Advanced Analytics & Excel-like UX), Fase 3 (Persistence, Auth & Advanced Features) e Fase 4 (Production Readiness & Polish)
-- **Stato Progetto:** Release 1.0 Candidate (✅ Produzione Pronta)
+- **Fasi Completate:** Fase 1 (Foundation & Scaffolding), Fase 2 (Core Data Engine & Visual Binding), Fase 2.5 (Advanced Analytics & Excel-like UX), Fase 3 (Persistence, Auth & Advanced Features), Fase 4 (Production Readiness & Polish) e Fase 5 (Publishing & Export Engine)
+- **Stato Progetto:** Release 1.0 General Availability (✅ Produzione Pronta con Engine di Export Completo)
 
 ---
 
@@ -53,6 +53,18 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 - [x] **Performance Optimization:** Ottimizzazione configurabile delle query DuckDB e gestione della memoria/thread (`threads`, `max_memory` pragmas, zero-copy evaluation) per dataset di medie e grandi dimensioni (>1M righe).
 - [x] **Documentation:** Documentazione completa ed aggiornata (README, TUTORIAL, guida sviluppatori, architettura, deployment).
 - [x] **CI/CD Pipeline:** Configurazione GitHub Actions (`.github/workflows/ci.yml`) per testing automatico (pytest + async), linting e build del container Docker.
+
+---
+
+## 📄 Fase 5: Publishing & Export Engine (✅ COMPLETATA)
+**Obiettivo:** Fornire un motore di esportazione e pubblicazione asincrono che trasforma dashboard e conoscenza dinamica in artefatti statici e versionati (PDF, HTML, Markdown, CSV).
+- [x] **Export Multi-Formato:** Generazione di PDF, HTML, Markdown e CSV per archiviazione e condivisione.
+- [x] **Templating Engine (Jinja2):** Supporto a template personalizzabili (`report_dati.html`, `documento_knowledge.md`).
+- [x] **Snapshot Versioning & Immutabilità:** Generazione di metadata `snapshot.json` con ID univoco e hash SHA-256 dei filtri attivi (`active_filters_hash`).
+- [x] **FilterContext Binding (`bind_filter_context`):** Applicazione automatica dei filtri attivi e valutazione del modello semantico prima della generazione degli export.
+- [x] **Generazione Assistita da AI:** Integrazione del prompt di compilazione assistita (`ai_compilation_prompt`) serializzato nei metadata di snapshot.
+- [x] **API REST Asincrona:** Endpoint per avvio job, polling dello stato (`/api/exports/{id}/status`) e download dell'artefatto (`/api/exports/{id}/download`).
+- [x] **Interfaccia Utente:** Modal dialog "Publish & Export" integrato nell'interfaccia con scelta formato, template, prompt AI ed indicatore di progresso in tempo reale.
 
 ---
 

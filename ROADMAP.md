@@ -8,16 +8,42 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
 
 ---
 
-## 🌐 Fase 6: Decoupled REST API Architecture (✅ COMPLETATA)
-**Obiettivo:** Disaccoppiare nettamente il frontend dal backend trasformando il backend in un servizio FastAPI RESTful puro e aggiornando il frontend per consumare le API `/api/v1/`.
-- [x] **Pydantic Schemas (`pybi/api/schemas.py`):** Modelli Pydantic per Projects, ETL DAG, Dashboards, Files, Jobs, e Viewer payloads.
-- [x] **Storage Refactoring (`pybi/storage/project_manager.py`):** Metodi granulari per gestione progetti, DAG, layout e file.
-- [x] **API Routers `/api/v1/`:** Endpoints RESTful completi per `/projects`, `/etl`, `/dashboards`, `/files` e `/viewer`.
-- [x] **Frontend Decoupling:** Aggiornamento delle pagine NiceGUI (`etl_editor.py`, `dashboard_editor.py`, `viewer.py`) e dei componenti (`ProjectManager`).
-- [x] **Standardized Error Handling:** Gestore eccezioni globale con risposta JSON standardizzata `{"detail": "...", "code": "API_ERROR"}`.
+## 🏆 Fase 6: Enterprise Parity & Production Hardening
+
+- [ ] **Epic 1: Semantic Layer & Data Modeling**
+  - [ ] Task 1.1: Schema `pybi/core/semantic_model.py` per tabelle, colonne, relazioni (join keys) e misure calcolate.
+  - [ ] Task 1.2: Query resolution con JOIN automatici tra relazioni in DuckDB (`SemanticQueryResolver`).
+  - [ ] Task 1.3: Binding UI Dashboard Editor per selezione "Misure" e "Dimensioni" semantiche.
+
+- [ ] **Epic 2: Enterprise Connectors & DirectQuery**
+  - [ ] Task 2.1: Refactoring connettori con `BaseConnector` (`read`, `write`, `test_connection`).
+  - [ ] Task 2.2: Connettori Snowflake e Google BigQuery con SQLAlchemy/DuckDB Secret.
+  - [ ] Task 2.3: Modalità DirectQuery in DuckDB per query live su sorgenti esterne.
+
+- [ ] **Epic 3: Dynamic Row-Level Security (RLS)**
+  - [ ] Task 3.1: Estrazione claims JWT (`user_id`, `role`, `allowed_regions`).
+  - [ ] Task 3.2: `pybi/core/rls_engine.py` per iniezione clausole WHERE da regole RLS semantiche.
+  - [ ] Task 3.3: Test E2E per isolamento RLS.
+
+- [ ] **Epic 4: ALM & Project Portability**
+  - [ ] Task 4.1: `pybi/alm/bundler.py` per esportazione/importazione bundle `.pybi` (ZIP).
+  - [ ] Task 4.2: Endpoint API `POST /api/v1/projects/import` per bundle `.pybi`.
+  - [ ] Task 4.3: GitHub Actions CI workflow per pytest e ruff.
+
+- [ ] **Epic 5: Osservabilità e Audit**
+  - [ ] Task 5.1: Middleware FastAPI per audit logging accesses/queries.
+  - [ ] Task 5.2: Endpoint `GET /api/v1/admin/usage-metrics`.
 
 ---
 
-## 🏆 Fase 4: Production Readiness & Polish (✅ COMPLETATA)
-- [x] **Performance Optimization:** Query DuckDB e pragmas di memoria.
-- [x] **CI/CD Pipeline:** Test automatici pytest ed E2E.
+## 🌐 Fase 5: Publishing & Export Engine (✅ COMPLETATA)
+- [x] **Export Engine (`pybi.export`):** Generazione report PDF, HTML, Markdown e CSV.
+- [x] **Snapshot Metadata:** File `snapshot.json` con hash SHA-256 dei filtri attivi.
+- [x] **Jinja2 Templating:** Layout personalizzabili e worker queue asincrona.
+
+---
+
+## 🌐 Fase 6 (Precedente): Decoupled REST API Architecture (✅ COMPLETATA)
+- [x] **Pydantic Schemas (`pybi/api/schemas.py`):** Modelli Pydantic per risorse API.
+- [x] **API Routers `/api/v1/`:** Endpoints RESTful completi.
+- [x] **Frontend Decoupling:** Client NiceGUI/Vue 3 consumano API REST v1.

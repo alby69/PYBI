@@ -1,19 +1,32 @@
 # 🔍 OpenBI / PyBI - Python Business Intelligence Platform
 
-**PyBI** (Python Business Intelligence) is an open-source, 100% Python-based BI platform designed as a modern alternative to PowerBI Desktop, featuring a decoupled REST API architecture.
+[![CI/CD Pipeline](https://github.com/alby69/PYBI/actions/workflows/ci.yml/badge.svg)](https://github.com/alby69/PYBI/actions/workflows/ci.yml)
+
+**PyBI** (Python Business Intelligence) is an open-source, 100% Python-based BI platform designed as a modern alternative to PowerBI Desktop, featuring a decoupled REST API architecture and Enterprise-grade analytical features.
 
 ---
 
-## 🏗️ Architecture & Stack (Decoupled API-First Engine)
+## 🏛️ Architecture & Stack (Decoupled API-First Engine)
 
-- **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, and Viewer with Pydantic schemas.
+- **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, Semantic Queries, and Viewer with Pydantic schemas.
 - **Frontend Core:** NiceGUI + Vue 3 & Quasar with **Declarative JSON-to-UI Engine (`DynamicRenderer`)** consuming REST APIs.
 - **UI State Management:** Pinia / Vue Reactive Store (`uiStore.js`) fetching schemas from FastAPI (`/api/v1/ui/schema/{page_name}`)
 - **ETL Visual Canvas:** [Vue Flow (`@vue-flow/core`)](https://vueflow.dev/) wrapped as a custom UI element
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom UI element
 - **Analytical Engine:** DuckDB + Polars
+- **Connectors & Caching:** SQLAlchemy (Snowflake, BigQuery, Postgres, SQLite), Redis Query Cache
 - **Publishing & Export Engine:** Headless Jinja2 + WeasyPrint / Async Worker Queue
 - **Auth & RBAC:** Casbin + PyJWT
+
+---
+
+## 🏢 Enterprise Features
+
+- **Semantic Model (`semantic_model.yaml`):** Multi-table relationship definitions (`1:1`, `1:*`, `*:1`), hierarchies, and calculated measures.
+- **Dynamic Row-Level Security (RLS):** Contextual `WHERE` filter injection based on authenticated JWT claims (`allowed_regions`, `user_id`).
+- **Enterprise Connectors & DirectQuery:** Live query execution on external databases (Snowflake, BigQuery, Postgres) via DuckDB secrets and SQLAlchemy.
+- **ALM & Project Portability (`.pybi` Bundles):** Export and import full project bundles (layouts, ETL DAGs, semantic models, data) as `.pybi` packages.
+- **Audit Logging & Observability:** Real-time access logging and usage metrics endpoint (`/api/v1/admin/usage-metrics`).
 
 ---
 
@@ -85,12 +98,6 @@ PyBI includes a robust Publishing & Export Engine (`pybi.export`) for freezing a
 - **Multi-Format Output:** Generate static PDF, HTML, Markdown, or raw CSV data extracts.
 - **Jinja2 Templating:** Customize output layouts using templates like `report_dati.html` and `documento_knowledge.md`.
 - **Snapshot Immutability:** Every export generates a `snapshot.json` metadata file containing a unique `export_id`, timestamp, project version, and a SHA-256 hash of active filter rules (`active_filters_hash`).
-- **REST API Endpoints:**
-  - `POST /api/v1/projects/{id}/export`: Initiate background export task.
-  - `POST /api/v1/projects/{id}/export/pdf`: PDF shortcut endpoint.
-  - `POST /api/v1/projects/{id}/export/data`: CSV shortcut endpoint.
-  - `GET /api/v1/exports/{export_id}/status`: Poll background task status and snapshot metadata.
-  - `GET /api/v1/exports/{export_id}/download`: Download generated artifact file.
 
 ---
 

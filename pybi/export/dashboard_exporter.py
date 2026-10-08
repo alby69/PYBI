@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from nicegui import ui
 
-from pybi.export_engine.engine import default_export_engine
+from pybi.export.engine import default_export_engine
 
 
 class DashboardExporter:

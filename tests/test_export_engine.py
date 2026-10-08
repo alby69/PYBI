@@ -7,7 +7,7 @@ import pytest
 
 from pybi.api.main import app
 from pybi.dashboard.filter_context import FilterContext
-from pybi.export_engine import (
+from pybi.export import (
     ExportEngine,
     default_export_engine,
     create_snapshot,

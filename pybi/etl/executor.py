@@ -15,14 +15,13 @@ from pybi.core.interfaces import ETLNode
 from pybi.etl.compiler import ETLCompiler
 from pybi.etl.optimizer import SQLOptimizer
 from pybi.model.engine import ModelEngine
+from pybi.etl.nodes.output import OutputNode
 
 from .connectors import (
     read_csv,
     read_parquet,
     read_postgres,
     read_sqlite,
-    write_postgres,
-    write_sqlite,
 )
 from .node_factory import JOIN_TYPES
 
@@ -97,7 +96,7 @@ class ETLResult:
 
 
 class ETLExecutor:
-    """ETLExecutor parses visual Vue Flow DAGs or ETLNode chains and executes them using Ibis, SQLGlot, Polars and DuckDB."""
+    """ETLExecutor orchestrates visual Vue Flow DAGs or ETLNode chains using Ibis, SQLGlot, Polars and DuckDB."""
 
     def __init__(
         self,
@@ -118,14 +117,7 @@ class ETLExecutor:
         self.model_engine = model_engine or ModelEngine(conn=self.duckdb_conn)
 
     def compile(self, dag: Dict[str, Any]) -> Dict[str, str]:
-        """Compile visual DAG dict into folded SQL queries per output table.
-
-        Args:
-            dag: Dict representing visual Vue Flow DAG.
-
-        Returns:
-            Dict[str, str]: Output table name to compiled SQL query string.
-        """
+        """Compile visual DAG dict into folded SQL queries per output table."""
         return self.compiler.compile_to_sql(dag)
 
     def execute_nodes(
@@ -135,17 +127,7 @@ class ETLExecutor:
         source_df: pl.DataFrame | None = None,
         source_table_name: str = "source_data",
     ) -> Tuple[pl.DataFrame, str, str]:
-        """Execute a topological list of ETLNodes using Query Folding (compile -> optimize -> execute).
-
-        Args:
-            dag: Sequence of ETLNode instances.
-            source_path: File path for source data.
-            source_df: Polars DataFrame for in-memory source data.
-            source_table_name: Name of the registered source table in DuckDB/Ibis.
-
-        Returns:
-            Tuple[pl.DataFrame, str, str]: (result_df, raw_sql, optimized_sql)
-        """
+        """Execute a topological list of ETLNodes using Query Folding (compile -> optimize -> execute)."""
         if source_path:
             source_path = resolve_data_path(source_path, self.base_dir)
             if source_path.endswith(".parquet"):
@@ -165,7 +147,6 @@ class ETLExecutor:
         raw_sql = self.compiler.compile(dag, source_expr)
         optimized_sql = self.optimizer.optimize(raw_sql)
 
-        # Register any intermediate/tmp tables in DuckDB execution connection if needed
         for table in self.ibis_con.list_tables():
             if table.startswith("_pybi_tmp_"):
                 df_tmp = self.ibis_con.table(table).execute()
@@ -266,233 +247,212 @@ class ETLExecutor:
             or node.get("type")
         )
 
-        if not node_type or node_type in ("input", "default", "output"):
-            if node_type == "input" or any(k in label for k in ("Source", "CSV", "Parquet", "PostgreSQL", "read_")):
-                category = "DataSource"
-            elif node_type == "output" or any(k in label for k in ("Output", "Table", "Save")):
-                category = "Output"
-            else:
-                category = "Transform"
-        else:
-            category = node_type
+        category = self.compiler._classify_category(node, node_type)
 
         # 1. DataSource
         if category in ("DataSource", "source", "input_source"):
-            source_type = (data.get("source_type") or "").lower()
-            filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
-
-            if not filepath and label:
-                match = re.search(r"\(([^)]+)\)", label)
-                if match:
-                    filepath = match.group(1)
-
-            if not source_type:
-                if filepath and ("postgres" in filepath or "postgresql" in filepath):
-                    source_type = "postgres"
-                elif filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3")):
-                    source_type = "sqlite"
-                elif filepath and filepath.endswith(".parquet"):
-                    source_type = "parquet"
-                else:
-                    source_type = "csv"
-
-            if source_type in ("postgres", "postgresql"):
-                uri = data.get("uri") or data.get("connection_string") or filepath
-                if not uri:
-                    raise ValueError(f"No URI provided for PostgreSQL DataSource node '{node_id}'")
-                query = data.get("query") or data.get("table_name") or data.get("table") or "SELECT 1"
-                df = read_postgres(uri, query)
-                return df, f"Loaded {len(df)} rows from POSTGRESQL '{uri}'", None
-
-            if not filepath:
-                raise ValueError(f"No file path provided for DataSource node '{node_id}'")
-
-            filepath = resolve_data_path(filepath, self.base_dir)
-
-            if source_type == "sqlite":
-                query_or_table = data.get("query") or data.get("table_name") or data.get("table")
-                df = read_sqlite(filepath, query_or_table=query_or_table)
-            elif source_type == "parquet":
-                df = read_parquet(filepath)
-            else:
-                df = read_csv(filepath, separator=data.get("csv_separator") or "auto")
-
-            return df, f"Loaded {len(df)} rows from {source_type.upper()} file '{filepath}'", None
+            df, log_msg = self._load_data_source(node_id, data, label)
+            return df, log_msg, None
 
         # 2. Transform
         elif category in ("Transform", "transform"):
             if not parent_ids:
                 raise ValueError(f"Transform node '{node_id}' requires at least one parent input")
-
-            parent_df = node_results[parent_ids[0]]
-            transform_type = data.get("transform_type") or data.get("action")
-
-            if not transform_type and label:
-                label_lower = label.lower()
-                if "filter" in label_lower:
-                    transform_type = "filter"
-                elif "select" in label_lower:
-                    transform_type = "select"
-                elif "group" in label_lower:
-                    transform_type = "groupby"
-                elif "join" in label_lower:
-                    transform_type = "join"
-                elif "pivot" in label_lower:
-                    transform_type = "pivot"
-
-            if not transform_type:
-                transform_type = "filter"
-
-            if transform_type == "filter":
-                condition = data.get("condition") or data.get("predicate")
-                if not condition and label:
-                    match = re.search(r"\(([^)]+)\)", label)
-                    if match:
-                        condition = match.group(1)
-
-                if condition:
-                    temp_conn = self.duckdb_conn
-                    temp_conn.register("source_df", parent_df)
-                    try:
-                        filtered_df = temp_conn.query(f"SELECT * FROM source_df WHERE {condition}").pl()
-                    finally:
-                        try:
-                            temp_conn.unregister("source_df")
-                        except Exception:
-                            pass
-                    return filtered_df, f"Applied filter ({condition}): {len(filtered_df)} rows remaining", None
-                else:
-                    return parent_df, "Filter node condition empty, passing through data", None
-
-            elif transform_type == "select":
-                cols = data.get("columns", [])
-                if isinstance(cols, str):
-                    cols = [c.strip() for c in cols.split(",")]
-                if cols:
-                    selected_df = parent_df.select(cols)
-                    return selected_df, f"Selected columns: {cols}", None
-                return parent_df, "Select columns empty, passing through data", None
-
-            elif transform_type in ("groupby", "group_by"):
-                group_cols = data.get("group_by") or data.get("by") or data.get("columns", [])
-                if isinstance(group_cols, str):
-                    group_cols = [c.strip() for c in group_cols.split(",")]
-
-                aggs = data.get("aggregations", {})
-                if group_cols:
-                    if aggs:
-                        agg_exprs = []
-                        for col_name, agg_func in aggs.items():
-                            if hasattr(pl.col(col_name), agg_func):
-                                agg_exprs.append(getattr(pl.col(col_name), agg_func)())
-                        grouped_df = parent_df.group_by(group_cols).agg(agg_exprs)
-                    else:
-                        grouped_df = parent_df.group_by(group_cols).first()
-                    return grouped_df, f"Grouped by {group_cols}", None
-                return parent_df, "GroupBy columns empty, passing through data", None
-
-            elif transform_type == "join":
-                if len(parent_ids) < 2:
-                    raise ValueError(
-                        f"Join node '{node_id}' requires two parent inputs: the first connection is the "
-                        "left table, the second one is the right table."
-                    )
-                left_df = node_results[parent_ids[0]]
-                right_df = node_results[parent_ids[1]]
-                how = (data.get("how") or data.get("join_type") or "inner").lower()
-                if how == "outer":
-                    how = "full"
-                if how not in JOIN_TYPES:
-                    raise ValueError(
-                        f"Unsupported join type '{how}' on node '{node_id}'. "
-                        f"Supported: {', '.join(JOIN_TYPES)}."
-                    )
-
-                if how == "cross":
-                    joined_df = left_df.join(right_df, how="cross")
-                    return joined_df, f"Cross joined the two inputs: {len(joined_df)} rows", None
-
-                left_on = _as_key_list(data.get("left_on") or data.get("left_column") or data.get("on"))
-                right_on = _as_key_list(data.get("right_on") or data.get("right_column") or data.get("on"))
-                if not left_on or not right_on:
-                    raise ValueError(f"Join node '{node_id}' requires both a left and a right key column.")
-                if len(left_on) != len(right_on):
-                    raise ValueError(
-                        f"Join node '{node_id}' needs the same number of keys on both sides, got "
-                        f"{len(left_on)} left and {len(right_on)} right."
-                    )
-                _check_join_keys(node_id, left_df, left_on, "left")
-                _check_join_keys(node_id, right_df, right_on, "right")
-
-                joined_df = left_df.join(right_df, left_on=left_on, right_on=right_on, how=how)
-                keys = ", ".join(left_on)
-                return joined_df, f"{how.upper()} joined on {keys}: {len(joined_df)} rows", None
-
-            elif transform_type == "pivot":
-                index_cols = _as_key_list(data.get("index"))
-                on_cols = _as_key_list(data.get("on"))
-                raw_values = data.get("values")
-                if isinstance(raw_values, list) and raw_values and isinstance(raw_values[0], dict):
-                    val_cols = [v.get("field") for v in raw_values if isinstance(v, dict) and v.get("field")]
-                else:
-                    val_cols = _as_key_list(raw_values)
-                agg_fn = data.get("aggregate_function") or "sum"
-
-                if not on_cols:
-                    raise ValueError(f"Pivot node '{node_id}' requires at least one pivot-on column in 'on'.")
-
-                pivoted_df = parent_df.pivot(
-                    on=on_cols,
-                    index=index_cols if index_cols else None,
-                    values=val_cols if val_cols else None,
-                    aggregate_function=agg_fn,
-                )
-                return pivoted_df, f"Pivoted on {on_cols} with aggregate '{agg_fn}': {len(pivoted_df)} rows", None
-
-            else:
-                return parent_df, f"Unknown transform '{transform_type}', passing data through", None
+            df, log_msg = self._apply_transform(node_id, data, label, parent_ids, node_results)
+            return df, log_msg, None
 
         # 3. Output
         elif category in ("Output", "output", "sink"):
             if not parent_ids:
                 raise ValueError(f"Output node '{node_id}' requires a parent input")
-
             parent_df = node_results[parent_ids[0]]
-            table_name = data.get("table_name")
-
-            if not table_name and label:
-                match = re.search(r"\(([^)]+)\)", label)
-                if match:
-                    table_name = match.group(1)
-
-            if not table_name:
-                table_name = f"output_{node_id}"
-
-            output_type = (data.get("output_type") or data.get("destination_type") or "").lower()
-            filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
-
-            if output_type in ("postgres", "postgresql") or (filepath and "postgres" in filepath):
-                uri = data.get("uri") or data.get("connection_string") or filepath
-                if not uri:
-                    raise ValueError(f"No URI provided for PostgreSQL Output node '{node_id}'")
-                write_postgres(parent_df, uri, table_name)
-                log_msg = f"Saved {len(parent_df)} rows to PostgreSQL table '{table_name}'"
-            elif output_type == "sqlite" or (filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3"))):
-                if not filepath:
-                    filepath = "output.db"
-                write_sqlite(parent_df, filepath, table_name)
-                log_msg = f"Saved {len(parent_df)} rows to SQLite table '{table_name}' at '{filepath}'"
-            else:
-                log_msg = f"Saved {len(parent_df)} rows to DuckDB table '{table_name}'"
-
-            self.duckdb_conn.register(table_name, parent_df)
-            return parent_df, log_msg, (table_name, parent_df)
+            out_node = OutputNode(node_id, data=data)
+            log_msg, (tbl_name, tbl_df) = out_node.execute(
+                parent_df,
+                context={"duckdb_conn": self.duckdb_conn, "base_dir": self.base_dir},
+            )
+            return parent_df, log_msg, (tbl_name, tbl_df)
 
         else:
             if parent_ids:
                 return node_results[parent_ids[0]], f"Unrecognized node category '{category}', passing through parent data", None
+            return pl.DataFrame(), f"Unrecognized node category '{category}' with no parents", None
+
+    def _load_data_source(self, node_id: str, data: Dict[str, Any], label: str) -> Tuple[pl.DataFrame, str]:
+        source_type = (data.get("source_type") or "").lower()
+        filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
+
+        if not filepath and label:
+            match = re.search(r"\(([^)]+)\)", label)
+            if match:
+                filepath = match.group(1)
+
+        if not source_type:
+            if filepath and ("postgres" in filepath or "postgresql" in filepath):
+                source_type = "postgres"
+            elif filepath and any(filepath.endswith(ext) for ext in (".sqlite", ".db", ".sqlite3")):
+                source_type = "sqlite"
+            elif filepath and filepath.endswith(".parquet"):
+                source_type = "parquet"
             else:
-                return pl.DataFrame(), f"Unrecognized node category '{category}' with no parents", None
+                source_type = "csv"
+
+        if source_type in ("postgres", "postgresql"):
+            uri = data.get("uri") or data.get("connection_string") or filepath
+            if not uri:
+                raise ValueError(f"No URI provided for PostgreSQL DataSource node '{node_id}'")
+            query = data.get("query") or data.get("table_name") or data.get("table") or "SELECT 1"
+            df = read_postgres(uri, query)
+            return df, f"Loaded {len(df)} rows from POSTGRESQL '{uri}'"
+
+        if not filepath:
+            raise ValueError(f"No file path provided for DataSource node '{node_id}'")
+
+        filepath = resolve_data_path(filepath, self.base_dir)
+
+        if source_type == "sqlite":
+            query_or_table = data.get("query") or data.get("table_name") or data.get("table")
+            df = read_sqlite(filepath, query_or_table=query_or_table)
+        elif source_type == "parquet":
+            df = read_parquet(filepath)
+        else:
+            df = read_csv(filepath, separator=data.get("csv_separator") or "auto")
+
+        return df, f"Loaded {len(df)} rows from {source_type.upper()} file '{filepath}'"
+
+    def _apply_transform(
+        self,
+        node_id: str,
+        data: Dict[str, Any],
+        label: str,
+        parent_ids: List[str],
+        node_results: Dict[str, pl.DataFrame],
+    ) -> Tuple[pl.DataFrame, str]:
+        parent_df = node_results[parent_ids[0]]
+        transform_type = data.get("transform_type") or data.get("action")
+
+        if not transform_type and label:
+            label_lower = label.lower()
+            if "filter" in label_lower:
+                transform_type = "filter"
+            elif "select" in label_lower:
+                transform_type = "select"
+            elif "group" in label_lower:
+                transform_type = "groupby"
+            elif "join" in label_lower:
+                transform_type = "join"
+            elif "pivot" in label_lower:
+                transform_type = "pivot"
+
+        if not transform_type:
+            transform_type = "filter"
+
+        if transform_type == "filter":
+            condition = data.get("condition") or data.get("predicate")
+            if not condition and label:
+                match = re.search(r"\(([^)]+)\)", label)
+                if match:
+                    condition = match.group(1)
+
+            if condition:
+                temp_conn = self.duckdb_conn
+                temp_conn.register("source_df", parent_df)
+                try:
+                    filtered_df = temp_conn.query(f"SELECT * FROM source_df WHERE {condition}").pl()
+                finally:
+                    try:
+                        temp_conn.unregister("source_df")
+                    except Exception:
+                        pass
+                return filtered_df, f"Applied filter ({condition}): {len(filtered_df)} rows remaining"
+            return parent_df, "Filter node condition empty, passing through data"
+
+        elif transform_type == "select":
+            cols = data.get("columns", [])
+            if isinstance(cols, str):
+                cols = [c.strip() for c in cols.split(",")]
+            if cols:
+                return parent_df.select(cols), f"Selected columns: {cols}"
+            return parent_df, "Select columns empty, passing through data"
+
+        elif transform_type in ("groupby", "group_by"):
+            group_cols = data.get("group_by") or data.get("by") or data.get("columns", [])
+            if isinstance(group_cols, str):
+                group_cols = [c.strip() for c in group_cols.split(",")]
+
+            aggs = data.get("aggregations", {})
+            if group_cols:
+                if aggs:
+                    agg_exprs = []
+                    for col_name, agg_func in aggs.items():
+                        if hasattr(pl.col(col_name), agg_func):
+                            agg_exprs.append(getattr(pl.col(col_name), agg_func)())
+                    grouped_df = parent_df.group_by(group_cols).agg(agg_exprs)
+                else:
+                    grouped_df = parent_df.group_by(group_cols).first()
+                return grouped_df, f"Grouped by {group_cols}"
+            return parent_df, "GroupBy columns empty, passing through data"
+
+        elif transform_type == "join":
+            if len(parent_ids) < 2:
+                raise ValueError(
+                    f"Join node '{node_id}' requires two parent inputs: the first connection is the "
+                    "left table, the second one is the right table."
+                )
+            left_df = node_results[parent_ids[0]]
+            right_df = node_results[parent_ids[1]]
+            how = (data.get("how") or data.get("join_type") or "inner").lower()
+            if how == "outer":
+                how = "full"
+            if how not in JOIN_TYPES:
+                raise ValueError(
+                    f"Unsupported join type '{how}' on node '{node_id}'. "
+                    f"Supported: {', '.join(JOIN_TYPES)}."
+                )
+
+            if how == "cross":
+                joined_df = left_df.join(right_df, how="cross")
+                return joined_df, f"Cross joined the two inputs: {len(joined_df)} rows"
+
+            left_on = _as_key_list(data.get("left_on") or data.get("left_column") or data.get("on"))
+            right_on = _as_key_list(data.get("right_on") or data.get("right_column") or data.get("on"))
+            if not left_on or not right_on:
+                raise ValueError(f"Join node '{node_id}' requires both a left and a right key column.")
+            if len(left_on) != len(right_on):
+                raise ValueError(
+                    f"Join node '{node_id}' needs the same number of keys on both sides, got "
+                    f"{len(left_on)} left and {len(right_on)} right."
+                )
+            _check_join_keys(node_id, left_df, left_on, "left")
+            _check_join_keys(node_id, right_df, right_on, "right")
+
+            joined_df = left_df.join(right_df, left_on=left_on, right_on=right_on, how=how)
+            keys = ", ".join(left_on)
+            return joined_df, f"{how.upper()} joined on {keys}: {len(joined_df)} rows"
+
+        elif transform_type == "pivot":
+            index_cols = _as_key_list(data.get("index"))
+            on_cols = _as_key_list(data.get("on"))
+            raw_values = data.get("values")
+            if isinstance(raw_values, list) and raw_values and isinstance(raw_values[0], dict):
+                val_cols = [v.get("field") for v in raw_values if isinstance(v, dict) and v.get("field")]
+            else:
+                val_cols = _as_key_list(raw_values)
+            agg_fn = data.get("aggregate_function") or "sum"
+
+            if not on_cols:
+                raise ValueError(f"Pivot node '{node_id}' requires at least one pivot-on column in 'on'.")
+
+            pivoted_df = parent_df.pivot(
+                on=on_cols,
+                index=index_cols if index_cols else None,
+                values=val_cols if val_cols else None,
+                aggregate_function=agg_fn,
+            )
+            return pivoted_df, f"Pivoted on {on_cols} with aggregate '{agg_fn}': {len(pivoted_df)} rows"
+
+        else:
+            return parent_df, f"Unknown transform '{transform_type}', passing data through"
 
 
 def execute_dag(

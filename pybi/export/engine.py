@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from pybi.export_engine.context_binder import bind_filter_context
-from pybi.export_engine.snapshot import create_snapshot
+from pybi.export.context_binder import bind_filter_context
+from pybi.export.snapshot import create_snapshot
 
 # Define default exports directory
 DEFAULT_EXPORTS_DIR = os.getenv("EXPORTS_DIR", "pybi_data/exports")

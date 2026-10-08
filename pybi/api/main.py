@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 from pybi.publish.viewer_api import router as viewer_router
-from pybi.export_engine.router import router as export_router
+from pybi.export.router import router as export_router
 
 
 def create_app() -> FastAPI:

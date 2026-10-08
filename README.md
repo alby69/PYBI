@@ -136,6 +136,23 @@ pipeline in the same server session.
 
 ---
 
+## ⚡ Performance Optimization (Phase 4)
+
+PyBI includes built-in performance optimization pragmas for DuckDB and Polars:
+- **Thread Tuning:** Set thread allocation using `DUCKDB_THREADS` environment variable or explicit `threads` argument in `ETLExecutor`.
+- **Memory Management:** Set max RAM limit using `DUCKDB_MAX_MEMORY` (e.g. `DUCKDB_MAX_MEMORY=4GB`).
+- **Server-Side Fallback Aggregations:** Interactive PivotTable widgets leverage DuckDB SQL pushdown for instant aggregation on datasets exceeding 50,000 rows.
+
+---
+
+## ⚙️ CI/CD Pipeline (Phase 4)
+
+Continuous Integration is powered by GitHub Actions (`.github/workflows/ci.yml`):
+- Automatic unit & async test execution (`pytest`, `pytest-asyncio`, `playwright`).
+- Automated multi-stage Docker build verification.
+
+---
+
 ## 🧪 Testing & Verification
 
 Unit and end-to-end tests require `pytest` and `playwright` with a Chromium install:

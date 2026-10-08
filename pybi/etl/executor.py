@@ -75,6 +75,28 @@ def _check_join_keys(node_id: str, df: pl.DataFrame, keys: List[str], side: str)
         )
 
 
+def configure_duckdb_connection(
+    conn: duckdb.DuckDBPyConnection,
+    threads: Optional[int] = None,
+    max_memory: Optional[str] = None,
+) -> duckdb.DuckDBPyConnection:
+    """Apply performance pragmas to a DuckDB connection.
+
+    Checks explicit parameters or `DUCKDB_THREADS` and `DUCKDB_MAX_MEMORY` environment variables.
+    """
+    env_threads = os.environ.get("DUCKDB_THREADS")
+    env_memory = os.environ.get("DUCKDB_MAX_MEMORY")
+
+    target_threads = threads or (int(env_threads) if env_threads and env_threads.isdigit() else None)
+    target_memory = max_memory or env_memory
+
+    if target_threads:
+        conn.execute(f"PRAGMA threads={target_threads}")
+    if target_memory:
+        conn.execute(f"PRAGMA max_memory='{target_memory}'")
+    return conn
+
+
 @dataclass
 class ETLResult:
     """Dataclass holding execution results of an ETL DAG pipeline."""
@@ -93,14 +115,19 @@ class ETLExecutor:
         self,
         duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
         base_dir: Optional[str] = None,
+        threads: Optional[int] = None,
+        max_memory: Optional[str] = None,
     ) -> None:
         """Initialize ETLExecutor.
 
         Args:
             duckdb_conn: Optional DuckDB connection instance.
             base_dir: Project data directory used to resolve DataSource file paths.
+            threads: Optional number of threads for DuckDB.
+            max_memory: Optional memory limit for DuckDB (e.g., '4GB').
         """
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
+        configure_duckdb_connection(self.duckdb_conn, threads=threads, max_memory=max_memory)
         self.base_dir = base_dir
 
     def execute(self, dag: Dict[str, Any]) -> ETLResult:
@@ -291,9 +318,15 @@ class ETLExecutor:
 
                 if condition:
                     # DuckDB SQL evaluation for flexible filter condition support
-                    temp_conn = duckdb.connect(":memory:")
+                    temp_conn = self.duckdb_conn
                     temp_conn.register("source_df", parent_df)
-                    filtered_df = temp_conn.query(f"SELECT * FROM source_df WHERE {condition}").pl()
+                    try:
+                        filtered_df = temp_conn.query(f"SELECT * FROM source_df WHERE {condition}").pl()
+                    finally:
+                        try:
+                            temp_conn.unregister("source_df")
+                        except Exception:
+                            pass
                     return filtered_df, f"Applied filter ({condition}): {len(filtered_df)} rows remaining", None
                 else:
                     return parent_df, "Filter node condition empty, passing through data", None
@@ -431,6 +464,8 @@ def execute_dag(
     dag: Dict[str, Any],
     duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
     base_dir: Optional[str] = None,
+    threads: Optional[int] = None,
+    max_memory: Optional[str] = None,
 ) -> ETLResult:
     """Convenience function to execute an ETL DAG.
 
@@ -438,9 +473,16 @@ def execute_dag(
         dag: Dict representing the DAG (nodes and edges).
         duckdb_conn: Optional DuckDB connection.
         base_dir: Project data directory used to resolve DataSource file paths.
+        threads: Optional number of DuckDB threads.
+        max_memory: Optional max memory setting for DuckDB.
 
     Returns:
         ETLResult instance.
     """
-    executor = ETLExecutor(duckdb_conn=duckdb_conn, base_dir=base_dir)
+    executor = ETLExecutor(
+        duckdb_conn=duckdb_conn,
+        base_dir=base_dir,
+        threads=threads,
+        max_memory=max_memory,
+    )
     return executor.execute(dag)

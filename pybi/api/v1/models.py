@@ -1,8 +1,8 @@
 """Pydantic request and response models for PyBI REST API v1."""
 
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from typing import Any
 
+from pydantic import BaseModel, Field
 
 # ==========================================
 # Common & Error Models
@@ -38,7 +38,7 @@ class UserProfile(BaseModel):
 
     username: str = Field(description="Username")
     role: str = Field(default="viewer", description="User role (e.g. admin, editor, viewer)")
-    email: Optional[str] = Field(default=None, description="Optional user email address")
+    email: str | None = Field(default=None, description="Optional user email address")
 
 
 class TokenResponse(BaseModel):
@@ -58,9 +58,9 @@ class ProjectSummary(BaseModel):
 
     project_id: str = Field(description="Unique project identifier")
     name: str = Field(description="Human readable project name")
-    description: Optional[str] = Field(default=None, description="Project description")
-    created_at: Optional[str] = Field(default=None, description="ISO timestamp of creation")
-    updated_at: Optional[str] = Field(default=None, description="ISO timestamp of last update")
+    description: str | None = Field(default=None, description="Project description")
+    created_at: str | None = Field(default=None, description="ISO timestamp of creation")
+    updated_at: str | None = Field(default=None, description="ISO timestamp of last update")
 
 
 class ProjectCreateRequest(BaseModel):
@@ -68,14 +68,14 @@ class ProjectCreateRequest(BaseModel):
 
     project_id: str = Field(description="Unique project identifier")
     name: str = Field(description="Human readable project name")
-    description: Optional[str] = Field(default=None, description="Project description")
+    description: str | None = Field(default=None, description="Project description")
 
 
 class ProjectUpdateRequest(BaseModel):
     """Payload for updating an existing project."""
 
-    name: Optional[str] = Field(default=None, description="Updated project name")
-    description: Optional[str] = Field(default=None, description="Updated project description")
+    name: str | None = Field(default=None, description="Updated project name")
+    description: str | None = Field(default=None, description="Updated project description")
 
 
 class ProjectResponse(BaseModel):
@@ -83,18 +83,18 @@ class ProjectResponse(BaseModel):
 
     project_id: str = Field(description="Unique project identifier")
     name: str = Field(description="Human readable project name")
-    description: Optional[str] = Field(default=None, description="Project description")
-    etl_dag: Dict[str, Any] = Field(default_factory=dict, description="ETL DAG configuration")
-    dashboards: List[Dict[str, Any]] = Field(default_factory=list, description="List of dashboards")
-    dashboard_layout: Optional[Any] = Field(default=None, description="Primary dashboard layout")
-    created_at: Optional[str] = Field(default=None, description="ISO timestamp of creation")
-    updated_at: Optional[str] = Field(default=None, description="ISO timestamp of last update")
+    description: str | None = Field(default=None, description="Project description")
+    etl_dag: dict[str, Any] = Field(default_factory=dict, description="ETL DAG configuration")
+    dashboards: list[dict[str, Any]] = Field(default_factory=list, description="List of dashboards")
+    dashboard_layout: Any | None = Field(default=None, description="Primary dashboard layout")
+    created_at: str | None = Field(default=None, description="ISO timestamp of creation")
+    updated_at: str | None = Field(default=None, description="ISO timestamp of last update")
 
 
 class ProjectListResponse(BaseModel):
     """Response containing a list of project summaries."""
 
-    projects: List[ProjectSummary] = Field(default_factory=list, description="List of project summaries")
+    projects: list[ProjectSummary] = Field(default_factory=list, description="List of project summaries")
     total: int = Field(description="Total count of projects")
 
 
@@ -111,7 +111,7 @@ class FileListResponse(BaseModel):
     """List of data source files uploaded for a project."""
 
     project_id: str = Field(description="Project identifier")
-    files: List[str] = Field(default_factory=list, description="List of filenames in project data folder")
+    files: list[str] = Field(default_factory=list, description="List of filenames in project data folder")
 
 
 # ==========================================
@@ -122,10 +122,10 @@ class ETLNodeSchema(BaseModel):
     """Representation of a node in an ETL Vue Flow DAG."""
 
     id: str = Field(description="Unique node identifier")
-    type: Optional[str] = Field(default=None, description="Vue Flow node type identifier")
-    label: Optional[str] = Field(default=None, description="Display label for node")
-    position: Optional[Dict[str, Any]] = Field(default=None, description="Canvas x, y coordinates")
-    data: Dict[str, Any] = Field(default_factory=dict, description="Node configuration parameters")
+    type: str | None = Field(default=None, description="Vue Flow node type identifier")
+    label: str | None = Field(default=None, description="Display label for node")
+    position: dict[str, Any] | None = Field(default=None, description="Canvas x, y coordinates")
+    data: dict[str, Any] = Field(default_factory=dict, description="Node configuration parameters")
 
 
 class ETLEdgeSchema(BaseModel):
@@ -134,15 +134,15 @@ class ETLEdgeSchema(BaseModel):
     id: str = Field(description="Unique edge identifier")
     source: str = Field(description="Source node ID")
     target: str = Field(description="Target node ID")
-    sourceHandle: Optional[str] = Field(default=None, description="Optional source handle identifier")
-    targetHandle: Optional[str] = Field(default=None, description="Optional target handle identifier")
+    sourceHandle: str | None = Field(default=None, description="Optional source handle identifier")
+    targetHandle: str | None = Field(default=None, description="Optional target handle identifier")
 
 
 class ETLDAGSchema(BaseModel):
     """Representation of an entire ETL pipeline DAG."""
 
-    nodes: List[ETLNodeSchema] = Field(default_factory=list, description="List of DAG nodes")
-    edges: List[ETLEdgeSchema] = Field(default_factory=list, description="List of DAG edges")
+    nodes: list[ETLNodeSchema] = Field(default_factory=list, description="List of DAG nodes")
+    edges: list[ETLEdgeSchema] = Field(default_factory=list, description="List of DAG edges")
 
 
 class SaveETLDAGRequest(BaseModel):
@@ -154,23 +154,23 @@ class SaveETLDAGRequest(BaseModel):
 class ETLExecuteRequest(BaseModel):
     """Payload for requesting execution of an ETL DAG."""
 
-    project_id: Optional[str] = Field(default=None, description="Associated project ID")
-    dag: Optional[ETLDAGSchema] = Field(default=None, description="Optional explicit DAG override")
+    project_id: str | None = Field(default=None, description="Associated project ID")
+    dag: ETLDAGSchema | None = Field(default=None, description="Optional explicit DAG override")
 
 
 class ETLExecuteResponse(BaseModel):
     """Execution output summary of an ETL DAG."""
 
     status: str = Field(description="Execution status: success | error")
-    logs: List[str] = Field(default_factory=list, description="Execution execution logs")
-    output_tables: List[str] = Field(default_factory=list, description="Names of registered output tables")
-    error: Optional[str] = Field(default=None, description="Error message if execution failed")
+    logs: list[str] = Field(default_factory=list, description="Execution execution logs")
+    output_tables: list[str] = Field(default_factory=list, description="Names of registered output tables")
+    error: str | None = Field(default=None, description="Error message if execution failed")
 
 
 class ETLPreviewRequest(BaseModel):
     """Payload for previewing node data in an ETL pipeline."""
 
-    project_id: Optional[str] = Field(default=None, description="Associated project ID")
+    project_id: str | None = Field(default=None, description="Associated project ID")
     node_id: str = Field(description="Node ID to preview output for")
     limit: int = Field(default=100, description="Maximum number of rows to return")
 
@@ -179,8 +179,8 @@ class ETLPreviewResponse(BaseModel):
     """Preview output data for an ETL node."""
 
     node_id: str = Field(description="Node ID previewed")
-    columns: List[str] = Field(default_factory=list, description="List of column names")
-    rows: List[Dict[str, Any]] = Field(default_factory=list, description="Preview row records")
+    columns: list[str] = Field(default_factory=list, description="List of column names")
+    rows: list[dict[str, Any]] = Field(default_factory=list, description="Preview row records")
     total_rows: int = Field(description="Total rows in preview result")
 
 
@@ -196,8 +196,8 @@ class DashboardItemSchema(BaseModel):
     y: int = Field(description="Grid column position y")
     w: int = Field(description="Grid width w")
     h: int = Field(description="Grid height h")
-    widget_type: Optional[str] = Field(default=None, description="Widget type (e.g. chart, pivot, kpi)")
-    config: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Widget configuration parameters")
+    widget_type: str | None = Field(default=None, description="Widget type (e.g. chart, pivot, kpi)")
+    config: dict[str, Any] | None = Field(default_factory=dict, description="Widget configuration parameters")
 
 
 class DashboardSchema(BaseModel):
@@ -205,21 +205,21 @@ class DashboardSchema(BaseModel):
 
     id: str = Field(description="Dashboard ID")
     name: str = Field(description="Dashboard name")
-    layout: List[Dict[str, Any]] = Field(default_factory=list, description="List of grid item configurations")
+    layout: list[dict[str, Any]] = Field(default_factory=list, description="List of grid item configurations")
 
 
 class SaveDashboardRequest(BaseModel):
     """Payload for saving or updating a dashboard layout."""
 
-    name: Optional[str] = Field(default=None, description="Dashboard display name")
-    layout: List[Dict[str, Any]] = Field(default_factory=list, description="Grid layout list")
+    name: str | None = Field(default=None, description="Dashboard display name")
+    layout: list[dict[str, Any]] = Field(default_factory=list, description="Grid layout list")
 
 
 class DashboardListResponse(BaseModel):
     """Response containing saved dashboards for a project."""
 
     project_id: str = Field(description="Project identifier")
-    dashboards: List[DashboardSchema] = Field(default_factory=list, description="List of project dashboards")
+    dashboards: list[DashboardSchema] = Field(default_factory=list, description="List of project dashboards")
 
 
 # ==========================================
@@ -230,10 +230,10 @@ class ExportRequest(BaseModel):
     """Payload model for project export requests."""
 
     format: str = Field(default="html", description="Export format: pdf | html | md | csv")
-    template_id: Optional[str] = Field(default=None, description="Jinja2 template filename")
-    filter_context: Optional[Dict[str, Any]] = Field(default=None, description="Active filter context rules")
-    ai_compilation_prompt: Optional[str] = Field(default=None, description="Prompt for AI-assisted compilation")
-    payload: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Export payload (widgets, tables, title)")
+    template_id: str | None = Field(default=None, description="Jinja2 template filename")
+    filter_context: dict[str, Any] | None = Field(default=None, description="Active filter context rules")
+    ai_compilation_prompt: str | None = Field(default=None, description="Prompt for AI-assisted compilation")
+    payload: dict[str, Any] | None = Field(default_factory=dict, description="Export payload (widgets, tables, title)")
 
 
 class ExportJobResponse(BaseModel):

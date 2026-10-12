@@ -1,9 +1,10 @@
 """Audit logging middleware for FastAPI in PyBI."""
 
-from datetime import datetime, timezone
 import logging
 import time
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -14,20 +15,20 @@ log = logging.getLogger("pybi.audit")
 class AuditLogStore:
     """In-memory audit log record store with summary metrics aggregation."""
 
-    _logs: List[Dict[str, Any]] = []
+    _logs: list[dict[str, Any]] = []
 
     @classmethod
-    def log_event(cls, event: Dict[str, Any]) -> None:
+    def log_event(cls, event: dict[str, Any]) -> None:
         """Record audit event."""
         cls._logs.append(event)
 
     @classmethod
-    def get_logs(cls, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_logs(cls, limit: int = 100) -> list[dict[str, Any]]:
         """Return recent log records."""
         return cls._logs[-limit:]
 
     @classmethod
-    def get_metrics(cls) -> Dict[str, Any]:
+    def get_metrics(cls) -> dict[str, Any]:
         """Aggregate audit usage metrics."""
         total_requests = len(cls._logs)
         if total_requests == 0:
@@ -43,8 +44,8 @@ class AuditLogStore:
         durations = [log_item["duration_ms"] for log_item in cls._logs if "duration_ms" in log_item]
         avg_time = sum(durations) / len(durations) if durations else 0.0
 
-        project_queries: Dict[str, int] = {}
-        status_codes: Dict[int, int] = {}
+        project_queries: dict[str, int] = {}
+        status_codes: dict[int, int] = {}
 
         for l in cls._logs:
             p = l.get("project_id") or "global"

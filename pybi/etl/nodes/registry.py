@@ -1,12 +1,13 @@
 """Registry mapping ETL node type strings to concrete ETLNode classes."""
 
-from typing import Dict, Type
-from pybi.core.interfaces import ETLNode
-from .source import DataSourceNode
-from .transform import FilterNode, SelectNode, GroupByNode, JoinNode, PivotNode
-from .output import OutputNode
 
-NODE_REGISTRY: Dict[str, Type[ETLNode]] = {
+from pybi.core.interfaces import ETLNode
+
+from .output import OutputNode
+from .source import DataSourceNode
+from .transform import FilterNode, GroupByNode, JoinNode, PivotNode, SelectNode
+
+NODE_REGISTRY: dict[str, type[ETLNode]] = {
     "DataSource": DataSourceNode,
     "Filter": FilterNode,
     "Select": SelectNode,
@@ -16,7 +17,7 @@ NODE_REGISTRY: Dict[str, Type[ETLNode]] = {
     "Output": OutputNode,
 }
 
-_TRANSFORM_NODES: Dict[str, Type[ETLNode]] = {
+_TRANSFORM_NODES: dict[str, type[ETLNode]] = {
     "filter": FilterNode,
     "select": SelectNode,
     "groupby": GroupByNode,
@@ -26,7 +27,7 @@ _TRANSFORM_NODES: Dict[str, Type[ETLNode]] = {
 }
 
 
-def get_node_class(node_type: str, transform_type: str | None = None) -> Type[ETLNode]:
+def get_node_class(node_type: str, transform_type: str | None = None) -> type[ETLNode]:
     """Return the concrete ETLNode class for a given node_type or transform_type."""
     if transform_type and transform_type.lower() in _TRANSFORM_NODES:
         return _TRANSFORM_NODES[transform_type.lower()]

@@ -1,19 +1,18 @@
 """FastAPI router for Project Management endpoints in PyBI v1 REST API."""
 
 import os
-from pathlib import Path
 import tempfile
-from typing import List, Union
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status, Body
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
+import pybi.storage.project_manager as pm
 from pybi.alm.bundler import ProjectBundler
 from pybi.api.schemas import (
+    FileListResponse,
+    FileUploadResponse,
     ProjectCreate,
     ProjectResponse,
-    FileUploadResponse,
-    FileListResponse,
 )
 from pybi.api.v1.models import (
     MessageResponse,
@@ -23,7 +22,6 @@ from pybi.api.v1.models import (
     ProjectUpdateRequest,
 )
 from pybi.core.semantic_model import CoreSemanticModel
-import pybi.storage.project_manager as pm
 from pybi.core.storage import default_storage, sanitize_project_id
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Projects"])
@@ -68,7 +66,7 @@ def list_projects() -> ProjectListResponse:
 
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-def create_project(req: Union[ProjectCreate, ProjectCreateRequest]) -> ProjectResponse:
+def create_project(req: ProjectCreate | ProjectCreateRequest) -> ProjectResponse:
     """Create a new project."""
     raw_pid = getattr(req, "project_id", None) or getattr(req, "name", "project")
     pid = sanitize_project_id(raw_pid)

@@ -2,20 +2,23 @@
 
 import copy
 
-from nicegui import ui
 import polars as pl
+from nicegui import ui
 
+from pybi.core.history import HistoryManager
 from pybi.core.storage import default_storage
 from pybi.dashboard import default_binder
-from pybi.core.history import HistoryManager
+from pybi.export.dashboard_exporter import render_export_dialog
 from pybi.ui.components.chart_widget import ChartWidget
 from pybi.ui.components.dashboard_grid import DashboardGrid
 from pybi.ui.components.dashboard_manager import DashboardManager
-from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.navbar import render_navbar
-from pybi.export.dashboard_exporter import render_export_dialog
+from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.search_bar import SearchBar
-from pybi.ui.components.widget_configurator import WidgetConfigurator, render_data_status_badge
+from pybi.ui.components.widget_configurator import (
+    WidgetConfigurator,
+    render_data_status_badge,
+)
 from pybi.ui.components.widget_data import (
     available_sources,
     bind_widget_data,

@@ -1,6 +1,8 @@
 """Widget configurator drawer and status badge helpers for Dashboard Editor."""
 
-from typing import Callable, Dict, Any, Optional, List
+from collections.abc import Callable
+from typing import Any
+
 from nicegui import ui
 
 WIDGET_GALLERY = [
@@ -18,22 +20,22 @@ WIDGET_GALLERY = [
 class WidgetConfigurator:
     """Side drawer for creating and configuring dashboard widget options."""
 
-    def __init__(self, on_save: Callable[[Dict[str, Any]], None], on_delete: Optional[Callable[[Dict[str, Any]], None]] = None):
+    def __init__(self, on_save: Callable[[dict[str, Any]], None], on_delete: Callable[[dict[str, Any]], None] | None = None):
         self.on_save = on_save
         self.on_delete = on_delete
         self.drawer = ui.right_drawer(value=False).classes('bg-gray-50 border-l border-gray-200 p-4')
         self.drawer.style('width: 380px;')
-        self.current_widget: Dict[str, Any] = {}
+        self.current_widget: dict[str, Any] = {}
         self._is_new = False
-        self._sources: List[str] = ['regional_sales']
+        self._sources: list[str] = ['regional_sales']
 
-    def open_widget(self, widget: Dict[str, Any], available_sources: Optional[List[str]] = None):
+    def open_widget(self, widget: dict[str, Any], available_sources: list[str] | None = None):
         """Open configurator drawer to edit an existing widget item."""
         self.current_widget = dict(widget)
         self._is_new = False
         self._render(available_sources)
 
-    def open_new_widget(self, available_sources: Optional[List[str]] = None):
+    def open_new_widget(self, available_sources: list[str] | None = None):
         """Open configurator drawer to create a brand new widget item."""
         sources = available_sources or ['regional_sales']
         gallery = {g['type']: g for g in WIDGET_GALLERY}
@@ -48,7 +50,7 @@ class WidgetConfigurator:
         self._is_new = True
         self._render(available_sources)
 
-    def _render(self, available_sources: Optional[List[str]] = None):
+    def _render(self, available_sources: list[str] | None = None):
         sources = available_sources or ['regional_sales']
         self._sources = sources
         header = 'Add Widget' if self._is_new else f"Configure: {self.current_widget.get('title', 'Widget')}"

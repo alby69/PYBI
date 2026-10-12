@@ -1,23 +1,24 @@
 """Semantic Model Editor page implementation for visual model builder and YAML management."""
 
 import os
-from typing import Dict, Any, List, Optional
-import yaml
+
 from nicegui import ui
 
 from pybi.core.semantic_model import (
-    SemanticModel as CoreSemanticModel,
-    SemanticTable,
+    Cardinality,
+    JoinType,
+    RLSRule,
     SemanticColumn,
     SemanticMeasure,
     SemanticRelationship,
-    RLSRule,
-    Cardinality,
-    JoinType,
+    SemanticTable,
+)
+from pybi.core.semantic_model import (
+    SemanticModel as CoreSemanticModel,
 )
 from pybi.core.storage import default_storage
-from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.navbar import render_navbar
+from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.shortcuts import render_shortcuts_help_button
 from pybi.ui.theme import default_theme
 

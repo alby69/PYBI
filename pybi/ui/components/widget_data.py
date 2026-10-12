@@ -2,7 +2,7 @@
 
 import copy
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import duckdb
 import polars as pl
@@ -60,12 +60,12 @@ def register_sample_source() -> None:
         default_binder.register_source('regional_sales', sample_df)
 
 
-def sample_layout() -> List[Dict[str, Any]]:
+def sample_layout() -> list[dict[str, Any]]:
     """Return a deep copy of the demo dashboard layout (unbound)."""
     return copy.deepcopy(SAMPLE_LAYOUT)
 
 
-def available_sources() -> List[str]:
+def available_sources() -> list[str]:
     """Registered data source names usable as widget bindings."""
     try:
         names = default_binder.list_sources()
@@ -102,7 +102,7 @@ def _format_number(value):
     return f'{as_float:,.2f}'
 
 
-def _source_frame(item: Dict[str, Any]) -> Tuple[Optional[pl.DataFrame], Optional[str]]:
+def _source_frame(item: dict[str, Any]) -> tuple[pl.DataFrame | None, str | None]:
     """Fetch the widget's bound DataFrame or execute semantic query if semantic fields are provided."""
     source = item.get('source')
     if not source:
@@ -133,7 +133,7 @@ def _source_frame(item: Dict[str, Any]) -> Tuple[Optional[pl.DataFrame], Optiona
         return None, f'Failed to load source "{source}": {err}'
 
 
-def _bind_table_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str]) -> Dict[str, Any]:
+def _bind_table_data(item: dict[str, Any], df: pl.DataFrame, error: str | None) -> dict[str, Any]:
     if error is not None:
         item['columns'] = []
         item['data_error'] = error
@@ -146,7 +146,7 @@ def _bind_table_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     return item
 
 
-def _build_vega_lite_spec(kind: str, labels: List[str], series: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _build_vega_lite_spec(kind: str, labels: list[str], series: list[dict[str, Any]]) -> dict[str, Any]:
     """Generate a declarative Vega-Lite specification dict."""
     data_values = []
     for idx, label in enumerate(labels):
@@ -185,7 +185,7 @@ def _build_vega_lite_spec(kind: str, labels: List[str], series: List[Dict[str, A
     }
 
 
-def _bind_chart_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str]) -> Dict[str, Any]:
+def _bind_chart_data(item: dict[str, Any], df: pl.DataFrame, error: str | None) -> dict[str, Any]:
     kind = item.get('chartType')
     kind = kind if kind in ('bar', 'line', 'pie') else 'bar'
     chart = {'kind': kind, 'labels': [], 'series': [], 'max': 0}
@@ -220,7 +220,7 @@ def _bind_chart_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     return item
 
 
-def _bind_kpi_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str]) -> Dict[str, Any]:
+def _bind_kpi_data(item: dict[str, Any], df: pl.DataFrame, error: str | None) -> dict[str, Any]:
     metric = item.get('metric') if item.get('metric') in KPI_METRICS else 'sum'
     source = item.get('source')
     if error is not None:
@@ -240,7 +240,7 @@ def _bind_kpi_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str])
     return item
 
 
-def _normalize_value_specs(vals: Any, default_agg: str = 'Sum') -> List[Dict[str, Any]]:
+def _normalize_value_specs(vals: Any, default_agg: str = 'Sum') -> list[dict[str, Any]]:
     """Normalize values config into a list of value spec dicts: [{field, agg, showAs}]."""
     if not vals:
         return []
@@ -263,13 +263,13 @@ def _normalize_value_specs(vals: Any, default_agg: str = 'Sum') -> List[Dict[str
 
 def _compute_server_pivot_duckdb(
     df: pl.DataFrame,
-    rows: List[str],
-    cols: List[str],
+    rows: list[str],
+    cols: list[str],
     vals: Any,
     agg: str = 'Sum',
-    filters: Optional[List[str]] = None,
-    filter_values: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    filters: list[str] | None = None,
+    filter_values: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Execute server-side DuckDB GROUP BY query for large datasets."""
     conn = duckdb.connect(':memory:')
     from pybi.etl.executor import configure_duckdb_connection
@@ -403,7 +403,7 @@ def _compute_server_pivot_duckdb(
     }
 
 
-def _bind_pivot_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str]) -> Dict[str, Any]:
+def _bind_pivot_data(item: dict[str, Any], df: pl.DataFrame, error: str | None) -> dict[str, Any]:
     """Attach pivot dataset records or server-side DuckDB pre-aggregated pivot matrix."""
     if error is not None:
         item['columns'] = []
@@ -446,7 +446,7 @@ def _bind_pivot_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     return item
 
 
-def _bind_widget_data(widget: Dict[str, Any]) -> Dict[str, Any]:
+def _bind_widget_data(widget: dict[str, Any]) -> dict[str, Any]:
     """Attach live data pulled from the widget's bound source or semantic model."""
     item = {k: v for k, v in widget.items() if k not in WIDGET_DATA_KEYS}
     for key in ('rows', 'cols', 'vals', 'aggregator_name', 'dimensions', 'measures'):
@@ -466,12 +466,12 @@ def _bind_widget_data(widget: Dict[str, Any]) -> Dict[str, Any]:
     return _bind_kpi_data(item, df, error)
 
 
-def bind_widget_data(layout: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def bind_widget_data(layout: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return a copy of the layout with live data attached to every widget."""
     register_sample_source()
     return [_bind_widget_data(item) for item in layout]
 
 
-def strip_widget_data(layout: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def strip_widget_data(layout: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return a copy of the layout without the live data (for storage/export)."""
     return [{k: v for k, v in item.items() if k not in WIDGET_DATA_KEYS} for item in layout]

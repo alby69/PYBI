@@ -1,7 +1,8 @@
 """Dedicated writer connectors and strategy registry for PyBI ETL output destinations."""
 
 import logging
-from typing import Any, Callable, Dict, Tuple
+from typing import Any
+
 import duckdb
 import polars as pl
 
@@ -42,7 +43,7 @@ class WriterRegistry:
         output_type: str,
         filepath_or_uri: str = "",
         duckdb_conn: Any = None,
-    ) -> Tuple[str, Tuple[str, pl.DataFrame]]:
+    ) -> tuple[str, tuple[str, pl.DataFrame]]:
         """Write DataFrame to target destination based on output_type.
 
         Args:

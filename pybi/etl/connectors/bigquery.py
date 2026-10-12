@@ -1,7 +1,8 @@
 """Google BigQuery connector implementation with DirectQuery support for PyBI."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
+
 import polars as pl
 from sqlalchemy import create_engine
 
@@ -13,7 +14,7 @@ log = logging.getLogger(__name__)
 class BigQueryConnector(BaseConnector):
     """Google BigQuery connector supporting read, write, test_connection, get_schema, and DirectQuery."""
 
-    def __init__(self, connection_uri: Optional[str] = None, project_id: Optional[str] = None, dataset_id: Optional[str] = None, credentials_path: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_uri: str | None = None, project_id: str | None = None, dataset_id: str | None = None, credentials_path: str | None = None, **kwargs: Any) -> None:
         super().__init__(connection_uri=connection_uri, **kwargs)
         self.project_id = project_id or "default-project"
         self.dataset_id = dataset_id or "default_dataset"
@@ -39,7 +40,7 @@ class BigQueryConnector(BaseConnector):
                 return True
             return False
 
-    def get_schema(self, table_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_schema(self, table_name: str | None = None) -> dict[str, Any]:
         """Get schema of BigQuery table."""
         target = table_name or "sample_table"
         try:

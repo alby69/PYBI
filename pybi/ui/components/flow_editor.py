@@ -1,13 +1,15 @@
 """Python wrapper for Vue Flow ETL Editor component."""
 
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
+
 from nicegui import ui
 
 
 class FlowEditor(ui.element, component='flow_editor.js'):
     """FlowEditor wraps Vue Flow component for visual ETL DAG creation."""
 
-    def __init__(self, nodes: Optional[List[Dict[str, Any]]] = None, edges: Optional[List[Dict[str, Any]]] = None) -> None:
+    def __init__(self, nodes: list[dict[str, Any]] | None = None, edges: list[dict[str, Any]] | None = None) -> None:
         super().__init__()
 
         # Polyfill process.env for browser ESM compatibility
@@ -22,26 +24,26 @@ class FlowEditor(ui.element, component='flow_editor.js'):
         self._props['edges'] = self._edges
 
     @property
-    def nodes(self) -> List[Dict[str, Any]]:
+    def nodes(self) -> list[dict[str, Any]]:
         return self._nodes
 
     @nodes.setter
-    def nodes(self, value: List[Dict[str, Any]]) -> None:
+    def nodes(self, value: list[dict[str, Any]]) -> None:
         self._nodes = value
         self._props['nodes'] = value
         self.update()
 
     @property
-    def edges(self) -> List[Dict[str, Any]]:
+    def edges(self) -> list[dict[str, Any]]:
         return self._edges
 
     @edges.setter
-    def edges(self, value: List[Dict[str, Any]]) -> None:
+    def edges(self, value: list[dict[str, Any]]) -> None:
         self._edges = value
         self._props['edges'] = value
         self.update()
 
-    def sync_from_client(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> None:
+    def sync_from_client(self, nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> None:
         """Adopt the graph state produced in the browser without pushing props back.
 
         Keeps the Python-side graph in sync with canvas edits (dragging, new
@@ -55,7 +57,7 @@ class FlowEditor(ui.element, component='flow_editor.js'):
         self._nodes = nodes or []
         self._edges = edges or []
 
-    def find_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+    def find_node(self, node_id: str) -> dict[str, Any] | None:
         """Look up a node by id in the current graph.
 
         Args:

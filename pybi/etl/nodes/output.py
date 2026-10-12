@@ -1,17 +1,19 @@
 """Output ETL node implementation."""
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
 import polars as pl
 
 from pybi.etl.connectors.writers import WriterRegistry
+
 from .base import BaseETLNode
 
 
 class OutputNode(BaseETLNode):
     """Output node destination definition."""
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         table_name = self.data.get("table_name")
         label = self.data.get("label", "")
         if not table_name and label:
@@ -28,8 +30,8 @@ class OutputNode(BaseETLNode):
     def execute(
         self,
         input_data: Any,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[str, Tuple[str, pl.DataFrame]]:
+        context: dict[str, Any] | None = None,
+    ) -> tuple[str, tuple[str, pl.DataFrame]]:
         """Execute output destination writing using WriterRegistry.
 
         Args:

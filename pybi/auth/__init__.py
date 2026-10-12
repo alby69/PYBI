@@ -11,10 +11,10 @@ from .rbac import RBACManager, default_rbac
 
 __all__ = [
     "AuthUser",
+    "RBACManager",
     "create_access_token",
     "decode_access_token",
+    "default_rbac",
     "hash_password",
     "verify_password",
-    "RBACManager",
-    "default_rbac",
 ]

@@ -1,14 +1,17 @@
 """Python wrapper for Vue Grid Layout Dashboard component."""
 
-from typing import Dict, List, Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
+
 from nicegui import ui
+
 
 class DashboardGrid(ui.element, component='dashboard_grid.js'):
     """DashboardGrid wraps grid-layout-plus Vue component for dashboard visual widgets."""
 
     def __init__(
         self,
-        layout: Optional[List[Dict[str, Any]]] = None,
+        layout: list[dict[str, Any]] | None = None,
         col_num: int = 12,
         row_height: int = 60,
         is_draggable: bool = True,
@@ -27,11 +30,11 @@ class DashboardGrid(ui.element, component='dashboard_grid.js'):
         self._props['isResizable'] = is_resizable
 
     @property
-    def layout(self) -> List[Dict[str, Any]]:
+    def layout(self) -> list[dict[str, Any]]:
         return self._layout
 
     @layout.setter
-    def layout(self, value: List[Dict[str, Any]]) -> None:
+    def layout(self, value: list[dict[str, Any]]) -> None:
         self._layout = value
         self._props['layout'] = value
         self.update()

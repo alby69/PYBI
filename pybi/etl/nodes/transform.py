@@ -1,10 +1,12 @@
 """Transformation ETL nodes implementation."""
 
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import ibis.expr.types as ir
 import polars as pl
+
 from pybi.core.exceptions import ValidationError
+
 from .base import BaseETLNode
 
 
@@ -16,7 +18,7 @@ def _format_input_table(input_table: str) -> str:
     return trimmed
 
 
-def _parse_condition(cond: str) -> tuple[Optional[str], Optional[str], Any]:
+def _parse_condition(cond: str) -> tuple[str | None, str | None, Any]:
     cond = cond.strip()
     for op in (">=", "<=", "!=", "==", "=", ">", "<"):
         if op in cond:
@@ -40,11 +42,11 @@ class FilterNode(BaseETLNode):
     def __init__(
         self,
         node_id: str,
-        column: Optional[str] = None,
-        operator: Optional[str] = None,
+        column: str | None = None,
+        operator: str | None = None,
         value: Any = None,
-        data: Optional[Dict[str, Any]] = None,
-        applied_steps: Optional[List[Dict[str, Any]]] = None,
+        data: dict[str, Any] | None = None,
+        applied_steps: list[dict[str, Any]] | None = None,
     ):
         d = data.copy() if data else {}
         if column is not None:
@@ -61,7 +63,7 @@ class FilterNode(BaseETLNode):
         self.value = self.data.get("value")
         self.applied_steps = self.data.get("applied_steps", [])
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         condition = self.data.get("condition") or self.data.get("predicate")
         applied_steps = self.data.get("applied_steps") or self.applied_steps
         if not condition and not (self.column and self.operator and self.value is not None) and not applied_steps:
@@ -139,8 +141,8 @@ class SelectNode(BaseETLNode):
     def __init__(
         self,
         node_id: str,
-        columns: Optional[List[str] | str] = None,
-        data: Optional[Dict[str, Any]] = None,
+        columns: list[str] | str | None = None,
+        data: dict[str, Any] | None = None,
     ):
         d = data.copy() if data else {}
         if columns is not None:
@@ -151,7 +153,7 @@ class SelectNode(BaseETLNode):
             cols = [c.strip() for c in cols.split(",") if c.strip()]
         self.columns = cols
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         if not self.columns:
             return [f"Select node '{self.node_id}' missing selected columns."]
         return []
@@ -176,11 +178,11 @@ class GroupByNode(BaseETLNode):
     def __init__(
         self,
         node_id: str,
-        group_cols: Optional[List[str]] = None,
-        agg_col: Optional[str] = None,
-        agg_func: Optional[str] = None,
-        output_alias: Optional[str] = None,
-        data: Optional[Dict[str, Any]] = None,
+        group_cols: list[str] | None = None,
+        agg_col: str | None = None,
+        agg_func: str | None = None,
+        output_alias: str | None = None,
+        data: dict[str, Any] | None = None,
     ):
         d = data.copy() if data else {}
         if group_cols is not None:
@@ -201,7 +203,7 @@ class GroupByNode(BaseETLNode):
         self.agg_func = self.data.get("agg_func")
         self.output_alias = self.data.get("output_alias")
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         if not self.group_cols and not self.data.get("group_by") and not self.data.get("by"):
             return [f"GroupBy node '{self.node_id}' missing grouping columns."]
         return []
@@ -276,7 +278,7 @@ GroupByAggregateNode = GroupByNode
 class JoinNode(BaseETLNode):
     """Join transformation node."""
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         how = (self.data.get("how") or "inner").lower()
         if how != "cross":
             left_on = self.data.get("left_on") or self.data.get("left_column")
@@ -325,7 +327,7 @@ class JoinNode(BaseETLNode):
 class PivotNode(BaseETLNode):
     """Pivot transformation node."""
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         on = self.data.get("on")
         if not on:
             return [f"Pivot node '{self.node_id}' missing pivot-on 'on' columns."]

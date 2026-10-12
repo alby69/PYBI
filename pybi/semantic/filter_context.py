@@ -1,9 +1,9 @@
 """Filter Context processing for PyBI Semantic Layer."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
-def build_where_clauses(filters: Dict[str, Any], valid_columns: Optional[set] = None) -> Tuple[List[str], List[Any]]:
+def build_where_clauses(filters: dict[str, Any], valid_columns: set | None = None) -> tuple[list[str], list[Any]]:
     """Convert a filter context dictionary into parameterized or sanitized SQL WHERE clause conditions.
 
     Supported filter values:
@@ -11,7 +11,7 @@ def build_where_clauses(filters: Dict[str, Any], valid_columns: Optional[set] = 
     - List of values: e.g. {'category': ['A', 'B']} -> '"category" IN (\'A\', \'B\')'
     - Operator dict: e.g. {'amount': {'>=': 100, '<': 500}} -> '"amount" >= 100 AND "amount" < 500'
     """
-    clauses: List[str] = []
+    clauses: list[str] = []
 
     if not filters:
         return clauses, []

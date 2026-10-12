@@ -1,6 +1,7 @@
 """Admin usage metrics router for PyBI v1 REST API."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from pybi.api.middleware.audit import AuditLogStore
 from pybi.api.v1.auth import get_current_user
 from pybi.auth.jwt_auth import AuthUser

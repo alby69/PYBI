@@ -1,9 +1,11 @@
 """Custom Python transformation ETL node (Non-foldable)."""
 
-from typing import Any, Callable, Dict, List
+from collections.abc import Callable
+from typing import Any
+
 import ibis.expr.types as ir
 import polars as pl
-from pybi.core.exceptions import ValidationError
+
 from .base import BaseETLNode
 
 
@@ -17,7 +19,7 @@ class CustomPythonNode(BaseETLNode):
         self,
         node_id: str,
         transform_fn: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
-        data: Dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
     ):
         super().__init__(node_id, data or {})
         self.transform_fn = transform_fn or self.data.get("transform_fn")
@@ -26,7 +28,7 @@ class CustomPythonNode(BaseETLNode):
     def foldable(self) -> bool:
         return False
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         if self.transform_fn is not None and not callable(self.transform_fn):
             return [f"CustomPythonNode '{self.node_id}' transform_fn must be callable."]
         return []

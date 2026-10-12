@@ -1,7 +1,8 @@
 """Centralized FilterContext for dashboard interaction and cross-filtering propagation."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 
 @dataclass
@@ -10,7 +11,7 @@ class FilterState:
 
     table: str
     column: str
-    values: List[Any]
+    values: list[Any]
     operator: str = "IN"
 
 
@@ -22,15 +23,15 @@ class FilterContext:
     """Centralized filter state manager and observer pattern subject for cross-filtering."""
 
     def __init__(self) -> None:
-        self._active_filters: Dict[str, FilterState] = {}
-        self._listeners: List[Callable] = []
+        self._active_filters: dict[str, FilterState] = {}
+        self._listeners: list[Callable] = []
 
     @property
-    def filters(self) -> Dict[str, FilterState]:
+    def filters(self) -> dict[str, FilterState]:
         """Expose active filters mapping."""
         return self._active_filters
 
-    def set_filter(self, table: str, column: str, values: List[Any], operator: str = "IN") -> None:
+    def set_filter(self, table: str, column: str, values: list[Any], operator: str = "IN") -> None:
         """Set or update a filter state for a table and column."""
         key = f"{table}.{column}"
         self._active_filters[key] = FilterState(table=table, column=column, values=values, operator=operator)
@@ -59,11 +60,11 @@ class FilterContext:
             self._active_filters.clear()
             self._notify_listeners()
 
-    def get_active_filters_for_table(self, table_name: str) -> List[FilterState]:
+    def get_active_filters_for_table(self, table_name: str) -> list[FilterState]:
         """Return active filter states for a specific table."""
         return [f for key, f in self._active_filters.items() if f.table == table_name]
 
-    def to_sql_where(self, table: Optional[Union[Any, str]] = None) -> str:
+    def to_sql_where(self, table: Any | str | None = None) -> str:
         """Generate a SQL WHERE clause for DuckDB/Polars based on active filters."""
         t_name = None
         if isinstance(table, str):

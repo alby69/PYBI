@@ -1,19 +1,19 @@
 """FastAPI router for Auth endpoints in PyBI v1 REST API."""
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
-from typing import Optional
 
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+
+from pybi.api.v1.models import LoginRequest, TokenResponse, UserProfile
 from pybi.auth.jwt_auth import (
     AuthUser,
     create_access_token,
     decode_access_token,
 )
-from pybi.api.v1.models import LoginRequest, TokenResponse, UserProfile
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> AuthUser:
+def get_current_user(authorization: str | None = Header(None)) -> AuthUser:
     """Dependency to extract and validate AuthUser with claims from Bearer token."""
     if not authorization or not authorization.startswith("Bearer "):
         # Fallback default user if no authorization header provided

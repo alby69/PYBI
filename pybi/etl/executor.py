@@ -1,11 +1,12 @@
 """ETL Execution Engine for PyBI visual DAGs using Polars and DuckDB."""
 
-from dataclasses import dataclass, field
 import graphlib
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Any
 
 import duckdb
 import ibis
@@ -13,9 +14,9 @@ import polars as pl
 
 from pybi.core.interfaces import ETLNode
 from pybi.etl.compiler import ETLCompiler
+from pybi.etl.nodes.output import OutputNode
 from pybi.etl.optimizer import SQLOptimizer
 from pybi.model.engine import ModelEngine
-from pybi.etl.nodes.output import OutputNode
 
 from .connectors import (
     read_csv,
@@ -28,7 +29,7 @@ from .node_factory import JOIN_TYPES
 log = logging.getLogger(__name__)
 
 
-def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
+def resolve_data_path(filepath: str, base_dir: str | None = None) -> str:
     """Resolve a data file path against the project data folder."""
     if not filepath or not base_dir:
         return filepath
@@ -44,7 +45,7 @@ def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
     return filepath
 
 
-def _as_key_list(value: Any) -> List[str]:
+def _as_key_list(value: Any) -> list[str]:
     """Normalise a join key definition into a list of column names."""
     if value is None:
         return []
@@ -55,7 +56,7 @@ def _as_key_list(value: Any) -> List[str]:
     return [str(value).strip()]
 
 
-def _check_join_keys(node_id: str, df: pl.DataFrame, keys: List[str], side: str) -> None:
+def _check_join_keys(node_id: str, df: pl.DataFrame, keys: list[str], side: str) -> None:
     """Fail with a helpful message when a join key is missing from its input."""
     missing = [key for key in keys if key not in df.columns]
     if missing:
@@ -67,8 +68,8 @@ def _check_join_keys(node_id: str, df: pl.DataFrame, keys: List[str], side: str)
 
 def configure_duckdb_connection(
     conn: duckdb.DuckDBPyConnection,
-    threads: Optional[int] = None,
-    max_memory: Optional[str] = None,
+    threads: int | None = None,
+    max_memory: str | None = None,
 ) -> duckdb.DuckDBPyConnection:
     """Apply performance pragmas to a DuckDB connection."""
     env_threads = os.environ.get("DUCKDB_THREADS")
@@ -89,10 +90,10 @@ class ETLResult:
     """Dataclass holding execution results of an ETL DAG pipeline."""
 
     status: str
-    dataframes: Dict[str, pl.DataFrame] = field(default_factory=dict)
-    output_tables: Dict[str, pl.DataFrame] = field(default_factory=dict)
-    logs: List[str] = field(default_factory=list)
-    error: Optional[str] = None
+    dataframes: dict[str, pl.DataFrame] = field(default_factory=dict)
+    output_tables: dict[str, pl.DataFrame] = field(default_factory=dict)
+    logs: list[str] = field(default_factory=list)
+    error: str | None = None
 
 
 class ETLExecutor:
@@ -100,11 +101,11 @@ class ETLExecutor:
 
     def __init__(
         self,
-        duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
-        base_dir: Optional[str] = None,
-        threads: Optional[int] = None,
-        max_memory: Optional[str] = None,
-        model_engine: Optional[ModelEngine] = None,
+        duckdb_conn: duckdb.DuckDBPyConnection | None = None,
+        base_dir: str | None = None,
+        threads: int | None = None,
+        max_memory: str | None = None,
+        model_engine: ModelEngine | None = None,
     ) -> None:
         """Initialize ETLExecutor."""
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
@@ -116,7 +117,7 @@ class ETLExecutor:
         self.optimizer = SQLOptimizer(dialect="duckdb")
         self.model_engine = model_engine or ModelEngine(conn=self.duckdb_conn)
 
-    def compile(self, dag: Dict[str, Any]) -> Dict[str, str]:
+    def compile(self, dag: dict[str, Any]) -> dict[str, str]:
         """Compile visual DAG dict into folded SQL queries per output table."""
         return self.compiler.compile_to_sql(dag)
 
@@ -126,7 +127,7 @@ class ETLExecutor:
         source_path: str | None = None,
         source_df: pl.DataFrame | None = None,
         source_table_name: str = "source_data",
-    ) -> Tuple[pl.DataFrame, str, str]:
+    ) -> tuple[pl.DataFrame, str, str]:
         """Execute a topological list of ETLNodes using Query Folding (compile -> optimize -> execute)."""
         if source_path:
             source_path = resolve_data_path(source_path, self.base_dir)
@@ -165,17 +166,17 @@ class ETLExecutor:
 
         return result_df, raw_sql, optimized_sql
 
-    def execute(self, dag: Dict[str, Any]) -> ETLResult:
+    def execute(self, dag: dict[str, Any]) -> ETLResult:
         """Execute a visual DAG defined by nodes and edges."""
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
-        logs: List[str] = []
+        logs: list[str] = []
 
         if not nodes:
             return ETLResult(status="success", logs=["No nodes found in DAG."])
 
-        node_map: Dict[str, Dict[str, Any]] = {n["id"]: n for n in nodes}
-        parents_map: Dict[str, List[str]] = {n_id: [] for n_id in node_map}
+        node_map: dict[str, dict[str, Any]] = {n["id"]: n for n in nodes}
+        parents_map: dict[str, list[str]] = {n_id: [] for n_id in node_map}
 
         for edge in edges:
             source = edge.get("source")
@@ -194,8 +195,8 @@ class ETLExecutor:
             )
 
         logs.append(f"Topological execution order: {' -> '.join(execution_order)}")
-        node_results: Dict[str, pl.DataFrame] = {}
-        output_tables: Dict[str, pl.DataFrame] = {}
+        node_results: dict[str, pl.DataFrame] = {}
+        output_tables: dict[str, pl.DataFrame] = {}
 
         for node_id in execution_order:
             node = node_map[node_id]
@@ -233,10 +234,10 @@ class ETLExecutor:
 
     def _execute_node(
         self,
-        node: Dict[str, Any],
-        parent_ids: List[str],
-        node_results: Dict[str, pl.DataFrame],
-    ) -> tuple[pl.DataFrame, str, Optional[tuple[str, pl.DataFrame]]]:
+        node: dict[str, Any],
+        parent_ids: list[str],
+        node_results: dict[str, pl.DataFrame],
+    ) -> tuple[pl.DataFrame, str, tuple[str, pl.DataFrame] | None]:
         node_id = node.get("id", "unknown")
         data = node.get("data", {})
         label = node.get("label", data.get("label", ""))
@@ -278,7 +279,7 @@ class ETLExecutor:
                 return node_results[parent_ids[0]], f"Unrecognized node category '{category}', passing through parent data", None
             return pl.DataFrame(), f"Unrecognized node category '{category}' with no parents", None
 
-    def _load_data_source(self, node_id: str, data: Dict[str, Any], label: str) -> Tuple[pl.DataFrame, str]:
+    def _load_data_source(self, node_id: str, data: dict[str, Any], label: str) -> tuple[pl.DataFrame, str]:
         source_type = (data.get("source_type") or "").lower()
         filepath = data.get("file_path") or data.get("path") or data.get("filepath") or data.get("uri")
 
@@ -323,11 +324,11 @@ class ETLExecutor:
     def _apply_transform(
         self,
         node_id: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         label: str,
-        parent_ids: List[str],
-        node_results: Dict[str, pl.DataFrame],
-    ) -> Tuple[pl.DataFrame, str]:
+        parent_ids: list[str],
+        node_results: dict[str, pl.DataFrame],
+    ) -> tuple[pl.DataFrame, str]:
         parent_df = node_results[parent_ids[0]]
         transform_type = data.get("transform_type") or data.get("action")
 
@@ -475,11 +476,11 @@ class ETLExecutor:
 
 
 def execute_dag(
-    dag: Dict[str, Any],
-    duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
-    base_dir: Optional[str] = None,
-    threads: Optional[int] = None,
-    max_memory: Optional[str] = None,
+    dag: dict[str, Any],
+    duckdb_conn: duckdb.DuckDBPyConnection | None = None,
+    base_dir: str | None = None,
+    threads: int | None = None,
+    max_memory: str | None = None,
 ) -> ETLResult:
     """Convenience function to execute an ETL DAG."""
     executor = ETLExecutor(

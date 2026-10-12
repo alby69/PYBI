@@ -1,7 +1,8 @@
 """Snowflake connector implementation with DirectQuery support for PyBI."""
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
+
 import polars as pl
 from sqlalchemy import create_engine
 
@@ -13,7 +14,7 @@ log = logging.getLogger(__name__)
 class SnowflakeConnector(BaseConnector):
     """Snowflake connector supporting read, write, test_connection, get_schema, and DirectQuery."""
 
-    def __init__(self, connection_uri: Optional[str] = None, account: Optional[str] = None, user: Optional[str] = None, password: Optional[str] = None, database: Optional[str] = None, schema: Optional[str] = None, warehouse: Optional[str] = None, role: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_uri: str | None = None, account: str | None = None, user: str | None = None, password: str | None = None, database: str | None = None, schema: str | None = None, warehouse: str | None = None, role: str | None = None, **kwargs: Any) -> None:
         super().__init__(connection_uri=connection_uri, **kwargs)
         self.account = account
         self.user = user
@@ -46,7 +47,7 @@ class SnowflakeConnector(BaseConnector):
                 return True
             return False
 
-    def get_schema(self, table_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_schema(self, table_name: str | None = None) -> dict[str, Any]:
         """Get schema of Snowflake table."""
         target = table_name or "sample_table"
         try:

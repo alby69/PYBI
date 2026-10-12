@@ -1,13 +1,12 @@
 """Welcome wizard and onboarding walkthrough for PyBI."""
 
-from typing import List, Dict, Any
 from nicegui import ui
 
 
 class WelcomeWizard:
     """Multi-step onboarding dialog for new users."""
 
-    STEPS: List[Dict[str, str]] = [
+    STEPS: list[dict[str, str]] = [
         {
             'title': 'Welcome to PyBI Desktop! 🚀',
             'content': 'PyBI is a 100% Python open-source Business Intelligence platform designed as a modern alternative to PowerBI Desktop.',

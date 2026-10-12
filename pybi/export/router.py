@@ -1,8 +1,9 @@
 """FastAPI router for Phase 5 Publishing & Export Engine REST API."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Response
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -15,14 +16,14 @@ class ExportRequest(BaseModel):
     """Payload model for project export requests."""
 
     format: str = Field(default="html", description="Export format: pdf | html | md | csv")
-    template_id: Optional[str] = Field(default=None, description="Jinja2 template filename")
-    filter_context: Optional[Dict[str, Any]] = Field(default=None, description="Active filter context rules")
-    ai_compilation_prompt: Optional[str] = Field(default=None, description="Prompt for AI-assisted compilation")
-    payload: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Export payload (widgets, tables, title)")
+    template_id: str | None = Field(default=None, description="Jinja2 template filename")
+    filter_context: dict[str, Any] | None = Field(default=None, description="Active filter context rules")
+    ai_compilation_prompt: str | None = Field(default=None, description="Prompt for AI-assisted compilation")
+    payload: dict[str, Any] | None = Field(default_factory=dict, description="Export payload (widgets, tables, title)")
 
 
 @router.post("/projects/{project_id}/export")
-def create_export_job(project_id: str, req: ExportRequest) -> Dict[str, Any]:
+def create_export_job(project_id: str, req: ExportRequest) -> dict[str, Any]:
     """Initiate an asynchronous export job."""
     payload = req.payload or {}
     if "title" not in payload:
@@ -48,7 +49,7 @@ def create_export_job(project_id: str, req: ExportRequest) -> Dict[str, Any]:
 
 
 @router.post("/projects/{project_id}/export/pdf")
-def create_pdf_export(project_id: str, req: Optional[ExportRequest] = None) -> Dict[str, Any]:
+def create_pdf_export(project_id: str, req: ExportRequest | None = None) -> dict[str, Any]:
     """Shortcut endpoint for requesting PDF exports."""
     request_data = req or ExportRequest(format="pdf")
     request_data.format = "pdf"
@@ -56,7 +57,7 @@ def create_pdf_export(project_id: str, req: Optional[ExportRequest] = None) -> D
 
 
 @router.post("/projects/{project_id}/export/data")
-def create_data_export(project_id: str, req: Optional[ExportRequest] = None) -> Dict[str, Any]:
+def create_data_export(project_id: str, req: ExportRequest | None = None) -> dict[str, Any]:
     """Shortcut endpoint for requesting raw CSV data extracts."""
     request_data = req or ExportRequest(format="csv")
     request_data.format = "csv"
@@ -64,7 +65,7 @@ def create_data_export(project_id: str, req: Optional[ExportRequest] = None) -> 
 
 
 @router.get("/exports/{export_id}/status")
-def get_export_status(export_id: str) -> Dict[str, Any]:
+def get_export_status(export_id: str) -> dict[str, Any]:
     """Retrieve async export job status, progress, and snapshot metadata."""
     status_info = default_export_engine.get_job_status(export_id)
     if not status_info:

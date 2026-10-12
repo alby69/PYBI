@@ -1,6 +1,8 @@
 """Property panel component using a side drawer for node configuration."""
 
-from typing import Callable, Dict, Any, List, Optional
+from collections.abc import Callable
+from typing import Any
+
 from nicegui import ui
 
 from pybi.etl.node_factory import (
@@ -8,7 +10,6 @@ from pybi.etl.node_factory import (
     build_node_data,
     default_values,
     fields_for,
-    node_kind,
     node_values,
 )
 
@@ -18,21 +19,21 @@ class PropertyPanel:
 
     def __init__(
         self,
-        on_save: Callable[[str, str, Dict[str, Any]], None],
+        on_save: Callable[[str, str, dict[str, Any]], None],
         on_delete: Callable[[str], None],
-        file_options: Optional[Callable[[], List[str]]] = None,
+        file_options: Callable[[], list[str]] | None = None,
     ):
         self.on_save = on_save
         self.on_delete = on_delete
         self.file_options = file_options
         self.drawer = ui.right_drawer(value=False).classes('bg-gray-50 border-l border-gray-200 p-4')
         self.drawer.style('width: 380px;')
-        self.editing_node_id: Optional[str] = None
+        self.editing_node_id: str | None = None
         self.current_kind: str = 'DataSource'
-        self.field_inputs: Dict[str, Any] = {}
-        self.applied_steps: List[Dict[str, Any]] = []
+        self.field_inputs: dict[str, Any] = {}
+        self.applied_steps: list[dict[str, Any]] = []
 
-    def open_node(self, kind: str, node_id: Optional[str] = None, current_node: Optional[Dict[str, Any]] = None):
+    def open_node(self, kind: str, node_id: str | None = None, current_node: dict[str, Any] | None = None):
         """Open drawer to edit an existing node or build a new node."""
         self.editing_node_id = node_id
         self.current_kind = kind
@@ -150,7 +151,7 @@ class PropertyPanel:
         """Close the drawer."""
         self.drawer.set_value(False)
 
-    def _collect_values(self) -> Dict[str, Any]:
+    def _collect_values(self) -> dict[str, Any]:
         vals = {key: (inp.value or '') for key, inp in self.field_inputs.items()}
         if self.applied_steps:
             vals['applied_steps'] = self.applied_steps

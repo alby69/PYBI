@@ -1,6 +1,7 @@
 """ModelEngine wrapping DuckDB columnar store for PyBI Semantic Model."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import duckdb
 import polars as pl
 
@@ -10,10 +11,10 @@ from pybi.model.schema import Column, DataType, SemanticModel, Table
 class ModelEngine:
     """Manages in-memory DuckDB columnar storage, semantic model tables, and calculated measures."""
 
-    def __init__(self, conn: Optional[duckdb.DuckDBPyConnection] = None):
+    def __init__(self, conn: duckdb.DuckDBPyConnection | None = None):
         self.conn = conn or duckdb.connect(database=":memory:")
-        self.tables: Dict[str, Table] = {}
-        self.measures: Dict[str, Any] = {}
+        self.tables: dict[str, Table] = {}
+        self.measures: dict[str, Any] = {}
         self.semantic_model = SemanticModel()
 
     def register_table(self, table: Table) -> None:
@@ -49,7 +50,7 @@ class ModelEngine:
             return float(result[0])
         return 0.0
 
-    def register_dataframe(self, table_name: str, df: pl.DataFrame, source_node_id: Optional[str] = None) -> Table:
+    def register_dataframe(self, table_name: str, df: pl.DataFrame, source_node_id: str | None = None) -> Table:
         """Register a Polars DataFrame into DuckDB and create a semantic Table."""
         self.conn.register(table_name, df)
 
@@ -78,6 +79,6 @@ class ModelEngine:
         """Execute a DuckDB SQL query against the semantic model tables."""
         return self.conn.query(sql).pl()
 
-    def list_tables(self) -> List[str]:
+    def list_tables(self) -> list[str]:
         """List registered table names in the model engine."""
         return list(self.tables.keys())

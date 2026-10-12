@@ -1,14 +1,15 @@
 """Abstract Base Connector interface for PyBI ETL and DirectQuery sources."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import polars as pl
 
 
 class BaseConnector(ABC):
     """Abstract base class defining standardized interface for external data connectors."""
 
-    def __init__(self, connection_uri: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_uri: str | None = None, **kwargs: Any) -> None:
         self.connection_uri = connection_uri or ""
         self.config = kwargs
 
@@ -19,16 +20,14 @@ class BaseConnector(ABC):
         Returns:
             bool: True if connection test succeeds, False otherwise.
         """
-        pass
 
     @abstractmethod
-    def get_schema(self, table_name: Optional[str] = None) -> Dict[str, Any]:
+    def get_schema(self, table_name: str | None = None) -> dict[str, Any]:
         """Fetch schema metadata for specified table or default target.
 
         Returns:
             Dict[str, Any]: Schema description dictionary with column names and types.
         """
-        pass
 
     @abstractmethod
     def read(self, query_or_table: str, **kwargs: Any) -> pl.DataFrame:
@@ -40,7 +39,6 @@ class BaseConnector(ABC):
         Returns:
             pl.DataFrame: Resulting DataFrame.
         """
-        pass
 
     @abstractmethod
     def write(self, df: pl.DataFrame, table_name: str, if_exists: str = "replace", **kwargs: Any) -> None:
@@ -51,7 +49,6 @@ class BaseConnector(ABC):
             table_name: Target table identifier.
             if_exists: Behavior if table exists ('replace', 'append', 'fail').
         """
-        pass
 
     @abstractmethod
     def direct_query(self, query: str, **kwargs: Any) -> pl.DataFrame:
@@ -63,4 +60,3 @@ class BaseConnector(ABC):
         Returns:
             pl.DataFrame: Query result set.
         """
-        pass

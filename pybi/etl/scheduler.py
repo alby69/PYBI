@@ -1,9 +1,10 @@
 """Asyncio-based task scheduler for background execution of ETL pipelines."""
 
 import asyncio
-from datetime import datetime, timezone
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import datetime, timezone
+from typing import Any
 
 from pybi.etl.executor import ETLExecutor, ETLResult
 
@@ -16,10 +17,10 @@ class ScheduledTask:
     def __init__(
         self,
         task_id: str,
-        dag: Dict[str, Any],
+        dag: dict[str, Any],
         interval_seconds: int,
-        base_dir: Optional[str] = None,
-        on_complete: Optional[Callable[[str, ETLResult], None]] = None,
+        base_dir: str | None = None,
+        on_complete: Callable[[str, ETLResult], None] | None = None,
     ) -> None:
         """Initialize ScheduledTask.
 
@@ -38,9 +39,9 @@ class ScheduledTask:
 
         self.is_running = False
         self.run_count = 0
-        self.last_run: Optional[str] = None
-        self.last_result: Optional[ETLResult] = None
-        self._async_task: Optional[asyncio.Task] = None
+        self.last_run: str | None = None
+        self.last_result: ETLResult | None = None
+        self._async_task: asyncio.Task | None = None
 
     async def _loop(self) -> None:
         """Main periodic execution loop."""
@@ -85,15 +86,15 @@ class ETLScheduler:
     """ETLScheduler manages periodic background tasks for ETL pipeline DAGs."""
 
     def __init__(self) -> None:
-        self.tasks: Dict[str, ScheduledTask] = {}
+        self.tasks: dict[str, ScheduledTask] = {}
 
     def schedule_pipeline(
         self,
         task_id: str,
-        dag: Dict[str, Any],
+        dag: dict[str, Any],
         interval_seconds: int,
-        base_dir: Optional[str] = None,
-        on_complete: Optional[Callable[[str, ETLResult], None]] = None,
+        base_dir: str | None = None,
+        on_complete: Callable[[str, ETLResult], None] | None = None,
     ) -> ScheduledTask:
         """Schedule a new periodic pipeline task or update an existing schedule.
 
@@ -136,7 +137,7 @@ class ETLScheduler:
             return True
         return False
 
-    def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get_task_status(self, task_id: str) -> dict[str, Any] | None:
         """Get current status summary for a scheduled task.
 
         Args:

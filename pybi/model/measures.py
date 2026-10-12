@@ -1,14 +1,14 @@
 """DAX/SQL Measure Evaluation Engine for PyBI Semantic Model."""
 
-from typing import Any, Dict, Optional
 import polars as pl
+
 from pybi.model.engine import ModelEngine
 
 
 class Measure:
     """Calculated measure definition."""
 
-    def __init__(self, name: str, table_name: str, expression: str, description: Optional[str] = None):
+    def __init__(self, name: str, table_name: str, expression: str, description: str | None = None):
         self.name = name
         self.table_name = table_name
         self.expression = expression
@@ -52,7 +52,7 @@ class MeasureEvaluator:
 
     def __init__(self, model_engine: ModelEngine):
         self.engine = model_engine
-        self.measures: Dict[str, Measure] = {}
+        self.measures: dict[str, Measure] = {}
 
     def add_measure(self, measure: Measure) -> None:
         """Register a measure."""
@@ -62,8 +62,8 @@ class MeasureEvaluator:
     def evaluate(
         self,
         measure_name: str,
-        group_by: Optional[list[str]] = None,
-        where_clause: Optional[str] = None
+        group_by: list[str] | None = None,
+        where_clause: str | None = None
     ) -> pl.DataFrame:
         """Evaluate a measure and return the aggregated Polars DataFrame."""
         if measure_name not in self.measures:

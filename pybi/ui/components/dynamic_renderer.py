@@ -1,6 +1,7 @@
 """Python wrapper for Vue DynamicRenderer component."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from nicegui import ui
 
 
@@ -9,8 +10,8 @@ class DynamicRenderer(ui.element, component='dynamic_renderer.js'):
 
     def __init__(
         self,
-        schema: Optional[Any] = None,
-        page_name: Optional[str] = None
+        schema: Any | None = None,
+        page_name: str | None = None
     ) -> None:
         super().__init__()
         self._schema = schema
@@ -19,11 +20,11 @@ class DynamicRenderer(ui.element, component='dynamic_renderer.js'):
         self._props['pageName'] = self._page_name
 
     @property
-    def schema(self) -> Optional[Any]:
+    def schema(self) -> Any | None:
         return self._schema
 
     @schema.setter
-    def schema(self, value: Optional[Any]) -> None:
+    def schema(self, value: Any | None) -> None:
         self._schema = value
         self._props['schema'] = value
         self.update()

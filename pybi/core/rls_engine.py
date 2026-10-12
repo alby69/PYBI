@@ -1,7 +1,8 @@
 """Dynamic Row-Level Security (RLS) Engine for PyBI."""
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
+
 from pybi.auth.jwt_auth import AuthUser
 from pybi.core.semantic_model import CoreSemanticModel
 
@@ -20,7 +21,7 @@ class RLSEngine:
         return f"'{val_str}'"
 
     @classmethod
-    def get_rls_clauses(cls, model: CoreSemanticModel, user: AuthUser) -> List[str]:
+    def get_rls_clauses(cls, model: CoreSemanticModel, user: AuthUser) -> list[str]:
         """Evaluate RLS rules for the model against user claims.
 
         Args:
@@ -33,7 +34,7 @@ class RLSEngine:
         if not model or not model.rls_rules:
             return []
 
-        clauses: List[str] = []
+        clauses: list[str] = []
 
         for rule in model.rls_rules:
             tbl_name = rule.target_table

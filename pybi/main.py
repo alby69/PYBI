@@ -1,8 +1,8 @@
 """Main UI entry point and page routes for PyBI."""
 
-from nicegui import ui
 import click
 from fastapi import Request
+from nicegui import ui
 
 from pybi.ui.components.navbar import render_navbar
 

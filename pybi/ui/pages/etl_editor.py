@@ -4,6 +4,7 @@ import copy
 
 from nicegui import ui
 
+from pybi.core.history import HistoryManager
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
 from pybi.etl.executor import execute_dag
@@ -14,15 +15,14 @@ from pybi.etl.node_factory import (
     node_kind,
     validate_pipeline,
 )
-from pybi.core.history import HistoryManager
 from pybi.ui.components.flow_editor import FlowEditor
+from pybi.ui.components.navbar import render_navbar
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.property_panel import PropertyPanel
 from pybi.ui.components.search_bar import SearchBar
-from pybi.ui.components.navbar import render_navbar
 from pybi.ui.shortcuts import render_shortcuts_help_button
-from pybi.ui.theme import NODE_COLORS, default_theme
 from pybi.ui.table_utils import build_preview_table
+from pybi.ui.theme import NODE_COLORS, default_theme
 
 NEW_NODE_X = 80
 NEW_NODE_Y_STEP = 90

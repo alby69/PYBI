@@ -1,6 +1,7 @@
 """UI schema definitions and Vue Flow node builders for ETL DAG editor."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
 from pybi.ui.theme import NODE_COLORS
 
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
@@ -11,7 +12,7 @@ JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
 
 PIVOT_STYLE = {"background": "#FFF8E1", "border": "2px solid #FFA000", "borderRadius": "8px", "padding": "10px"}
 
-NODE_KINDS: Dict[str, Dict[str, Any]] = {
+NODE_KINDS: dict[str, dict[str, Any]] = {
     "DataSource": {
         "label": "Data Source",
         "icon": NODE_COLORS["DataSource"]["icon"],
@@ -221,7 +222,7 @@ _TRANSFORM_KIND = {
 }
 
 
-def new_node_id(kind: str, existing_ids: List[str]) -> str:
+def new_node_id(kind: str, existing_ids: list[str]) -> str:
     """Build a unique node id for a new node of the given kind."""
     prefix = KIND_PREFIX.get(kind, "node")
     taken = set(existing_ids)
@@ -231,7 +232,7 @@ def new_node_id(kind: str, existing_ids: List[str]) -> str:
     return f"{prefix}_{index}"
 
 
-def build_label(kind: str, data: Dict[str, Any]) -> str:
+def build_label(kind: str, data: dict[str, Any]) -> str:
     """Build the human readable node label shown on the canvas."""
     template = NODE_KINDS[kind]
     icon = template["icon"]
@@ -275,7 +276,7 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
     return f"{icon} {template['label']}"
 
 
-def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
+def build_node_data(kind: str, values: dict[str, Any]) -> dict[str, Any]:
     """Validate form values and build the executor node data payload."""
     if kind == "DataSource":
         source_type = values.get("source_type") or "csv"
@@ -284,7 +285,7 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
         file_path = (values.get("file_path") or "").strip()
         if not file_path:
             raise ValueError("File path is required for a Data Source node.")
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "node_type": "DataSource",
             "source_type": source_type,
             "file_path": file_path,
@@ -399,7 +400,7 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
     raise ValueError(f"Unknown node kind '{kind}'.")
 
 
-def build_node(kind: str, values: Dict[str, Any], node_id: str, position: Dict[str, int]) -> Dict[str, Any]:
+def build_node(kind: str, values: dict[str, Any], node_id: str, position: dict[str, int]) -> dict[str, Any]:
     """Build a complete Vue Flow node from form values."""
     if kind not in NODE_KINDS:
         raise ValueError(f"Unknown node kind '{kind}'.")
@@ -414,7 +415,7 @@ def build_node(kind: str, values: Dict[str, Any], node_id: str, position: Dict[s
     }
 
 
-def node_kind(node: Dict[str, Any]) -> str:
+def node_kind(node: dict[str, Any]) -> str:
     """Infer the node kind of an existing graph node."""
     data = node.get("data", {}) or {}
     node_type = data.get("node_type")
@@ -429,7 +430,7 @@ def node_kind(node: Dict[str, Any]) -> str:
     return "DataSource"
 
 
-def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
+def node_values(node: dict[str, Any]) -> dict[str, Any]:
     """Extract form values from an existing graph node."""
     kind = node_kind(node)
     data = (node.get("data") or {}).copy()
@@ -487,21 +488,21 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def default_values(kind: str) -> Dict[str, Any]:
+def default_values(kind: str) -> dict[str, Any]:
     """Return the default form values for a node kind."""
     if kind not in NODE_KINDS:
         raise ValueError(f"Unknown node kind '{kind}'.")
     return {field["key"]: field.get("default", "") for field in NODE_KINDS[kind]["fields"]}
 
 
-def fields_for(kind: str) -> List[Dict[str, Any]]:
+def fields_for(kind: str) -> list[dict[str, Any]]:
     """Return the form field metadata for a node kind."""
     if kind not in NODE_KINDS:
         raise ValueError(f"Unknown node kind '{kind}'.")
     return NODE_KINDS[kind]["fields"]
 
 
-def palette_entry(kind: str) -> Tuple[str, str]:
+def palette_entry(kind: str) -> tuple[str, str]:
     """Return the (icon, label) pair shown in the node palette."""
     template = NODE_KINDS[kind]
     return template["icon"], f"{template['icon']} {template['label']}"

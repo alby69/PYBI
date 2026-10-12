@@ -1,11 +1,12 @@
 """FastAPI router for Public Read-Only Viewer endpoints in PyBI v1 REST API."""
 
-from typing import Any, Dict, List
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 
+import pybi.storage.project_manager as pm
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
-import pybi.storage.project_manager as pm
 from pybi.semantic.engine import SemanticQueryResolver
 from pybi.semantic.models import SemanticQueryRequest, SemanticQueryResponse
 
@@ -13,13 +14,13 @@ router = APIRouter(prefix="/api/v1/viewer", tags=["Viewer"])
 
 
 @router.get("/health")
-def viewer_health() -> Dict[str, str]:
+def viewer_health() -> dict[str, str]:
     """Health check endpoint for viewer API."""
     return {"status": "ok", "service": "pybi-viewer-api"}
 
 
 @router.get("/projects/{project_id}")
-def get_published_project(project_id: str) -> Dict[str, Any]:
+def get_published_project(project_id: str) -> dict[str, Any]:
     """Fetch published dashboard layout and schema for read-only viewing."""
     if not default_storage.project_exists(project_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
@@ -36,7 +37,7 @@ def get_published_project(project_id: str) -> Dict[str, Any]:
 
 
 @router.get("/{project_id}/dashboards/{dashboard_id}/data")
-def get_viewer_dashboard_data(project_id: str, dashboard_id: str) -> Dict[str, Any]:
+def get_viewer_dashboard_data(project_id: str, dashboard_id: str) -> dict[str, Any]:
     """Optimized read-only endpoint returning aggregated widget data ready for rendering."""
     if not default_storage.project_exists(project_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
@@ -48,7 +49,7 @@ def get_viewer_dashboard_data(project_id: str, dashboard_id: str) -> Dict[str, A
             detail=f"Dashboard '{dashboard_id}' not found in project '{project_id}'",
         )
 
-    widget_data: List[Dict[str, Any]] = []
+    widget_data: list[dict[str, Any]] = []
     registered_sources = set(default_binder.list_sources())
 
     for item in layout:

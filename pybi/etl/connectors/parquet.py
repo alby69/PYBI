@@ -1,6 +1,7 @@
 """Parquet data connector using Polars."""
 
 from typing import Any
+
 import polars as pl
 
 

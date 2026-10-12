@@ -1,5 +1,7 @@
 """Semantic Layer package for PyBI."""
 
+from pybi.semantic.engine import SemanticQueryResolver
+from pybi.semantic.filter_context import build_where_clauses
 from pybi.semantic.models import (
     Dimension,
     Measure,
@@ -7,15 +9,13 @@ from pybi.semantic.models import (
     SemanticQueryRequest,
     SemanticQueryResponse,
 )
-from pybi.semantic.engine import SemanticQueryResolver
-from pybi.semantic.filter_context import build_where_clauses
 
 __all__ = [
     "Dimension",
     "Measure",
     "SemanticModel",
     "SemanticQueryRequest",
-    "SemanticQueryResponse",
     "SemanticQueryResolver",
+    "SemanticQueryResponse",
     "build_where_clauses",
 ]

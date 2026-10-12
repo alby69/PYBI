@@ -2,7 +2,8 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from nicegui import ui
 
 from pybi.export.engine import default_export_engine
@@ -12,12 +13,12 @@ class DashboardExporter:
     """Exporter utility for generating standalone HTML or export configurations."""
 
     @staticmethod
-    def export_to_json(layout: List[Dict[str, Any]], indent: int = 2) -> str:
+    def export_to_json(layout: list[dict[str, Any]], indent: int = 2) -> str:
         """Export dashboard layout to formatted JSON string."""
         return json.dumps(layout, indent=indent)
 
     @staticmethod
-    def export_to_html(title: str, layout: List[Dict[str, Any]]) -> str:
+    def export_to_html(title: str, layout: list[dict[str, Any]]) -> str:
         """Generate standalone HTML document representing the dashboard layout."""
         widgets_html = []
         for w in layout:
@@ -61,7 +62,7 @@ class DashboardExporter:
         return f"/viewer?project={project_id}"
 
 
-def render_export_dialog(project_id: str, layout: List[Dict[str, Any]], filter_context: Optional[Any] = None):
+def render_export_dialog(project_id: str, layout: list[dict[str, Any]], filter_context: Any | None = None):
     """Render Phase 5 export dialog with multi-format, template selection, and background status tracking."""
     with ui.dialog() as dialog, ui.card().classes('w-full max-w-md p-4'):
         ui.label('Publish & Export Engine').classes('text-lg font-bold mb-1')

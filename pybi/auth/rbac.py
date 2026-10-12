@@ -1,6 +1,6 @@
 """Casbin-backed Role-Based Access Control (RBAC) manager for PyBI."""
 
-from typing import List, Optional
+
 import casbin
 from casbin.model import Model
 
@@ -38,7 +38,7 @@ DEFAULT_POLICIES = [
 class RBACManager:
     """RBACManager handles Casbin permission checking and role assignments."""
 
-    def __init__(self, model_path: Optional[str] = None, policy_path: Optional[str] = None) -> None:
+    def __init__(self, model_path: str | None = None, policy_path: str | None = None) -> None:
         """Initialize Casbin Enforcer with inline default model or config file.
 
         Args:
@@ -95,7 +95,7 @@ class RBACManager:
         """
         return self.enforcer.remove_grouping_policy(username, role)
 
-    def get_roles_for_user(self, username: str) -> List[str]:
+    def get_roles_for_user(self, username: str) -> list[str]:
         """Get list of assigned roles for a user.
 
         Args:

@@ -2,10 +2,9 @@
 
 import json
 import os
-from pathlib import Path
 import shutil
-from typing import Optional, Union
 import zipfile
+from pathlib import Path
 
 from pybi.core.storage import FileProjectStorage, default_storage, sanitize_project_id
 
@@ -16,8 +15,8 @@ class ProjectBundler:
     @staticmethod
     def create_bundle(
         project_id: str,
-        output_path: Optional[Union[str, Path]] = None,
-        storage: Optional[FileProjectStorage] = None,
+        output_path: str | Path | None = None,
+        storage: FileProjectStorage | None = None,
     ) -> Path:
         """Export a project and all associated assets into a portable .pybi ZIP file.
 
@@ -56,9 +55,9 @@ class ProjectBundler:
 
     @staticmethod
     def extract_bundle(
-        bundle_path: Union[str, Path],
-        target_project_id: Optional[str] = None,
-        storage: Optional[FileProjectStorage] = None,
+        bundle_path: str | Path,
+        target_project_id: str | None = None,
+        storage: FileProjectStorage | None = None,
     ) -> str:
         """Import a .pybi bundle archive, restoring project state and assets.
 

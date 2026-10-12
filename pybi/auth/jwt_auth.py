@@ -25,7 +25,7 @@ def hash_password(password: str, salt: Optional[str] = None) -> str:
     """
     if not salt:
         salt = secrets.token_hex(16)
-    salted = f"{salt}{password}".encode("utf-8")
+    salted = f"{salt}{password}".encode()
     pwd_hash = hashlib.sha256(salted).hexdigest()
     return f"{salt}${pwd_hash}"
 
@@ -50,7 +50,7 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     """Generate a JWT access token encoding the payload data and expiration time.
 
     Args:
-        data: Payload dict containing claims (e.g. {"sub": username, "role": "admin"}).
+        data: Payload dict containing claims (e.g. {"sub": username, "role": "admin", "allowed_regions": ["EU"]}).
         expires_delta: Optional custom token validity duration.
 
     Returns:
@@ -83,12 +83,28 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 class AuthUser:
-    """Dataclass or class representing an authenticated user session."""
+    """Class representing an authenticated user session with claims."""
 
-    def __init__(self, username: str, role: str = "viewer", email: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        username: str,
+        role: str = "viewer",
+        email: Optional[str] = None,
+        claims: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.username = username
         self.role = role
         self.email = email
+        self.claims = claims or {}
+
+    def get_claim(self, claim_key: str, default: Any = None) -> Any:
+        """Retrieve custom claim value."""
+        return self.claims.get(claim_key, default)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"username": self.username, "role": self.role, "email": self.email}
+        return {
+            "username": self.username,
+            "role": self.role,
+            "email": self.email,
+            "claims": self.claims,
+        }

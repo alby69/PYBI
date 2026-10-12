@@ -1,7 +1,7 @@
 """Semantic Query Resolver engine for PyBI supporting multi-table relationship resolution and DuckDB execution."""
 
 import logging
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import duckdb
 import polars as pl
 import sqlglot
@@ -46,6 +46,7 @@ class SemanticQueryResolver:
         self,
         request: SemanticQueryRequest,
         source_df: Optional[pl.DataFrame] = None,
+        auth_user: Optional[Any] = None,
     ) -> str:
         """Construct an optimized SQL query for the semantic query request with multi-table JOIN resolution."""
         model = self.get_model(request.model_name) if request.model_name else None
@@ -66,6 +67,15 @@ class SemanticQueryResolver:
                 tables=[SemanticTable(name=src, source_table=src)],
                 default_table=src,
             )
+
+        # Helper to get physical column name from table and column/dimension identifier
+        def _get_phys_col(table_name: str, col_or_dim: str) -> str:
+            tbl = model.get_table(table_name)
+            if tbl:
+                for c in tbl.columns:
+                    if c.name == col_or_dim or c.column_name == col_or_dim:
+                        return c.column_name
+            return col_or_dim
 
         # Map dimensions and measures to target tables
         referenced_tables: Set[str] = set()
@@ -116,35 +126,44 @@ class SemanticQueryResolver:
             referenced_tables.add(p_tbl)
 
         # Primary table selection
-        primary_table_name = model.default_table if model.default_table in referenced_tables else next(iter(referenced_tables))
+        primary_table_name = model.default_table if (model.default_table and model.default_table in referenced_tables) else next(iter(referenced_tables))
         primary_table = model.get_table(primary_table_name) or model.tables[0]
 
         # Build FROM clause
         from_sql = f'"{primary_table.source_table}" AS "{primary_table.name}"'
 
-        # Build JOIN clauses for additional referenced tables
+        # Build JOIN clauses for additional referenced tables using multi-pass resolution
         join_sqls: List[str] = []
         joined_tables: Set[str] = {primary_table.name}
 
-        for rel in model.relationships:
-            if rel.from_table in joined_tables and rel.to_table in referenced_tables and rel.to_table not in joined_tables:
-                target_tbl = model.get_table(rel.to_table)
-                if target_tbl:
-                    j_type = rel.join_type.upper() if isinstance(rel.join_type, str) else rel.join_type.value
-                    join_sqls.append(
-                        f'{j_type} JOIN "{target_tbl.source_table}" AS "{target_tbl.name}" '
-                        f'ON "{rel.from_table}"."{rel.from_column}" = "{target_tbl.name}"."{rel.to_column}"'
-                    )
-                    joined_tables.add(target_tbl.name)
-            elif rel.to_table in joined_tables and rel.from_table in referenced_tables and rel.from_table not in joined_tables:
-                target_tbl = model.get_table(rel.from_table)
-                if target_tbl:
-                    j_type = rel.join_type.upper() if isinstance(rel.join_type, str) else rel.join_type.value
-                    join_sqls.append(
-                        f'{j_type} JOIN "{target_tbl.source_table}" AS "{target_tbl.name}" '
-                        f'ON "{rel.to_table}"."{rel.to_column}" = "{target_tbl.name}"."{rel.from_column}"'
-                    )
-                    joined_tables.add(target_tbl.name)
+        changed = True
+        while changed:
+            changed = False
+            for rel in model.relationships:
+                if rel.from_table in joined_tables and rel.to_table not in joined_tables:
+                    target_tbl = model.get_table(rel.to_table)
+                    if target_tbl:
+                        j_type = rel.join_type.upper() if isinstance(rel.join_type, str) else rel.join_type.value
+                        from_col_phys = _get_phys_col(rel.from_table, rel.from_column)
+                        to_col_phys = _get_phys_col(rel.to_table, rel.to_column)
+                        join_sqls.append(
+                            f'{j_type} JOIN "{target_tbl.source_table}" AS "{target_tbl.name}" '
+                            f'ON "{rel.from_table}"."{from_col_phys}" = "{target_tbl.name}"."{to_col_phys}"'
+                        )
+                        joined_tables.add(target_tbl.name)
+                        changed = True
+                elif rel.to_table in joined_tables and rel.from_table not in joined_tables:
+                    target_tbl = model.get_table(rel.from_table)
+                    if target_tbl:
+                        j_type = rel.join_type.upper() if isinstance(rel.join_type, str) else rel.join_type.value
+                        from_col_phys = _get_phys_col(rel.from_table, rel.from_column)
+                        to_col_phys = _get_phys_col(rel.to_table, rel.to_column)
+                        join_sqls.append(
+                            f'{j_type} JOIN "{target_tbl.source_table}" AS "{target_tbl.name}" '
+                            f'ON "{rel.to_table}"."{to_col_phys}" = "{target_tbl.name}"."{from_col_phys}"'
+                        )
+                        joined_tables.add(target_tbl.name)
+                        changed = True
 
         joins_str = (" " + " ".join(join_sqls)) if join_sqls else ""
 
@@ -162,9 +181,11 @@ class SemanticQueryResolver:
             # Table-qualify simple column references in expressions if needed
             alias = meas_name.replace(".", "_")
             if expr and not ("." in expr):
-                for col in (model.get_table(tbl_name).columns if model.get_table(tbl_name) else []):
-                    if f'"{col.column_name}"' in expr:
-                        expr = expr.replace(f'"{col.column_name}"', f'"{tbl_name}"."{col.column_name}"')
+                tbl_obj = model.get_table(tbl_name)
+                if tbl_obj:
+                    for col in tbl_obj.columns:
+                        if f'"{col.column_name}"' in expr:
+                            expr = expr.replace(f'"{col.column_name}"', f'"{tbl_name}"."{col.column_name}"')
             select_exprs.append(f'{expr} AS "{alias}"')
 
         if not select_exprs:
@@ -179,6 +200,15 @@ class SemanticQueryResolver:
                 qualified_clauses.append(f'"{primary_table.name}".{c}')
             else:
                 qualified_clauses.append(c)
+
+        # Apply RLS rules if present and auth_user provided
+        if auth_user and model and model.rls_rules:
+            try:
+                from pybi.core.rls_engine import RLSEngine
+                rls_clauses = RLSEngine.get_rls_clauses(model, auth_user)
+                qualified_clauses.extend(rls_clauses)
+            except ImportError:
+                pass
 
         where_sql = f" WHERE {' AND '.join(qualified_clauses)}" if qualified_clauses else ""
 
@@ -202,6 +232,7 @@ class SemanticQueryResolver:
         self,
         request: SemanticQueryRequest,
         source_df: Optional[pl.DataFrame] = None,
+        auth_user: Optional[Any] = None,
     ) -> SemanticQueryResponse:
         """Execute a semantic query and return a SemanticQueryResponse."""
         model = self.get_model(request.model_name) if request.model_name else None
@@ -210,7 +241,7 @@ class SemanticQueryResolver:
             source_table = (model.default_table if model else request.source_table) or "source_table"
             self.duckdb_conn.register(source_table, source_df)
 
-        sql = self.resolve_to_sql(request, source_df=source_df)
+        sql = self.resolve_to_sql(request, source_df=source_df, auth_user=auth_user)
 
         res_df = self.duckdb_conn.execute(sql).pl()
 

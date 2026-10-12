@@ -20,7 +20,7 @@ STDLIB_AND_LOCAL = {
     'datetime', 'enum', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
     'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
-    'pybi',
+    'zipfile', 'pybi',
 }
 
 
@@ -55,6 +55,7 @@ def imported_top_level_modules():
         'jwt': 'pyjwt',
         'ibis': 'ibis-framework',
         'yaml': 'pyyaml',
+        'starlette': 'fastapi',
     }
     modules = set()
     for path in (ROOT / 'pybi').rglob('*.py'):

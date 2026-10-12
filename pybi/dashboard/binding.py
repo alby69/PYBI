@@ -110,7 +110,7 @@ class DataBinder:
         """List the names of all registered data sources and semantic models."""
         sources = set(self._sources.keys())
         sources.update(self.semantic_resolver.registry.keys())
-        return sorted(list(sources))
+        return sorted(sources)
 
     def update_source(self, source_name: str, new_data: pl.DataFrame | duckdb.DuckDBPyRelation) -> None:
         """Update a registered data source and trigger reactive callbacks for all bound widgets."""

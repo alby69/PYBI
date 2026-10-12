@@ -176,7 +176,7 @@ class ChartWidget:
                         "name": col_name,
                         "type": chart_type,
                         "data": df[col_name].to_list(),
-                        "smooth": True if chart_type == "line" else False,
+                        "smooth": chart_type == "line",
                     })
             options["series"] = series
 

@@ -1,22 +1,22 @@
 """Data source ETL node implementation."""
 
+from typing import Any, Dict, List, Optional
 import ibis.expr.types as ir
 import polars as pl
-
 from .base import BaseETLNode
 
 
 class DataSourceNode(BaseETLNode):
     """Data source node (CSV, Parquet, SQLite, Postgres)."""
 
-    def validate(self) -> list[str]:
+    def validate(self) -> List[str]:
         errors = []
         filepath = self.data.get("file_path") or self.data.get("path")
         if not filepath and self.data.get("source_type") != "postgres":
             errors.append(f"DataSource node '{self.node_id}' missing file_path.")
         return errors
 
-    def to_ibis_expr(self, input_expr: ir.Table | None = None) -> ir.Table:
+    def to_ibis_expr(self, input_expr: Optional[ir.Table] = None) -> ir.Table:
         if input_expr is not None:
             return input_expr
         return super().to_ibis_expr(input_expr)
@@ -43,7 +43,7 @@ class DataSourceNode(BaseETLNode):
             return f"SELECT * FROM sqlite_scan('{filepath}', '{query}')"
         return f"SELECT * FROM '{filepath}'"
 
-    def to_polars_expr(self, input_lazyframe: pl.LazyFrame | None = None) -> pl.LazyFrame:
+    def to_polars_expr(self, input_lazyframe: Optional[pl.LazyFrame] = None) -> pl.LazyFrame:
         source_type = (self.data.get("source_type") or "csv").lower()
         filepath = self.data.get("file_path") or self.data.get("path") or ""
 

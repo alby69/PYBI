@@ -1,16 +1,15 @@
 """SQLite data connector using Python's built-in sqlite3 and Polars."""
 
 import sqlite3
-from typing import Any
-
+from typing import Any, Optional
 import polars as pl
 
 
 def read_sqlite(
     filepath_or_conn: str,
-    query_or_table: str | None = None,
-    table_name: str | None = None,
-    query: str | None = None,
+    query_or_table: Optional[str] = None,
+    table_name: Optional[str] = None,
+    query: Optional[str] = None,
     **kwargs: Any,
 ) -> pl.DataFrame:
     """Read a table or query from an SQLite database into a Polars DataFrame.

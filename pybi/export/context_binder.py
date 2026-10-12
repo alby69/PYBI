@@ -1,11 +1,12 @@
 """Context binder module connecting FilterContext and SemanticModel to export payloads."""
 
-from typing import Any
+from typing import Any, Dict, List, Optional
+import polars as pl
 
-from pybi.dashboard.filter_context import FilterContext
+from pybi.dashboard.filter_context import FilterContext, FilterState
 
 
-def bind_filter_context(export_payload: dict[str, Any], filter_context: Any | None = None) -> dict[str, Any]:
+def bind_filter_context(export_payload: Dict[str, Any], filter_context: Optional[Any] = None) -> Dict[str, Any]:
     """Apply active FilterContext rules to export payload queries and data extractions.
 
     Args:
@@ -16,10 +17,12 @@ def bind_filter_context(export_payload: dict[str, Any], filter_context: Any | No
         Enriched payload with active filters metadata, SQL WHERE clauses, and filtered data.
     """
     payload = dict(export_payload)
-    active_filters_summary: list[dict[str, Any]] = []
+    active_filters_summary: List[Dict[str, Any]] = []
 
-    ctx: FilterContext | None = None
-    if isinstance(filter_context, FilterContext) or filter_context and hasattr(filter_context, "filters"):
+    ctx: Optional[FilterContext] = None
+    if isinstance(filter_context, FilterContext):
+        ctx = filter_context
+    elif filter_context and hasattr(filter_context, "filters"):
         ctx = filter_context
 
     if ctx:
@@ -54,7 +57,7 @@ def bind_filter_context(export_payload: dict[str, Any], filter_context: Any | No
 
     # Apply filter filtering to any raw tabular data passed in payload['tables']
     if "tables" in payload and isinstance(payload["tables"], dict):
-        filtered_tables: dict[str, list[dict[str, Any]]] = {}
+        filtered_tables: Dict[str, List[Dict[str, Any]]] = {}
         for table_name, rows in payload["tables"].items():
             if not isinstance(rows, list):
                 filtered_tables[table_name] = rows
@@ -74,7 +77,10 @@ def bind_filter_context(export_payload: dict[str, Any], filter_context: Any | No
                     op = tf.get("operator", "IN")
                     if col in row:
                         val = row[col]
-                        if op == "IN" and val not in vals or op == "=" and val not in vals and str(val) != str(vals[0] if vals else ""):
+                        if op == "IN" and val not in vals:
+                            keep = False
+                            break
+                        elif op == "=" and val not in vals and str(val) != str(vals[0] if vals else ""):
                             keep = False
                             break
                 if keep:

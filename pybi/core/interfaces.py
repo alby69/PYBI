@@ -1,7 +1,7 @@
 """Abstract Base Classes for PyBI Decoupled Architecture."""
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 
 class ETLNode(ABC):
@@ -30,7 +30,7 @@ class ETLNode(ABC):
             f"Node '{self.node_id}' does not implement to_ibis_expr()"
         )
 
-    def validate(self) -> list[str]:
+    def validate(self) -> List[str]:
         """Validate node configuration and input parameters.
 
         Returns:
@@ -60,7 +60,7 @@ class ETLNode(ABC):
         """
         return input_lazyframe
 
-    def execute(self, input_data: Any, context: dict[str, Any] | None = None) -> Any:
+    def execute(self, input_data: Any, context: Optional[Dict[str, Any]] = None) -> Any:
         """Optional direct execution method for fallback or non-foldable node execution.
 
         Args:
@@ -77,7 +77,7 @@ class Visual(ABC):
     """Abstract Base Class for individual visual charts and tables."""
 
     @abstractmethod
-    def generate_query(self, filter_context: Any | None = None) -> str:
+    def generate_query(self, filter_context: Optional[Any] = None) -> str:
         """Generate SQL query to fetch visual data, respecting current filter context.
 
         Args:
@@ -86,13 +86,14 @@ class Visual(ABC):
         Returns:
             str: DuckDB SQL query string.
         """
+        pass
 
 
 class Publisher(ABC):
     """Abstract Base Class for exporting and publishing reports."""
 
     @abstractmethod
-    def export_to_html(self, project_id: str, output_path: str | None = None) -> str:
+    def export_to_html(self, project_id: str, output_path: Optional[str] = None) -> str:
         """Export project dashboard to a static standalone HTML file.
 
         Args:
@@ -102,9 +103,10 @@ class Publisher(ABC):
         Returns:
             str: Path to generated HTML file.
         """
+        pass
 
     @abstractmethod
-    def export_to_pdf(self, project_id: str, output_path: str | None = None) -> str:
+    def export_to_pdf(self, project_id: str, output_path: Optional[str] = None) -> str:
         """Export project dashboard to a PDF document.
 
         Args:
@@ -114,3 +116,4 @@ class Publisher(ABC):
         Returns:
             str: Path to generated PDF file.
         """
+        pass

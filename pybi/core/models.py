@@ -1,8 +1,7 @@
 """Core Pydantic data models for PyBI."""
 
 from enum import Enum
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -25,7 +24,7 @@ class ColumnMeta(BaseModel):
     data_type: DataType = DataType.UNKNOWN
     is_key: bool = False
     is_hidden: bool = False
-    description: str | None = None
+    description: Optional[str] = None
 
 
 class RelationshipType(str, Enum):
@@ -51,23 +50,23 @@ class TableSchema(BaseModel):
     """Schema definition for a semantic table."""
 
     name: str
-    columns: list[ColumnMeta] = Field(default_factory=list)
-    primary_key: list[str] | None = None
-    source_node_id: str | None = None
+    columns: List[ColumnMeta] = Field(default_factory=list)
+    primary_key: Optional[List[str]] = None
+    source_node_id: Optional[str] = None
 
 
 class ETLDAG(BaseModel):
     """Data representation of an ETL Directed Acyclic Graph."""
 
-    nodes: list[dict[str, Any]] = Field(default_factory=list)
-    edges: list[dict[str, Any]] = Field(default_factory=list)
+    nodes: List[Dict[str, Any]] = Field(default_factory=list)
+    edges: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class DashboardLayout(BaseModel):
     """Dashboard layout configuration containing grid items and widgets."""
 
-    widgets: list[dict[str, Any]] = Field(default_factory=list)
-    grid_layout: list[dict[str, Any]] = Field(default_factory=list)
+    widgets: List[Dict[str, Any]] = Field(default_factory=list)
+    grid_layout: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class Project(BaseModel):
@@ -75,7 +74,7 @@ class Project(BaseModel):
 
     id: str
     name: str
-    description: str | None = None
+    description: Optional[str] = None
     dag: ETLDAG = Field(default_factory=ETLDAG)
     dashboard: DashboardLayout = Field(default_factory=DashboardLayout)
-    relationships: list[Relationship] = Field(default_factory=list)
+    relationships: List[Relationship] = Field(default_factory=list)

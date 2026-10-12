@@ -1,14 +1,14 @@
 """Dashboard data binding module linking widgets to Polars DataFrames, DuckDB queries, and Semantic Models."""
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional, Union
 
 import duckdb
 import polars as pl
 
 from pybi.core.semantic_model import SemanticModel as CoreSemanticModel
 from pybi.semantic.engine import SemanticQueryResolver
-from pybi.semantic.models import SemanticModel, SemanticQueryRequest
+from pybi.semantic.models import SemanticModel, SemanticQueryRequest, SemanticQueryResponse
 
 
 @dataclass
@@ -17,25 +17,25 @@ class WidgetBinding:
 
     widget_id: str
     source_name: str
-    query: str | None = None
-    callback: Callable[[pl.DataFrame], None] | None = None
+    query: Optional[str] = None
+    callback: Optional[Callable[[pl.DataFrame], None]] = None
 
 
 class DataBinder:
     """Manager class linking dashboard widgets to Polars DataFrames, DuckDB queries, or Semantic Models with reactive callbacks."""
 
-    def __init__(self, duckdb_conn: duckdb.DuckDBPyConnection | None = None) -> None:
+    def __init__(self, duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> None:
         """Initialize DataBinder.
 
         Args:
             duckdb_conn: Optional DuckDB connection instance.
         """
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
-        self._sources: dict[str, pl.DataFrame] = {}
-        self._bindings: dict[str, WidgetBinding] = {}
+        self._sources: Dict[str, pl.DataFrame] = {}
+        self._bindings: Dict[str, WidgetBinding] = {}
         self.semantic_resolver = SemanticQueryResolver(self.duckdb_conn)
 
-    def register_source(self, name: str, data: pl.DataFrame | duckdb.DuckDBPyRelation) -> None:
+    def register_source(self, name: str, data: Union[pl.DataFrame, duckdb.DuckDBPyRelation]) -> None:
         """Register or overwrite a data source.
 
         Args:
@@ -52,7 +52,7 @@ class DataBinder:
         self._sources[name] = df
         self.duckdb_conn.register(name, df)
 
-    def register_semantic_model(self, model: SemanticModel | CoreSemanticModel) -> None:
+    def register_semantic_model(self, model: Union[SemanticModel, CoreSemanticModel]) -> None:
         """Register a semantic model in the underlying resolver."""
         self.semantic_resolver.register_model(model)
 
@@ -67,8 +67,8 @@ class DataBinder:
         self,
         widget_id: str,
         source_name: str,
-        query: str | None = None,
-        callback: Callable[[pl.DataFrame], None] | None = None,
+        query: Optional[str] = None,
+        callback: Optional[Callable[[pl.DataFrame], None]] = None,
     ) -> WidgetBinding:
         """Bind a dashboard widget to a data source or query."""
         binding = WidgetBinding(
@@ -84,7 +84,7 @@ class DataBinder:
         """Remove binding for a widget."""
         self._bindings.pop(widget_id, None)
 
-    def get_source_data(self, source_name: str, query: str | None = None) -> pl.DataFrame:
+    def get_source_data(self, source_name: str, query: Optional[str] = None) -> pl.DataFrame:
         """Fetch DataFrame for a data source or DuckDB query."""
         if source_name not in self._sources:
             # Check if source_name is a registered semantic model
@@ -110,9 +110,9 @@ class DataBinder:
         """List the names of all registered data sources and semantic models."""
         sources = set(self._sources.keys())
         sources.update(self.semantic_resolver.registry.keys())
-        return sorted(sources)
+        return sorted(list(sources))
 
-    def update_source(self, source_name: str, new_data: pl.DataFrame | duckdb.DuckDBPyRelation) -> None:
+    def update_source(self, source_name: str, new_data: Union[pl.DataFrame, duckdb.DuckDBPyRelation]) -> None:
         """Update a registered data source and trigger reactive callbacks for all bound widgets."""
         self.register_source(source_name, new_data)
 

@@ -1,13 +1,12 @@
 """FastAPI router for Phase 5 Publishing & Export Engine REST API v1."""
 
 from pathlib import Path
-from typing import Any
-
+from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from pybi.api.v1.models import ExportJobResponse, ExportRequest
 from pybi.export.engine import default_export_engine
+from pybi.api.v1.models import ExportJobResponse, ExportRequest
 
 router = APIRouter(prefix="/api/v1", tags=["Exports"])
 
@@ -39,7 +38,7 @@ def create_export_job(project_id: str, req: ExportRequest) -> ExportJobResponse:
 
 
 @router.post("/projects/{project_id}/export/pdf", response_model=ExportJobResponse)
-def create_pdf_export(project_id: str, req: ExportRequest | None = None) -> ExportJobResponse:
+def create_pdf_export(project_id: str, req: Optional[ExportRequest] = None) -> ExportJobResponse:
     """Shortcut endpoint for requesting PDF exports."""
     request_data = req or ExportRequest(format="pdf")
     request_data.format = "pdf"
@@ -47,7 +46,7 @@ def create_pdf_export(project_id: str, req: ExportRequest | None = None) -> Expo
 
 
 @router.post("/projects/{project_id}/export/data", response_model=ExportJobResponse)
-def create_data_export(project_id: str, req: ExportRequest | None = None) -> ExportJobResponse:
+def create_data_export(project_id: str, req: Optional[ExportRequest] = None) -> ExportJobResponse:
     """Shortcut endpoint for requesting raw CSV data extracts."""
     request_data = req or ExportRequest(format="csv")
     request_data.format = "csv"
@@ -55,7 +54,7 @@ def create_data_export(project_id: str, req: ExportRequest | None = None) -> Exp
 
 
 @router.get("/exports/{export_id}/status")
-def get_export_status(export_id: str) -> dict[str, Any]:
+def get_export_status(export_id: str) -> Dict[str, Any]:
     """Retrieve async export job status, progress, and snapshot metadata."""
     status_info = default_export_engine.get_job_status(export_id)
     if not status_info:

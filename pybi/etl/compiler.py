@@ -2,9 +2,8 @@
 
 import graphlib
 import logging
-from collections.abc import Sequence
-from typing import Any
-
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+import duckdb
 import ibis
 import ibis.expr.types as ir
 import polars as pl
@@ -26,7 +25,7 @@ log = logging.getLogger(__name__)
 class ETLCompiler:
     """Compiles visual DAGs or sequence of ETLNodes into folded DuckDB CTE SQL queries using Ibis."""
 
-    def __init__(self, backend: str = "duckdb", ibis_con: Any | None = None):
+    def __init__(self, backend: str = "duckdb", ibis_con: Optional[Any] = None):
         self.backend = backend
         self._con = ibis_con or ibis.duckdb.connect()
         self._tmp_counter = 0
@@ -103,7 +102,7 @@ class ETLCompiler:
         except Exception as e:
             raise CompilationError(f"Ibis SQL generation failed: {e}") from e
 
-    def compile_to_sql(self, dag: dict[str, Any]) -> dict[str, str]:
+    def compile_to_sql(self, dag: Dict[str, Any]) -> Dict[str, str]:
         """Compile DAG dict (nodes and edges) into a mapping of output table names to SQL strings.
 
         Args:
@@ -122,7 +121,7 @@ class ETLCompiler:
             return {}
 
         node_map = {n["id"]: n for n in nodes}
-        parents_map: dict[str, list[str]] = {n_id: [] for n_id in node_map}
+        parents_map: Dict[str, List[str]] = {n_id: [] for n_id in node_map}
 
         for edge in edges:
             source = edge.get("source")
@@ -136,8 +135,8 @@ class ETLCompiler:
         except graphlib.CycleError as err:
             raise CompilationError(f"DAG compilation failed due to cycle: {err}")
 
-        cte_queries: dict[str, str] = {}
-        output_queries: dict[str, str] = {}
+        cte_queries: Dict[str, str] = {}
+        output_queries: Dict[str, str] = {}
 
         for node_id in execution_order:
             node = node_map[node_id]
@@ -195,7 +194,7 @@ class ETLCompiler:
 
         return output_queries
 
-    def _classify_category(self, node: dict[str, Any], node_type: str | None) -> str:
+    def _classify_category(self, node: Dict[str, Any], node_type: Optional[str]) -> str:
         label = node.get("label", node.get("data", {}).get("label", ""))
         if not node_type or node_type in ("input", "default", "output"):
             if node_type == "input" or any(k in label for k in ("Source", "CSV", "Parquet", "PostgreSQL", "read_")):

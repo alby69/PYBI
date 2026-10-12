@@ -1,9 +1,10 @@
 """Design system tokens and theme manager for PyBI."""
 
+from typing import Dict, Any
 from nicegui import ui
 
 # Node color themes by kind
-NODE_COLORS: dict[str, dict[str, str]] = {
+NODE_COLORS: Dict[str, Dict[str, str]] = {
     'DataSource': {'bg': '#e0f2fe', 'border': '#0284c7', 'text': '#0369a1', 'icon': '📄'},
     'Filter': {'bg': '#fef3c7', 'border': '#d97706', 'text': '#b45309', 'icon': '⚡'},
     'Select': {'bg': '#ede9fe', 'border': '#7c3aed', 'text': '#6d28d9', 'icon': '🔍'},

@@ -4,34 +4,34 @@ This module acts as a facade over UI schema definitions (pybi.etl.nodes.ui_schem
 and node class registries (pybi.etl.nodes.registry).
 """
 
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from pybi.etl.nodes.registry import NODE_REGISTRY, get_node_class
 from pybi.etl.nodes.ui_schema import (
-    _TRANSFORM_KIND,
-    AGGREGATIONS,
-    JOIN_TYPES,
-    KIND_PREFIX,
-    NODE_KINDS,
-    OUTPUT_TYPES,
-    PIVOT_STYLE,
     SOURCE_TYPES,
     TRANSFORM_TYPES,
-    build_label,
-    build_node,
-    build_node_data,
-    default_values,
-    fields_for,
+    OUTPUT_TYPES,
+    AGGREGATIONS,
+    JOIN_TYPES,
+    PIVOT_STYLE,
+    NODE_KINDS,
+    KIND_PREFIX,
+    _TRANSFORM_KIND,
     new_node_id,
+    build_label,
+    build_node_data,
+    build_node,
     node_kind,
     node_values,
+    default_values,
+    fields_for,
     palette_entry,
 )
 
 
-def parse_aggregations(text: str) -> dict[str, str]:
+def parse_aggregations(text: str) -> Dict[str, str]:
     """Parse an aggregation text field into a column/function mapping."""
-    result: dict[str, str] = {}
+    result: Dict[str, str] = {}
     for chunk in text.split(","):
         pair = chunk.strip()
         if not pair:
@@ -47,26 +47,26 @@ def parse_aggregations(text: str) -> dict[str, str]:
     return result
 
 
-def format_aggregations(aggregations: dict[str, str] | None) -> str:
+def format_aggregations(aggregations: Optional[Dict[str, str]]) -> str:
     """Render an aggregation mapping back to its text field representation."""
     if not aggregations:
         return ""
     return ", ".join(f"{column}:{func}" for column, func in aggregations.items())
 
 
-def parse_columns(text: str) -> list[str]:
+def parse_columns(text: str) -> List[str]:
     """Parse a comma separated column list."""
     return [chunk.strip() for chunk in text.split(",") if chunk.strip()]
 
 
-def validate_pipeline(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[str]:
+def validate_pipeline(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[str]:
     """Check a pipeline before execution and return human readable problems."""
-    problems: list[str] = []
+    problems: List[str] = []
     if not nodes:
         return ["The pipeline has no nodes."]
 
     ids = {node.get("id") for node in nodes}
-    parents: dict[str, list[str]] = {node_id: [] for node_id in ids}
+    parents: Dict[str, List[str]] = {node_id: [] for node_id in ids}
     for edge in edges:
         source, target = edge.get("source"), edge.get("target")
         if source not in ids or target not in ids:
@@ -99,28 +99,28 @@ def validate_pipeline(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) 
 
 
 __all__ = [
-    "AGGREGATIONS",
-    "JOIN_TYPES",
-    "KIND_PREFIX",
-    "NODE_KINDS",
-    "NODE_REGISTRY",
-    "OUTPUT_TYPES",
-    "PIVOT_STYLE",
     "SOURCE_TYPES",
     "TRANSFORM_TYPES",
+    "OUTPUT_TYPES",
+    "AGGREGATIONS",
+    "JOIN_TYPES",
+    "PIVOT_STYLE",
+    "NODE_KINDS",
+    "KIND_PREFIX",
     "_TRANSFORM_KIND",
-    "build_label",
-    "build_node",
-    "build_node_data",
-    "default_values",
-    "fields_for",
-    "format_aggregations",
+    "NODE_REGISTRY",
     "get_node_class",
+    "parse_aggregations",
+    "format_aggregations",
+    "parse_columns",
     "new_node_id",
+    "build_label",
+    "build_node_data",
+    "build_node",
     "node_kind",
     "node_values",
+    "default_values",
+    "fields_for",
     "palette_entry",
-    "parse_aggregations",
-    "parse_columns",
     "validate_pipeline",
 ]

@@ -5,14 +5,14 @@ the currently selected project and lets the user switch between them, create
 brand new ones, rename them and delete them.
 """
 
-from collections.abc import Callable
+from typing import Callable, Dict, List, Optional
 
 from nicegui import ui
 
 from pybi.core.storage import default_storage
 
 
-def _next_dashboard_n(dashboards: list[str]) -> int:
+def _next_dashboard_n(dashboards: List[str]) -> int:
     """Return the next free numeric suffix for a "Dashboard N" label."""
     used = set()
     for dash_id in dashboards:
@@ -30,8 +30,8 @@ class DashboardManager:
     def __init__(
         self,
         project_id: str = "default",
-        on_select: Callable[[dict[str, str]], None] | None = None,
-        on_changed: Callable[[dict[str, str]], None] | None = None,
+        on_select: Optional[Callable[[Dict[str, str]], None]] = None,
+        on_changed: Optional[Callable[[Dict[str, str]], None]] = None,
     ) -> None:
         """Initialize the dashboard manager.
 
@@ -45,7 +45,7 @@ class DashboardManager:
         self.project_id = project_id
         self._on_select = on_select
         self._on_changed = on_changed
-        self._current: str | None = None
+        self._current: Optional[str] = None
         self._updating = False
 
         self.select = (
@@ -99,11 +99,11 @@ class DashboardManager:
         self.set_project(project_id)
 
     @property
-    def dashboard_id(self) -> str | None:
+    def dashboard_id(self) -> Optional[str]:
         """Currently selected dashboard id, or None when no dashboard exists."""
         return self._current
 
-    def dashboards(self) -> list[dict[str, str]]:
+    def dashboards(self) -> List[Dict[str, str]]:
         """List the dashboards of the current project."""
         if not self.project_id:
             return []
@@ -173,7 +173,7 @@ class DashboardManager:
         )
         self.delete_dialog.open()
 
-    def _current_name(self) -> str | None:
+    def _current_name(self) -> Optional[str]:
         for dash in self.dashboards():
             if dash['id'] == self._current:
                 return dash.get('name')

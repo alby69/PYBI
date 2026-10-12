@@ -1,16 +1,16 @@
 """Semantic Query Resolver engine for PyBI supporting multi-table relationship resolution and DuckDB execution."""
 
 import logging
-from typing import Any
-
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import duckdb
 import polars as pl
 import sqlglot
 
 from pybi.core.semantic_model import (
+    CoreSemanticModel,
+    SemanticColumn,
+    SemanticMeasure,
     SemanticModel as CoreModelType,
-)
-from pybi.core.semantic_model import (
     SemanticTable,
 )
 from pybi.semantic.filter_context import build_where_clauses
@@ -26,11 +26,11 @@ log = logging.getLogger(__name__)
 class SemanticQueryResolver:
     """Translates SemanticQueryRequest into optimized DuckDB SQL (including multi-table JOINs) and executes it."""
 
-    def __init__(self, duckdb_conn: duckdb.DuckDBPyConnection | None = None):
+    def __init__(self, duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None):
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
-        self.registry: dict[str, CoreModelType] = {}
+        self.registry: Dict[str, CoreModelType] = {}
 
-    def register_model(self, model: SemanticModel | CoreModelType) -> None:
+    def register_model(self, model: Union[SemanticModel, CoreModelType]) -> None:
         """Register a semantic model."""
         if isinstance(model, SemanticModel):
             core_m = model.to_core_model()
@@ -38,15 +38,15 @@ class SemanticQueryResolver:
             core_m = model
         self.registry[core_m.name] = core_m
 
-    def get_model(self, model_name: str) -> CoreModelType | None:
+    def get_model(self, model_name: str) -> Optional[CoreModelType]:
         """Retrieve a registered semantic model by name."""
         return self.registry.get(model_name)
 
     def resolve_to_sql(
         self,
         request: SemanticQueryRequest,
-        source_df: pl.DataFrame | None = None,
-        auth_user: Any | None = None,
+        source_df: Optional[pl.DataFrame] = None,
+        auth_user: Optional[Any] = None,
     ) -> str:
         """Construct an optimized SQL query for the semantic query request with multi-table JOIN resolution."""
         model = self.get_model(request.model_name) if request.model_name else None
@@ -78,9 +78,9 @@ class SemanticQueryResolver:
             return col_or_dim
 
         # Map dimensions and measures to target tables
-        referenced_tables: set[str] = set()
-        dim_targets: list[tuple[str, str, str]] = []  # (dim_name, table_name, physical_col_name)
-        meas_targets: list[tuple[str, str, str, str | None]] = []  # (meas_name, table_name, expr, agg_func)
+        referenced_tables: Set[str] = set()
+        dim_targets: List[Tuple[str, str, str]] = []  # (dim_name, table_name, physical_col_name)
+        meas_targets: List[Tuple[str, str, str, Optional[str]]] = []  # (meas_name, table_name, expr, agg_func)
 
         # Process requested dimensions
         for dim_name in request.dimensions:
@@ -133,8 +133,8 @@ class SemanticQueryResolver:
         from_sql = f'"{primary_table.source_table}" AS "{primary_table.name}"'
 
         # Build JOIN clauses for additional referenced tables using multi-pass resolution
-        join_sqls: list[str] = []
-        joined_tables: set[str] = {primary_table.name}
+        join_sqls: List[str] = []
+        joined_tables: Set[str] = {primary_table.name}
 
         changed = True
         while changed:
@@ -231,8 +231,8 @@ class SemanticQueryResolver:
     def execute(
         self,
         request: SemanticQueryRequest,
-        source_df: pl.DataFrame | None = None,
-        auth_user: Any | None = None,
+        source_df: Optional[pl.DataFrame] = None,
+        auth_user: Optional[Any] = None,
     ) -> SemanticQueryResponse:
         """Execute a semantic query and return a SemanticQueryResponse."""
         model = self.get_model(request.model_name) if request.model_name else None

@@ -1,7 +1,6 @@
 """Python wrapper for Excel-like Pivot Table Vue component."""
 
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from nicegui import ui
 
 
@@ -10,21 +9,21 @@ class PivotTable(ui.element, component='pivot_table.js'):
 
     def __init__(
         self,
-        data: list[dict[str, Any]] | None = None,
-        columns: list[str] | None = None,
-        rows: list[str] | None = None,
-        cols: list[str] | None = None,
-        vals: Any | None = None,
-        values: Any | None = None,
-        filters: list[str] | None = None,
-        filter_values: dict[str, Any] | None = None,
+        data: Optional[List[Dict[str, Any]]] = None,
+        columns: Optional[List[str]] = None,
+        rows: Optional[List[str]] = None,
+        cols: Optional[List[str]] = None,
+        vals: Optional[Any] = None,
+        values: Optional[Any] = None,
+        filters: Optional[List[str]] = None,
+        filter_values: Optional[Dict[str, Any]] = None,
         aggregator_name: str = 'Sum',
         show_row_subtotals: bool = True,
         show_col_subtotals: bool = True,
         show_grand_totals: bool = True,
         empty_value_placeholder: str = '—',
         read_only: bool = False,
-        server_pivot_data: dict[str, Any] | None = None,
+        server_pivot_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__()
 
@@ -62,7 +61,7 @@ class PivotTable(ui.element, component='pivot_table.js'):
         self._props['readOnly'] = self._read_only
         self._props['serverPivotData'] = self._server_pivot_data
 
-    def update_data(self, new_data: list[dict[str, Any]], columns: list[str] | None = None) -> None:
+    def update_data(self, new_data: List[Dict[str, Any]], columns: Optional[List[str]] = None) -> None:
         """Update dataset array."""
         self._data = new_data
         self._props['data'] = new_data
@@ -74,7 +73,7 @@ class PivotTable(ui.element, component='pivot_table.js'):
             self._props['columns'] = self._columns
         self.update()
 
-    def get_config(self) -> dict[str, Any]:
+    def get_config(self) -> Dict[str, Any]:
         """Return current pivot configuration."""
         config = {
             'rows': self._rows,
@@ -96,7 +95,7 @@ class PivotTable(ui.element, component='pivot_table.js'):
             config['empty_value_placeholder'] = self._empty_value_placeholder
         return config
 
-    def set_config(self, config: dict[str, Any]) -> None:
+    def set_config(self, config: Dict[str, Any]) -> None:
         """Set pivot configuration parameters."""
         if 'rows' in config:
             self._rows = config['rows'] or []

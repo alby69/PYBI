@@ -1,11 +1,10 @@
 """FastAPI router for ETL Pipeline operations in PyBI v1 REST API."""
 
+from typing import Any, Dict, Optional, Union
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-import pybi.storage.project_manager as pm
 from pybi.api.schemas import DagSaveRequest, JobStatusResponse
 from pybi.api.v1.models import (
     ETLDAGSchema,
@@ -19,11 +18,12 @@ from pybi.api.v1.models import (
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
 from pybi.etl.executor import ETLExecutor
+import pybi.storage.project_manager as pm
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/etl", tags=["ETL"])
 
 # In-memory store for ETL execution job statuses
-_jobs: dict[str, JobStatusResponse] = {}
+_jobs: Dict[str, JobStatusResponse] = {}
 
 
 @router.get("", response_model=ETLDAGSchema)
@@ -43,7 +43,7 @@ def get_etl_dag(project_id: str) -> ETLDAGSchema:
 @router.put("/dag", response_model=MessageResponse)
 def save_etl_dag(
     project_id: str,
-    req: DagSaveRequest | SaveETLDAGRequest | dict[str, Any],
+    req: Union[DagSaveRequest, SaveETLDAGRequest, Dict[str, Any]],
 ) -> MessageResponse:
     """Save or update ETL DAG configuration for project."""
     if not default_storage.project_exists(project_id):
@@ -70,7 +70,7 @@ def save_etl_dag(
 @router.post("/execute", response_model=ETLExecuteResponse)
 def execute_etl_pipeline(
     project_id: str,
-    req: ETLExecuteRequest | None = None,
+    req: Optional[ETLExecuteRequest] = None,
 ) -> ETLExecuteResponse:
     """Execute ETL pipeline DAG for project using Polars and DuckDB."""
     if req and req.dag and req.dag.nodes:

@@ -2,8 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Any
-
+from typing import Any, Dict, List, Optional, Tuple, Union
 import yaml
 from pydantic import BaseModel, Field
 
@@ -32,21 +31,21 @@ class SemanticColumn(BaseModel):
     name: str = Field(..., description="Unique dimension or column identifier")
     column_name: str = Field(..., description="Physical database column name")
     data_type: str = Field("string", description="Data type e.g. string, integer, float, date")
-    label: str | None = Field(None, description="Human readable display label")
+    label: Optional[str] = Field(None, description="Human readable display label")
     is_key: bool = Field(False, description="Whether column is a key column")
     is_hidden: bool = Field(False, description="Whether column is hidden from visualization picker")
-    hierarchy: list[str] | None = Field(None, description="Hierarchy drill-down path")
+    hierarchy: Optional[List[str]] = Field(None, description="Hierarchy drill-down path")
 
 
 class SemanticMeasure(BaseModel):
     """Measure definition within a semantic model."""
 
     name: str = Field(..., description="Unique measure identifier")
-    expression: str | None = Field(None, description="Aggregation or formula expression e.g. SUM(amount)")
-    agg_func: str | None = Field("SUM", description="Aggregation function: SUM, AVG, COUNT, MIN, MAX")
-    column_name: str | None = Field(None, description="Physical target column for simple aggregations")
-    format_string: str | None = Field(None, description="Formatting template e.g. '${:,.2f}'")
-    label: str | None = Field(None, description="Human readable display label")
+    expression: Optional[str] = Field(None, description="Aggregation or formula expression e.g. SUM(amount)")
+    agg_func: Optional[str] = Field("SUM", description="Aggregation function: SUM, AVG, COUNT, MIN, MAX")
+    column_name: Optional[str] = Field(None, description="Physical target column for simple aggregations")
+    format_string: Optional[str] = Field(None, description="Formatting template e.g. '${:,.2f}'")
+    label: Optional[str] = Field(None, description="Human readable display label")
 
 
 class SemanticRelationship(BaseModel):
@@ -56,8 +55,8 @@ class SemanticRelationship(BaseModel):
     from_column: str = Field(..., description="Source column key")
     to_table: str = Field(..., description="Target table name")
     to_column: str = Field(..., description="Target column key")
-    cardinality: Cardinality | str = Field(Cardinality.MANY_TO_ONE, description="Relationship cardinality")
-    join_type: JoinType | str = Field(JoinType.LEFT, description="Join type: LEFT, INNER, etc.")
+    cardinality: Union[Cardinality, str] = Field(Cardinality.MANY_TO_ONE, description="Relationship cardinality")
+    join_type: Union[JoinType, str] = Field(JoinType.LEFT, description="Join type: LEFT, INNER, etc.")
 
 
 class RLSRule(BaseModel):
@@ -73,28 +72,28 @@ class SemanticTable(BaseModel):
 
     name: str = Field(..., description="Semantic table name")
     source_table: str = Field(..., description="Physical table or DuckDB view name")
-    columns: list[SemanticColumn] = Field(default_factory=list, description="Defined columns/dimensions")
-    measures: list[SemanticMeasure] = Field(default_factory=list, description="Defined calculated measures")
-    primary_key: list[str] | None = Field(None, description="Primary key columns")
+    columns: List[SemanticColumn] = Field(default_factory=list, description="Defined columns/dimensions")
+    measures: List[SemanticMeasure] = Field(default_factory=list, description="Defined calculated measures")
+    primary_key: Optional[List[str]] = Field(None, description="Primary key columns")
 
 
 class SemanticModel(BaseModel):
     """Root Semantic Model encapsulating tables, relationships, and RLS rules."""
 
     name: str = Field(..., description="Semantic model identifier")
-    tables: list[SemanticTable] = Field(default_factory=list, description="Tables in model")
-    relationships: list[SemanticRelationship] = Field(default_factory=list, description="Table relationships")
-    rls_rules: list[RLSRule] = Field(default_factory=list, description="Row-level security rules")
-    default_table: str | None = Field(None, description="Default source table name")
+    tables: List[SemanticTable] = Field(default_factory=list, description="Tables in model")
+    relationships: List[SemanticRelationship] = Field(default_factory=list, description="Table relationships")
+    rls_rules: List[RLSRule] = Field(default_factory=list, description="Row-level security rules")
+    default_table: Optional[str] = Field(None, description="Default source table name")
 
-    def get_table(self, table_name: str) -> SemanticTable | None:
+    def get_table(self, table_name: str) -> Optional[SemanticTable]:
         """Retrieve table by name."""
         for t in self.tables:
             if t.name == table_name:
                 return t
         return None
 
-    def find_column(self, col_or_dim_name: str) -> tuple[SemanticTable, SemanticColumn] | None:
+    def find_column(self, col_or_dim_name: str) -> Optional[Tuple[SemanticTable, SemanticColumn]]:
         """Find a column or dimension by name or table.col_name syntax."""
         if "." in col_or_dim_name:
             t_name, c_name = col_or_dim_name.split(".", 1)
@@ -110,7 +109,7 @@ class SemanticModel(BaseModel):
                         return tbl, c
         return None
 
-    def find_measure(self, meas_name: str) -> tuple[SemanticTable, SemanticMeasure] | None:
+    def find_measure(self, meas_name: str) -> Optional[Tuple[SemanticTable, SemanticMeasure]]:
         """Find a measure by name or table.meas_name syntax."""
         if "." in meas_name:
             t_name, m_name = meas_name.split(".", 1)
@@ -126,19 +125,19 @@ class SemanticModel(BaseModel):
                         return tbl, m
         return None
 
-    def get_relationships_for_table(self, table_name: str) -> list[SemanticRelationship]:
+    def get_relationships_for_table(self, table_name: str) -> List[SemanticRelationship]:
         """Retrieve all relationships involving specified table."""
         return [
             rel for rel in self.relationships
             if rel.from_table == table_name or rel.to_table == table_name
         ]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """Export model as dictionary."""
         return self.model_dump(mode="json")
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SemanticModel":
+    def from_dict(cls, data: Dict[str, Any]) -> "SemanticModel":
         """Instantiate model from dictionary."""
         return cls.model_validate(data)
 
@@ -153,14 +152,14 @@ class SemanticModel(BaseModel):
         parsed = yaml.safe_load(yaml_content) or {}
         return cls.from_dict(parsed)
 
-    def save_yaml_file(self, filepath: str | Path) -> None:
+    def save_yaml_file(self, filepath: Union[str, Path]) -> None:
         """Save SemanticModel to YAML file."""
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.to_yaml(), encoding="utf-8")
 
     @classmethod
-    def load_yaml_file(cls, filepath: str | Path) -> "SemanticModel":
+    def load_yaml_file(cls, filepath: Union[str, Path]) -> "SemanticModel":
         """Load SemanticModel from YAML file."""
         content = Path(filepath).read_text(encoding="utf-8")
         return cls.from_yaml(content)

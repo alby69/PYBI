@@ -1,13 +1,13 @@
 """Export Engine and Orchestrator for managing multi-format export background jobs."""
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import io
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from pybi.export.context_binder import bind_filter_context
@@ -20,10 +20,10 @@ DEFAULT_EXPORTS_DIR = os.getenv("EXPORTS_DIR", "pybi_data/exports")
 class ExportEngine:
     """Orchestrator for queuing and rendering static, versioned exports (PDF, HTML, MD, CSV)."""
 
-    def __init__(self, exports_dir: str | None = None):
+    def __init__(self, exports_dir: Optional[str] = None):
         self.exports_dir = Path(exports_dir or DEFAULT_EXPORTS_DIR)
         self.exports_dir.mkdir(parents=True, exist_ok=True)
-        self.jobs: dict[str, dict[str, Any]] = {}
+        self.jobs: Dict[str, Dict[str, Any]] = {}
         self._executor = ThreadPoolExecutor(max_workers=4)
 
         templates_path = Path(__file__).parent / "templates"
@@ -35,12 +35,12 @@ class ExportEngine:
     def submit_export_job(
         self,
         project_id: str,
-        payload: dict[str, Any],
-        filter_context: Any | None = None,
+        payload: Dict[str, Any],
+        filter_context: Optional[Any] = None,
         export_format: str = "html",
-        template_id: str | None = None,
-        ai_prompt: str | None = None,
-        source_files: list[str] | None = None,
+        template_id: Optional[str] = None,
+        ai_prompt: Optional[str] = None,
+        source_files: Optional[List[str]] = None,
         project_version: str = "1.0.0",
     ) -> str:
         """Submit export task to background worker pool.
@@ -152,17 +152,17 @@ class ExportEngine:
             job["status"] = "failed"
             job["error"] = str(err)
 
-    def render_html(self, payload: dict[str, Any], template_id: str = "report_dati.html") -> str:
+    def render_html(self, payload: Dict[str, Any], template_id: str = "report_dati.html") -> str:
         """Render HTML string using Jinja2 template."""
         tpl = self.jinja_env.get_template(template_id)
         return tpl.render(**payload)
 
-    def render_markdown(self, payload: dict[str, Any], template_id: str = "documento_knowledge.md") -> str:
+    def render_markdown(self, payload: Dict[str, Any], template_id: str = "documento_knowledge.md") -> str:
         """Render Markdown string using Jinja2 template."""
         tpl = self.jinja_env.get_template(template_id)
         return tpl.render(**payload)
 
-    def render_csv(self, payload: dict[str, Any]) -> str:
+    def render_csv(self, payload: Dict[str, Any]) -> str:
         """Render tabular CSV extract from payload tables or widgets."""
         output = io.StringIO()
         writer = None
@@ -196,7 +196,7 @@ class ExportEngine:
 
         return output.getvalue()
 
-    def render_pdf(self, payload: dict[str, Any], html_content: str) -> bytes:
+    def render_pdf(self, payload: Dict[str, Any], html_content: str) -> bytes:
         """Render PDF bytes using WeasyPrint if available, falling back to clean PDF output."""
         try:
             import weasyprint
@@ -207,13 +207,13 @@ class ExportEngine:
             snapshot = payload.get("snapshot", {})
             hash_str = snapshot.get("active_filters_hash", "SHA256")[:16]
             pdf_str = f"%PDF-1.4\n1 0 obj\n<< /Title ({title}) /Subject (PyBI Snapshot {hash_str}) >>\nendobj\n"
-            pdf_str += "2 0 obj\n<< /Type /Catalog /Pages 3 0 R >>\nendobj\n"
-            pdf_str += "3 0 obj\n<< /Type /Pages /Count 1 /Kids [4 0 R] >>\nendobj\n"
-            pdf_str += "4 0 obj\n<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] >>\nendobj\n"
+            pdf_str += f"2 0 obj\n<< /Type /Catalog /Pages 3 0 R >>\nendobj\n"
+            pdf_str += f"3 0 obj\n<< /Type /Pages /Count 1 /Kids [4 0 R] >>\nendobj\n"
+            pdf_str += f"4 0 obj\n<< /Type /Page /Parent 3 0 R /MediaBox [0 0 612 792] >>\nendobj\n"
             pdf_str += "xref\n0 5\n0000000000 65535 f \ntrailer\n<< /Size 5 /Root 2 0 R >>\nstartxref\n180\n%%EOF"
             return pdf_str.encode("utf-8")
 
-    def get_job_status(self, export_id: str) -> dict[str, Any] | None:
+    def get_job_status(self, export_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve job status, progress, snapshot, and file path."""
         job = self.jobs.get(export_id)
         if not job:

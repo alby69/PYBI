@@ -1,8 +1,7 @@
 """UI Schema definition and FastAPI endpoint router for Declarative Schema-Driven UI Engine."""
 
-from typing import Any
-
-from fastapi import APIRouter
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/ui", tags=["ui_schema"])
@@ -12,12 +11,12 @@ class ComponentSchema(BaseModel):
     """Pydantic model describing a declarative UI component."""
 
     type: str = Field(description="Component type e.g., q-btn, q-card, custom:dashboard-grid")
-    props: dict[str, Any] | None = Field(default_factory=dict, description="Vue / Quasar props")
-    text: str | None = Field(default=None, description="Text content inside component")
-    children: list["ComponentSchema"] | None = Field(default=None, description="Nested child components")
-    action: str | None = Field(default=None, description="API action string e.g., api:POST:/api/etl/execute")
-    dataBinding: str | None = Field(default=None, description="Reactive state binding path")
-    key: str | None = Field(default=None, description="Unique key for Vue rendering")
+    props: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Vue / Quasar props")
+    text: Optional[str] = Field(default=None, description="Text content inside component")
+    children: Optional[List["ComponentSchema"]] = Field(default=None, description="Nested child components")
+    action: Optional[str] = Field(default=None, description="API action string e.g., api:POST:/api/etl/execute")
+    dataBinding: Optional[str] = Field(default=None, description="Reactive state binding path")
+    key: Optional[str] = Field(default=None, description="Unique key for Vue rendering")
 
 
 ComponentSchema.model_rebuild()
@@ -27,11 +26,11 @@ class UISchema(BaseModel):
     """Pydantic model describing a complete page UI schema."""
 
     page: str = Field(description="Page identifier e.g., viewer, etl-editor")
-    components: list[ComponentSchema] = Field(description="List of top-level component schemas")
-    meta: dict[str, Any] | None = Field(default_factory=dict, description="Metadata dictionary")
+    components: List[ComponentSchema] = Field(description="List of top-level component schemas")
+    meta: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Metadata dictionary")
 
 
-def get_viewer_schema(project_id: str | None = None) -> UISchema:
+def get_viewer_schema(project_id: Optional[str] = None) -> UISchema:
     """Generate UI schema for the public viewer page."""
     return UISchema(
         page="viewer",
@@ -81,7 +80,7 @@ def get_etl_editor_schema() -> UISchema:
 
 
 @router.get("/schema/{page_name}", response_model=UISchema)
-def get_page_ui_schema(page_name: str, project_id: str | None = None) -> UISchema:
+def get_page_ui_schema(page_name: str, project_id: Optional[str] = None) -> UISchema:
     """FastAPI endpoint returning JSON UI schema for dynamic frontend rendering."""
     page_key = page_name.lower().strip()
     if page_key in ["viewer", "public-viewer"]:

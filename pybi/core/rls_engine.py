@@ -64,11 +64,17 @@ class RLSEngine:
                         # Replace = '{key}' with IN (...)
                         eq_placeholder = f"= '{placeholder}'"
                         if eq_placeholder in expr_template:
-                            expr_template = expr_template.replace(eq_placeholder, f"IN ({sanitized_vals})")
+                            expr_template = expr_template.replace(
+                                eq_placeholder, f"IN ({sanitized_vals})"
+                            )
                         else:
                             substitutions[key] = f"({sanitized_vals})"
                     else:
-                        substitutions[key] = cls.sanitize_val(val) if not isinstance(val, (int, float)) else str(val)
+                        substitutions[key] = (
+                            cls.sanitize_val(val)
+                            if not isinstance(val, (int, float))
+                            else str(val)
+                        )
 
             if skip_rule:
                 continue

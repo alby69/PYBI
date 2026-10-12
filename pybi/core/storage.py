@@ -1,11 +1,12 @@
 """Project serialization and filesystem storage module for PyBI."""
 
+from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 import json
 import os
 import shutil
-from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
+
 
 DEFAULT_STORAGE_DIR = "pybi_data"
 ID_SAFE_CHARS = ("-", "_")
@@ -26,7 +27,7 @@ def sanitize_project_id(project_id: str) -> str:
     return safe_id or "default"
 
 
-def resolve_storage_dir(storage_dir: str | None = None) -> str:
+def resolve_storage_dir(storage_dir: Optional[str] = None) -> str:
     """Resolve the directory holding project JSON files.
 
     Resolution order: explicit argument, DATA_DIR environment variable, "pybi_data".
@@ -46,16 +47,19 @@ class ProjectStorage(ABC):
     """Abstract base class defining the interface for PyBI project storage backends."""
 
     @abstractmethod
-    def list_dashboards(self, project_id: str) -> list[dict[str, Any]]:
+    def list_dashboards(self, project_id: str) -> List[Dict[str, Any]]:
         """List the dashboards saved for a project."""
+        pass
 
     @abstractmethod
     def load_dashboard(self, project_id: str, dashboard_id: str) -> Any:
         """Load a named dashboard's layout for a project."""
+        pass
 
     @abstractmethod
     def save_dashboard(self, project_id: str, dashboard_id: str, name: str, layout: Any) -> None:
         """Create or update a named dashboard for a project."""
+        pass
 
     @abstractmethod
     def get_project_data_dir(self, project_id: str) -> str:
@@ -67,39 +71,45 @@ class ProjectStorage(ABC):
         Returns:
             str: Path to the project's data directory.
         """
+        pass
 
     @abstractmethod
     def save_project(
         self,
         project_id: str,
-        etl_dag: dict[str, Any] | None = None,
-        dashboard_layout: Any | None = None,
+        etl_dag: Optional[Dict[str, Any]] = None,
+        dashboard_layout: Optional[Any] = None,
         name: str = "",
-        dashboards: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
+        dashboards: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """Save project configuration."""
+        pass
 
     @abstractmethod
-    def load_project(self, project_id: str) -> dict[str, Any]:
+    def load_project(self, project_id: str) -> Dict[str, Any]:
         """Load project configuration by project_id."""
+        pass
 
     @abstractmethod
-    def list_projects(self) -> list[str]:
+    def list_projects(self) -> List[str]:
         """List all saved project IDs."""
+        pass
 
     @abstractmethod
     def delete_project(self, project_id: str) -> bool:
         """Delete project configuration by project_id."""
+        pass
 
     @abstractmethod
     def project_exists(self, project_id: str) -> bool:
         """Check whether a project has already been saved."""
+        pass
 
 
 class FileProjectStorage(ProjectStorage):
     """JSON file system storage implementation for PyBI projects under pybi_data/."""
 
-    def __init__(self, storage_dir: str | None = None) -> None:
+    def __init__(self, storage_dir: Optional[str] = None) -> None:
         """Initialize FileProjectStorage.
 
         Args:
@@ -121,7 +131,7 @@ class FileProjectStorage(ProjectStorage):
         """
         return os.path.join(self.projects_dir, f"{sanitize_project_id(project_id)}.json")
 
-    def _make_dashboard(self, dashboard_id: str, name: str, layout: Any, now_str: str) -> dict[str, Any]:
+    def _make_dashboard(self, dashboard_id: str, name: str, layout: Any, now_str: str) -> Dict[str, Any]:
         """Build a dashboard entry for the project's dashboards list."""
         return {
             "id": dashboard_id,
@@ -131,7 +141,7 @@ class FileProjectStorage(ProjectStorage):
             "updated_at": now_str,
         }
 
-    def _project_dashboards(self, project_data: dict[str, Any]) -> list[dict[str, Any]]:
+    def _project_dashboards(self, project_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Return the dashboards list of a project, migrating the legacy single layout.
 
         Legacy projects only store ``dashboard_layout``; they are treated as a single
@@ -167,7 +177,7 @@ class FileProjectStorage(ProjectStorage):
         os.makedirs(cache_dir, exist_ok=True)
         return cache_dir
 
-    def get_cached_table(self, project_id: str, cache_key: str) -> Any | None:
+    def get_cached_table(self, project_id: str, cache_key: str) -> Optional[Any]:
         """Load cached Parquet file if exists."""
         import polars as pl
         cache_dir = self.get_project_cache_dir(project_id)
@@ -191,11 +201,11 @@ class FileProjectStorage(ProjectStorage):
     def save_project(
         self,
         project_id: str,
-        etl_dag: dict[str, Any] | None = None,
-        dashboard_layout: Any | None = None,
+        etl_dag: Optional[Dict[str, Any]] = None,
+        dashboard_layout: Optional[Any] = None,
         name: str = "",
-        dashboards: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
+        dashboards: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """Save project configuration to filesystem JSON file.
 
         Args:
@@ -254,7 +264,7 @@ class FileProjectStorage(ProjectStorage):
 
         return project_data
 
-    def load_project(self, project_id: str) -> dict[str, Any]:
+    def load_project(self, project_id: str) -> Dict[str, Any]:
         """Load project configuration from filesystem JSON file.
 
         Args:
@@ -270,7 +280,7 @@ class FileProjectStorage(ProjectStorage):
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def list_projects(self) -> list[str]:
+    def list_projects(self) -> List[str]:
         """List all project IDs stored in the filesystem directory.
 
         Returns:
@@ -304,7 +314,7 @@ class FileProjectStorage(ProjectStorage):
 
         return os.path.abspath(file_path)
 
-    def list_project_files(self, project_id: str) -> list[str]:
+    def list_project_files(self, project_id: str) -> List[str]:
         """Return list of files in the project's data directory.
 
         Args:
@@ -369,7 +379,7 @@ class FileProjectStorage(ProjectStorage):
         """
         return os.path.exists(self._get_project_path(project_id))
 
-    def rename_project(self, project_id: str, new_project_id: str, name: str | None = None) -> str:
+    def rename_project(self, project_id: str, new_project_id: str, name: Optional[str] = None) -> str:
         """Rename a project, preserving its ETL DAG and dashboard layout.
 
         Args:
@@ -401,16 +411,16 @@ class FileProjectStorage(ProjectStorage):
         self.delete_project(project_id)
         return target_id
 
-    def save_etl_dag(self, project_id: str, etl_dag: dict[str, Any]) -> None:
+    def save_etl_dag(self, project_id: str, etl_dag: Dict[str, Any]) -> None:
         """Convenience method to save only the ETL DAG for a project."""
         self.save_project(project_id=project_id, etl_dag=etl_dag)
 
-    def load_etl_dag(self, project_id: str) -> dict[str, Any]:
+    def load_etl_dag(self, project_id: str) -> Dict[str, Any]:
         """Convenience method to load only the ETL DAG for a project."""
         proj = self.load_project(project_id)
         return proj.get("etl_dag", {"nodes": [], "edges": []})
 
-    def list_dashboards(self, project_id: str) -> list[dict[str, Any]]:
+    def list_dashboards(self, project_id: str) -> List[Dict[str, Any]]:
         """List the dashboards saved for a project.
 
         Returns:

@@ -1,15 +1,13 @@
 """Global/page search bar component for nodes, widgets, and tables."""
 
-from collections.abc import Callable
-from typing import Any
-
+from typing import Callable, List, Dict, Any
 from nicegui import ui
 
 
 class SearchBar:
     """Search bar component for filtering nodes, widgets, and fields."""
 
-    def __init__(self, items_provider: Callable[[], list[dict[str, Any]]], on_select: Callable[[dict[str, Any]], None]):
+    def __init__(self, items_provider: Callable[[], List[Dict[str, Any]]], on_select: Callable[[Dict[str, Any]], None]):
         self.items_provider = items_provider
         self.on_select = on_select
         self.dialog = ui.dialog()
@@ -48,7 +46,7 @@ class SearchBar:
             if not matched:
                 ui.label('No matching items found').classes('text-xs text-gray-500 p-2')
 
-    def _select_item(self, item: dict[str, Any]):
+    def _select_item(self, item: Dict[str, Any]):
         self.dialog.close()
         self.on_select(item)
 

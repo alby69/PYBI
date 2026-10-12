@@ -1,9 +1,8 @@
 """ChartWidget UI component integrating NiceGUI ECharts with Polars DataFrames."""
 
-from typing import Any
-
-import polars as pl
+from typing import Any, Dict, List, Optional, Union
 from nicegui import ui
+import polars as pl
 
 from pybi.dashboard import DataBinder, default_binder
 
@@ -13,10 +12,10 @@ class ChartWidget:
 
     def __init__(
         self,
-        df: pl.DataFrame | None = None,
+        df: Optional[pl.DataFrame] = None,
         chart_type: str = "bar",
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
         title: str = "",
     ) -> None:
         """Initialize ChartWidget.
@@ -40,13 +39,13 @@ class ChartWidget:
 
     def bind_to(
         self,
-        binder: DataBinder | None = None,
+        binder: Optional[DataBinder] = None,
         widget_id: str = "chart_widget",
         source_name: str = "",
-        query: str | None = None,
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
-        chart_type: str | None = None,
+        query: Optional[str] = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
+        chart_type: Optional[str] = None,
     ) -> 'ChartWidget':
         """Bind this ChartWidget to a DataBinder source for reactive updates.
 
@@ -95,10 +94,10 @@ class ChartWidget:
     def update_data(
         self,
         df: pl.DataFrame,
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
-        chart_type: str | None = None,
-        title: str | None = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
+        chart_type: Optional[str] = None,
+        title: Optional[str] = None,
     ) -> None:
         """Update chart data and refresh ECharts view.
 
@@ -128,10 +127,10 @@ class ChartWidget:
     def _build_options(
         df: pl.DataFrame,
         chart_type: str,
-        x_col: str | None,
-        y_cols: list[str] | None,
+        x_col: Optional[str],
+        y_cols: Optional[List[str]],
         title: str,
-    ) -> dict[str, Any]:
+    ) -> Dict[str, Any]:
         """Construct ECharts options dict from Polars DataFrame.
 
         Args:
@@ -144,7 +143,7 @@ class ChartWidget:
         Returns:
             Dict[str, Any]: ECharts configuration dictionary.
         """
-        options: dict[str, Any] = {
+        options: Dict[str, Any] = {
             "title": {"text": title, "textStyle": {"fontSize": 14, "fontWeight": "bold"}},
             "tooltip": {"trigger": "axis" if chart_type in ("bar", "line") else "item"},
             "legend": {"bottom": 0},
@@ -176,7 +175,7 @@ class ChartWidget:
                         "name": col_name,
                         "type": chart_type,
                         "data": df[col_name].to_list(),
-                        "smooth": chart_type == "line",
+                        "smooth": True if chart_type == "line" else False,
                     })
             options["series"] = series
 

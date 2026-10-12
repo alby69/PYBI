@@ -7,17 +7,17 @@ from fastapi.responses import JSONResponse
 from pybi.api.middleware.audit import AuditMiddleware
 from pybi.api.v1.admin import router as v1_admin_router
 from pybi.api.v1.auth import router as v1_auth_router
-from pybi.api.v1.dashboards import router as v1_dashboards_router
-from pybi.api.v1.etl import router as v1_etl_router
-from pybi.api.v1.exports import router as v1_exports_router
-from pybi.api.v1.files import router as v1_files_router
 from pybi.api.v1.projects import router as v1_projects_router
+from pybi.api.v1.files import router as v1_files_router
+from pybi.api.v1.etl import router as v1_etl_router
+from pybi.api.v1.dashboards import router as v1_dashboards_router
+from pybi.api.v1.exports import router as v1_exports_router
 from pybi.api.v1.ui_schema import router as v1_ui_schema_router
 from pybi.api.v1.viewer import router as v1_viewer_router
-from pybi.export.router import router as export_router
 
 # Legacy routes for backward compatibility
 from pybi.publish.viewer_api import router as viewer_router
+from pybi.export.router import router as export_router
 from pybi.server.ui_schema import router as ui_schema_router
 
 
@@ -56,7 +56,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         if hasattr(exc, "status_code"):
-            status_code = exc.status_code
+            status_code = getattr(exc, "status_code")
             detail = getattr(exc, "detail", str(exc))
         else:
             status_code = status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -90,7 +90,9 @@ class ProjectBundler:
             with open(proj_json_path, "r", encoding="utf-8") as f:
                 proj_data = json.load(f)
 
-            pid = sanitize_project_id(target_project_id or proj_data.get("project_id") or b_path.stem)
+            pid = sanitize_project_id(
+                target_project_id or proj_data.get("project_id") or b_path.stem
+            )
             proj_data["project_id"] = pid
 
             # Write restored project.json to storage

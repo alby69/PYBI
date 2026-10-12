@@ -1,14 +1,13 @@
 """PostgreSQL data connector using SQLAlchemy and Polars."""
 
-from typing import Any
-
+from typing import Any, Optional, Union
 import polars as pl
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 
 def read_postgres(
-    uri_or_engine: str | Engine,
+    uri_or_engine: Union[str, Engine],
     query: str,
     **kwargs: Any,
 ) -> pl.DataFrame:
@@ -47,7 +46,7 @@ def read_postgres(
 
 def write_postgres(
     df: pl.DataFrame,
-    uri_or_engine: str | Engine,
+    uri_or_engine: Union[str, Engine],
     table_name: str,
     if_exists: str = "replace",
     **kwargs: Any,

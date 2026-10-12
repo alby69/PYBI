@@ -3,7 +3,7 @@
 import json
 import os
 import sqlite3
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from pybi.core.storage import default_storage, sanitize_project_id
 
@@ -14,7 +14,7 @@ DEFAULT_DB_PATH = os.path.join("pybi_data", "projects.db")
 # Granular File/Default Storage API Functions
 # ==========================================================
 
-def list_projects() -> list[dict[str, Any]]:
+def list_projects() -> List[Dict[str, Any]]:
     """List summary details for all saved projects.
 
     Returns:
@@ -38,7 +38,7 @@ def list_projects() -> list[dict[str, Any]]:
     return results
 
 
-def create_project(name: str, project_id: str | None = None, description: str | None = None) -> dict[str, Any]:
+def create_project(name: str, project_id: Optional[str] = None, description: Optional[str] = None) -> Dict[str, Any]:
     """Create a new project.
 
     Args:
@@ -67,7 +67,7 @@ def create_project(name: str, project_id: str | None = None, description: str | 
     return saved
 
 
-def get_project(project_id: str) -> dict[str, Any]:
+def get_project(project_id: str) -> Dict[str, Any]:
     """Get project configuration by project_id.
 
     Args:
@@ -83,9 +83,9 @@ def get_project(project_id: str) -> dict[str, Any]:
 
 def update_project(
     project_id: str,
-    name: str | None = None,
-    description: str | None = None,
-) -> dict[str, Any]:
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+) -> Dict[str, Any]:
     """Update project name or description.
 
     Args:
@@ -121,7 +121,7 @@ def delete_project(project_id: str) -> bool:
     return default_storage.delete_project(project_id)
 
 
-def save_dag(project_id: str, dag: dict[str, Any]) -> None:
+def save_dag(project_id: str, dag: Dict[str, Any]) -> None:
     """Save ETL pipeline DAG for a project.
 
     Args:
@@ -131,7 +131,7 @@ def save_dag(project_id: str, dag: dict[str, Any]) -> None:
     default_storage.save_etl_dag(project_id, dag)
 
 
-def load_dag(project_id: str) -> dict[str, Any]:
+def load_dag(project_id: str) -> Dict[str, Any]:
     """Load ETL pipeline DAG for a project.
 
     Args:
@@ -148,7 +148,7 @@ def save_dashboard_layout(
     layout: Any,
     dashboard_id: str = "dash_1",
     name: str = "Main Dashboard",
-    bindings: dict[str, Any] | None = None,
+    bindings: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Save or update dashboard grid layout and bindings.
 
@@ -167,7 +167,7 @@ def save_dashboard_layout(
     )
 
 
-def load_dashboard_layout(project_id: str, dashboard_id: str = "dash_1") -> dict[str, Any]:
+def load_dashboard_layout(project_id: str, dashboard_id: str = "dash_1") -> Dict[str, Any]:
     """Load dashboard layout and bindings for a project.
 
     Args:
@@ -221,9 +221,9 @@ def _get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
 
 def save_project(
     name: str,
-    dag: dict[str, Any] | None = None,
-    dashboard_layout: dict[str, Any] | None = None,
-    bindings: dict[str, Any] | None = None,
+    dag: Optional[Dict[str, Any]] = None,
+    dashboard_layout: Optional[Dict[str, Any]] = None,
+    bindings: Optional[Dict[str, Any]] = None,
     db_path: str = DEFAULT_DB_PATH,
 ) -> bool:
     """Save or update project pipeline, dashboard layout, and bindings into SQLite."""
@@ -256,7 +256,7 @@ def save_project(
         conn.close()
 
 
-def load_project(name: str, db_path: str = DEFAULT_DB_PATH) -> dict[str, Any]:
+def load_project(name: str, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
     """Load project pipeline, dashboard layout, and bindings from SQLite database."""
     if not name or not name.strip():
         raise ValueError("Project name cannot be empty.")

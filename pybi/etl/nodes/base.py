@@ -1,17 +1,15 @@
 """Base ETL node class."""
 
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 import ibis.expr.types as ir
 import polars as pl
-
 from pybi.core.interfaces import ETLNode
 
 
 class BaseETLNode(ETLNode):
     """Base class for concrete ETL nodes."""
 
-    def __init__(self, node_id: str, data: dict[str, Any] | None = None):
+    def __init__(self, node_id: str, data: Dict[str, Any] | None = None):
         self._node_id = node_id
         self.data = data if data is not None else {}
 
@@ -23,7 +21,7 @@ class BaseETLNode(ETLNode):
     def foldable(self) -> bool:
         return True
 
-    def validate(self) -> list[str]:
+    def validate(self) -> List[str]:
         return []
 
     def to_ibis_expr(self, input_expr: ir.Table) -> ir.Table:
@@ -35,5 +33,5 @@ class BaseETLNode(ETLNode):
     def to_polars_expr(self, input_lazyframe: pl.LazyFrame) -> pl.LazyFrame:
         return input_lazyframe
 
-    def execute(self, input_data: Any, context: dict[str, Any] | None = None) -> Any:
+    def execute(self, input_data: Any, context: Optional[Dict[str, Any]] = None) -> Any:
         return input_data

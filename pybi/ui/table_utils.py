@@ -1,10 +1,9 @@
 """Helpers for rendering Polars DataFrames as NiceGUI tables."""
 
-from collections.abc import Sequence
-from typing import Any
+from typing import Any, Dict, List, Optional, Sequence
 
 
-def pick_row_key(columns: Sequence[str], rows: Sequence[dict[str, Any]]) -> str | None:
+def pick_row_key(columns: Sequence[str], rows: Sequence[Dict[str, Any]]) -> Optional[str]:
     """Choose a row key column for a preview table.
 
     Prefers 'id', then the first column whose values are unique. Returns None
@@ -34,7 +33,7 @@ def pick_row_key(columns: Sequence[str], rows: Sequence[dict[str, Any]]) -> str 
     return None
 
 
-def build_preview_table(df: Any) -> dict[str, Any]:
+def build_preview_table(df: Any) -> Dict[str, Any]:
     """Build the column and row arguments for a NiceGUI table preview.
 
     Args:
@@ -43,8 +42,8 @@ def build_preview_table(df: Any) -> dict[str, Any]:
     Returns:
         Dict[str, Any]: Keyword arguments with 'columns', 'rows' and 'row_key'.
     """
-    columns: list[str] = list(df.columns)
-    rows: list[dict[str, Any]] = df.to_dicts()
+    columns: List[str] = list(df.columns)
+    rows: List[Dict[str, Any]] = df.to_dicts()
     table_columns = [{"name": column, "label": column, "field": column, "sortable": True} for column in columns]
     return {
         "columns": table_columns,

@@ -1,5 +1,7 @@
 """Chart components providing NiceGUI wrappers for bar and line charts bound to DataBinder."""
 
+from typing import Any, Dict, List, Optional, Union
+from nicegui import ui
 import polars as pl
 
 from pybi.dashboard.binding import DataBinder, default_binder
@@ -14,11 +16,11 @@ class Chart:
         widget_id: str,
         source_name: str = "",
         chart_type: str = "bar",
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
         title: str = "",
-        query: str | None = None,
-        binder: DataBinder | None = None,
+        query: Optional[str] = None,
+        binder: Optional[DataBinder] = None,
     ) -> None:
         """Initialize Chart component.
 
@@ -60,9 +62,9 @@ class Chart:
     def bind_source(
         self,
         source_name: str,
-        query: str | None = None,
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
+        query: Optional[str] = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
     ) -> "Chart":
         """Bind or re-bind chart to a DataBinder source name.
 
@@ -120,11 +122,11 @@ class BarChart(Chart):
         self,
         widget_id: str,
         source_name: str = "",
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
         title: str = "",
-        query: str | None = None,
-        binder: DataBinder | None = None,
+        query: Optional[str] = None,
+        binder: Optional[DataBinder] = None,
     ) -> None:
         """Initialize BarChart.
 
@@ -156,11 +158,11 @@ class LineChart(Chart):
         self,
         widget_id: str,
         source_name: str = "",
-        x_col: str | None = None,
-        y_cols: list[str] | None = None,
+        x_col: Optional[str] = None,
+        y_cols: Optional[List[str]] = None,
         title: str = "",
-        query: str | None = None,
-        binder: DataBinder | None = None,
+        query: Optional[str] = None,
+        binder: Optional[DataBinder] = None,
     ) -> None:
         """Initialize LineChart.
 

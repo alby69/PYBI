@@ -2,8 +2,7 @@
 
 import os
 import re
-from typing import Any
-
+from typing import Any, Optional
 import polars as pl
 
 CSV_SEPARATORS = {
@@ -47,7 +46,7 @@ def detect_csv_separator(filepath: str, sample_lines: int = 5) -> str:
     return best
 
 
-def read_csv(filepath: str, separator: str | None = None, **kwargs: Any) -> pl.DataFrame:
+def read_csv(filepath: str, separator: Optional[str] = None, **kwargs: Any) -> pl.DataFrame:
     """Read CSV file into a Polars DataFrame.
 
     Args:

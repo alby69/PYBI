@@ -1,11 +1,11 @@
 """Reusable project selector with create, rename and delete actions."""
 
-from collections.abc import Callable
+from typing import Callable, List, Optional
 
 from nicegui import ui
 
-import pybi.storage.project_manager as pm
 from pybi.core.storage import ProjectStorage, default_storage, sanitize_project_id
+import pybi.storage.project_manager as pm
 
 
 class ProjectManager:
@@ -13,9 +13,9 @@ class ProjectManager:
 
     def __init__(
         self,
-        storage: ProjectStorage | None = None,
+        storage: Optional[ProjectStorage] = None,
         value: str = "default",
-        on_switch: Callable[[str, str], None] | None = None,
+        on_switch: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         """Initialize the project manager.
 
@@ -99,7 +99,7 @@ class ProjectManager:
         """Currently selected sanitized project id."""
         return self._current
 
-    def projects(self) -> list[str]:
+    def projects(self) -> List[str]:
         """List the stored project ids via storage module."""
         if self._storage:
             return self._storage.list_projects()

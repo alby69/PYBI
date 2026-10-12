@@ -41,7 +41,13 @@ class BaseConnector(ABC):
         """
 
     @abstractmethod
-    def write(self, df: pl.DataFrame, table_name: str, if_exists: str = "replace", **kwargs: Any) -> None:
+    def write(
+        self,
+        df: pl.DataFrame,
+        table_name: str,
+        if_exists: str = "replace",
+        **kwargs: Any,
+    ) -> None:
         """Write Polars DataFrame to target dataset/table.
 
         Args:

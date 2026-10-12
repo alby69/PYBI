@@ -1,12 +1,11 @@
 """Visual chart definitions for PyBI Report Layer."""
 
-from typing import Any
-
+from typing import Any, Dict, List, Optional
 from pybi.core.interfaces import Visual
 from pybi.dashboard.filter_context import FilterContext
 
 
-def _build_where_sql(filter_context: FilterContext | None, table_name: str) -> str:
+def _build_where_sql(filter_context: Optional[FilterContext], table_name: str) -> str:
     """Helper to format WHERE clause SQL fragment."""
     if not filter_context:
         return ""
@@ -21,12 +20,12 @@ def _build_where_sql(filter_context: FilterContext | None, table_name: str) -> s
 class BaseVisual(Visual):
     """Base visual representation."""
 
-    def __init__(self, visual_id: str, table_name: str, config: dict[str, Any]):
+    def __init__(self, visual_id: str, table_name: str, config: Dict[str, Any]):
         self.visual_id = visual_id
         self.table_name = table_name
         self.config = config
 
-    def generate_query(self, filter_context: FilterContext | None = None) -> str:
+    def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
         where_sql = _build_where_sql(filter_context, self.table_name)
         return f"SELECT * FROM {self.table_name}{where_sql}"
 
@@ -34,7 +33,7 @@ class BaseVisual(Visual):
 class BarChartVisual(BaseVisual):
     """Bar chart visual representation."""
 
-    def generate_query(self, filter_context: FilterContext | None = None) -> str:
+    def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
         x_col = self.config.get("x", "")
         y_col = self.config.get("y", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
@@ -49,7 +48,7 @@ class BarChartVisual(BaseVisual):
 class LineChartVisual(BaseVisual):
     """Line chart visual representation."""
 
-    def generate_query(self, filter_context: FilterContext | None = None) -> str:
+    def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
         x_col = self.config.get("x", "")
         y_col = self.config.get("y", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
@@ -64,7 +63,7 @@ class LineChartVisual(BaseVisual):
 class TableVisual(BaseVisual):
     """Table visual representation."""
 
-    def generate_query(self, filter_context: FilterContext | None = None) -> str:
+    def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
         cols = self.config.get("columns", [])
         cols_str = ", ".join(cols) if cols else "*"
 
@@ -76,7 +75,7 @@ class TableVisual(BaseVisual):
 class KPIVisual(BaseVisual):
     """KPI visual representation."""
 
-    def generate_query(self, filter_context: FilterContext | None = None) -> str:
+    def generate_query(self, filter_context: Optional[FilterContext] = None) -> str:
         val_col = self.config.get("value", "")
         agg = (self.config.get("aggregate") or "SUM").upper()
 

@@ -1,10 +1,10 @@
 """JWT authentication and user password handling for PyBI."""
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Dict, Optional
 
 import jwt
 
@@ -13,7 +13,7 @@ ALGORITHM = "HS256"
 DEFAULT_EXPIRATION_MINUTES = 60 * 24  # 24 hours
 
 
-def hash_password(password: str, salt: str | None = None) -> str:
+def hash_password(password: str, salt: Optional[str] = None) -> str:
     """Hash a plaintext password using SHA-256 and a salt.
 
     Args:
@@ -46,7 +46,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hash_password(plain_password, salt=salt) == hashed_password
 
 
-def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Generate a JWT access token encoding the payload data and expiration time.
 
     Args:
@@ -66,7 +66,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> dict[str, Any] | None:
+def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     """Decode and validate a JWT access token.
 
     Args:
@@ -89,8 +89,8 @@ class AuthUser:
         self,
         username: str,
         role: str = "viewer",
-        email: str | None = None,
-        claims: dict[str, Any] | None = None,
+        email: Optional[str] = None,
+        claims: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.username = username
         self.role = role
@@ -101,7 +101,7 @@ class AuthUser:
         """Retrieve custom claim value."""
         return self.claims.get(claim_key, default)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         return {
             "username": self.username,
             "role": self.role,

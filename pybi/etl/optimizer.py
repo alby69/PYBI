@@ -2,7 +2,6 @@
 
 import sqlglot
 from sqlglot.optimizer import optimize as sqlglot_optimize
-
 from pybi.core.exceptions import CompilationError
 
 
@@ -41,7 +40,7 @@ class SQLOptimizer:
             return optimized.sql(dialect=self.dialect, pretty=True)
         except sqlglot.errors.ParseError as e:
             raise CompilationError(f"SQL parse error: {e}") from e
-        except Exception:
+        except Exception as e:
             # Fallback to parsed.sql or original sql if optimizer rule fails on complex dialect constructs
             try:
                 parsed = sqlglot.parse_one(sql, read=self.dialect)

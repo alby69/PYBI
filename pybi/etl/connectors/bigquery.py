@@ -14,7 +14,14 @@ log = logging.getLogger(__name__)
 class BigQueryConnector(BaseConnector):
     """Google BigQuery connector supporting read, write, test_connection, get_schema, and DirectQuery."""
 
-    def __init__(self, connection_uri: str | None = None, project_id: str | None = None, dataset_id: str | None = None, credentials_path: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        connection_uri: str | None = None,
+        project_id: str | None = None,
+        dataset_id: str | None = None,
+        credentials_path: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(connection_uri=connection_uri, **kwargs)
         self.project_id = project_id or "default-project"
         self.dataset_id = dataset_id or "default_dataset"
@@ -44,24 +51,40 @@ class BigQueryConnector(BaseConnector):
         """Get schema of BigQuery table."""
         target = table_name or "sample_table"
         try:
-            df = self.read(f"SELECT * FROM `{self.project_id}.{self.dataset_id}.{target}` LIMIT 1")
-            return {"table": target, "columns": {col: str(df[col].dtype) for col in df.columns}}
+            df = self.read(
+                f"SELECT * FROM `{self.project_id}.{self.dataset_id}.{target}` LIMIT 1"
+            )
+            return {
+                "table": target,
+                "columns": {col: str(df[col].dtype) for col in df.columns},
+            }
         except Exception:
             return {
                 "table": target,
-                "columns": {"id": "Int64", "name": "String", "region": "String", "amount": "Float64"},
+                "columns": {
+                    "id": "Int64",
+                    "name": "String",
+                    "region": "String",
+                    "amount": "Float64",
+                },
             }
 
     def read(self, query_or_table: str, **kwargs: Any) -> pl.DataFrame:
         """Read data from BigQuery into Polars DataFrame."""
         if self.config.get("mock", False):
-            return pl.DataFrame({
-                "id": [10, 20, 30],
-                "region": ["EU", "APAC", "US"],
-                "sales": [500.0, 750.0, 1200.0],
-            })
+            return pl.DataFrame(
+                {
+                    "id": [10, 20, 30],
+                    "region": ["EU", "APAC", "US"],
+                    "sales": [500.0, 750.0, 1200.0],
+                }
+            )
         clean = query_or_table.strip()
-        query = clean if clean.upper().startswith(("SELECT", "WITH")) else f"SELECT * FROM `{self.project_id}.{self.dataset_id}.{clean}`"
+        query = (
+            clean
+            if clean.upper().startswith(("SELECT", "WITH"))
+            else f"SELECT * FROM `{self.project_id}.{self.dataset_id}.{clean}`"
+        )
         uri = self._get_uri()
         engine = create_engine(uri)
         try:
@@ -69,14 +92,25 @@ class BigQueryConnector(BaseConnector):
         finally:
             engine.dispose()
 
-    def write(self, df: pl.DataFrame, table_name: str, if_exists: str = "replace", **kwargs: Any) -> None:
+    def write(
+        self,
+        df: pl.DataFrame,
+        table_name: str,
+        if_exists: str = "replace",
+        **kwargs: Any,
+    ) -> None:
         """Write Polars DataFrame to BigQuery."""
         if self.config.get("mock", False):
             return
         uri = self._get_uri()
         engine = create_engine(uri)
         try:
-            df.write_database(table_name=table_name, connection=engine, if_table_exists=if_exists, **kwargs)
+            df.write_database(
+                table_name=table_name,
+                connection=engine,
+                if_table_exists=if_exists,
+                **kwargs,
+            )
         finally:
             engine.dispose()
 

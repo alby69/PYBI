@@ -1,11 +1,10 @@
 """FastAPI router for Dashboard Layout operations in PyBI v1 REST API."""
 
+from typing import Any, Dict, List, Optional, Union
 import uuid
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-import pybi.storage.project_manager as pm
 from pybi.api.schemas import DashboardCreateRequest, DashboardSaveRequest
 from pybi.api.v1.models import (
     DashboardListResponse,
@@ -14,6 +13,7 @@ from pybi.api.v1.models import (
     SaveDashboardRequest,
 )
 from pybi.core.storage import default_storage
+import pybi.storage.project_manager as pm
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/dashboards", tags=["Dashboards"])
 
@@ -35,8 +35,8 @@ def list_dashboards(project_id: str) -> DashboardListResponse:
     return DashboardListResponse(project_id=project_id, dashboards=schemas)
 
 
-@router.post("", response_model=dict[str, Any], status_code=status.HTTP_201_CREATED)
-def create_dashboard(project_id: str, req: DashboardCreateRequest) -> dict[str, Any]:
+@router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
+def create_dashboard(project_id: str, req: DashboardCreateRequest) -> Dict[str, Any]:
     """Create a new dashboard for project and return new dashboard_id."""
     if not default_storage.project_exists(project_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
@@ -56,8 +56,8 @@ def create_dashboard(project_id: str, req: DashboardCreateRequest) -> dict[str, 
     }
 
 
-@router.get("/{dashboard_id}", response_model=dict[str, Any])
-def get_dashboard(project_id: str, dashboard_id: str) -> dict[str, Any]:
+@router.get("/{dashboard_id}", response_model=Dict[str, Any])
+def get_dashboard(project_id: str, dashboard_id: str) -> Dict[str, Any]:
     """Load specific dashboard layout and bindings by dashboard_id."""
     if not default_storage.project_exists(project_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
@@ -87,7 +87,7 @@ def get_dashboard(project_id: str, dashboard_id: str) -> dict[str, Any]:
 def save_dashboard(
     project_id: str,
     dashboard_id: str,
-    req: DashboardSaveRequest | SaveDashboardRequest,
+    req: Union[DashboardSaveRequest, SaveDashboardRequest],
 ) -> MessageResponse:
     """Save or update dashboard layout grid configuration and bindings."""
     if not default_storage.project_exists(project_id):

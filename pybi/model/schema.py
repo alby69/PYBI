@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Literal
+from typing import Dict, List, Literal, Optional, Union
 
 
 class DataType(str, Enum):
@@ -22,10 +22,10 @@ class Column:
     """Semantic model column metadata."""
 
     name: str
-    data_type: str | DataType = DataType.UNKNOWN
+    data_type: Union[str, DataType] = DataType.UNKNOWN
     is_hidden: bool = False
     is_key: bool = False
-    description: str | None = None
+    description: Optional[str] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.data_type, DataType):
@@ -59,18 +59,18 @@ class Table:
     """Semantic model table definition."""
 
     name: str
-    columns: list[Column] = field(default_factory=list)
-    relationships: list[Relationship] = field(default_factory=list)
-    primary_key: list[str] | None = None
-    source_node_id: str | None = None
+    columns: List[Column] = field(default_factory=list)
+    relationships: List[Relationship] = field(default_factory=list)
+    primary_key: Optional[List[str]] = None
+    source_node_id: Optional[str] = None
 
 
 @dataclass
 class SemanticModel:
     """Complete semantic model schema representing tables and relationships."""
 
-    tables: dict[str, Table] = field(default_factory=dict)
-    relationships: list[Relationship] = field(default_factory=list)
+    tables: Dict[str, Table] = field(default_factory=dict)
+    relationships: List[Relationship] = field(default_factory=list)
 
     def add_table(self, table: Table) -> None:
         """Add or update a table in the semantic model."""

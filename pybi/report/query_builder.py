@@ -1,22 +1,15 @@
 """QueryBuilder translating visual configurations into DuckDB SQL queries."""
 
-from typing import Any
-
+from typing import Any, Dict, Optional
 from pybi.dashboard.filter_context import FilterContext
-from pybi.report.visuals import (
-    BarChartVisual,
-    BaseVisual,
-    KPIVisual,
-    LineChartVisual,
-    TableVisual,
-)
+from pybi.report.visuals import BarChartVisual, BaseVisual, KPIVisual, LineChartVisual, TableVisual
 
 
 class QueryBuilder:
     """Translates visual specifications and field assignments into SQL queries."""
 
     @staticmethod
-    def build_query(visual_type: str, visual_id: str, table_name: str, config: dict[str, Any], filter_context: FilterContext | None = None) -> str:
+    def build_query(visual_type: str, visual_id: str, table_name: str, config: Dict[str, Any], filter_context: Optional[FilterContext] = None) -> str:
         """Construct SQL query string for a visual type.
 
         Args:

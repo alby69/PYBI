@@ -40,8 +40,14 @@ class AuditLogStore:
                 "status_codes": {},
             }
 
-        users = {log_item["user_id"] for log_item in cls._logs if log_item.get("user_id")}
-        durations = [log_item["duration_ms"] for log_item in cls._logs if "duration_ms" in log_item]
+        users = {
+            log_item["user_id"] for log_item in cls._logs if log_item.get("user_id")
+        }
+        durations = [
+            log_item["duration_ms"]
+            for log_item in cls._logs
+            if "duration_ms" in log_item
+        ]
         avg_time = sum(durations) / len(durations) if durations else 0.0
 
         project_queries: dict[str, int] = {}
@@ -69,7 +75,9 @@ class AuditLogStore:
 class AuditMiddleware(BaseHTTPMiddleware):
     """Middleware intercepting requests and logging structured audit metadata."""
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         start_time = time.time()
 
         # Determine user_id from auth header if present
@@ -78,6 +86,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if auth_header and auth_header.startswith("Bearer "):
             try:
                 from pybi.auth.jwt_auth import decode_access_token
+
                 token = auth_header.split(" ", 1)[1]
                 payload = decode_access_token(token)
                 if payload and "sub" in payload:
@@ -108,6 +117,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
         }
 
         AuditLogStore.log_event(event)
-        log.info(f"AUDIT: {event['method']} {event['path']} - {event['status_code']} ({event['duration_ms']}ms) by {event['user_id']}")
+        log.info(
+            f"AUDIT: {event['method']} {event['path']} - {event['status_code']} ({event['duration_ms']}ms) by {event['user_id']}"
+        )
 
         return response

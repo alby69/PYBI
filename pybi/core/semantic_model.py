@@ -2,7 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import yaml
 from pydantic import BaseModel, Field
 
@@ -93,7 +93,7 @@ class SemanticModel(BaseModel):
                 return t
         return None
 
-    def find_column(self, col_or_dim_name: str) -> Optional[tuple[SemanticTable, SemanticColumn]]:
+    def find_column(self, col_or_dim_name: str) -> Optional[Tuple[SemanticTable, SemanticColumn]]:
         """Find a column or dimension by name or table.col_name syntax."""
         if "." in col_or_dim_name:
             t_name, c_name = col_or_dim_name.split(".", 1)
@@ -109,7 +109,7 @@ class SemanticModel(BaseModel):
                         return tbl, c
         return None
 
-    def find_measure(self, meas_name: str) -> Optional[tuple[SemanticTable, SemanticMeasure]]:
+    def find_measure(self, meas_name: str) -> Optional[Tuple[SemanticTable, SemanticMeasure]]:
         """Find a measure by name or table.meas_name syntax."""
         if "." in meas_name:
             t_name, m_name = meas_name.split(".", 1)
@@ -124,6 +124,13 @@ class SemanticModel(BaseModel):
                     if m.name == meas_name:
                         return tbl, m
         return None
+
+    def get_relationships_for_table(self, table_name: str) -> List[SemanticRelationship]:
+        """Retrieve all relationships involving specified table."""
+        return [
+            rel for rel in self.relationships
+            if rel.from_table == table_name or rel.to_table == table_name
+        ]
 
     def to_dict(self) -> Dict[str, Any]:
         """Export model as dictionary."""

@@ -4,6 +4,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pybi.api.middleware.audit import AuditMiddleware
+from pybi.api.v1.admin import router as v1_admin_router
 from pybi.api.v1.auth import router as v1_auth_router
 from pybi.api.v1.projects import router as v1_projects_router
 from pybi.api.v1.files import router as v1_files_router
@@ -34,8 +36,12 @@ def create_app() -> FastAPI:
             {"name": "Exports", "description": "Async multi-format export and snapshot generation"},
             {"name": "UI Schema", "description": "Declarative Schema-Driven UI rendering specification"},
             {"name": "Viewer", "description": "Read-only published dashboard viewing endpoints"},
+            {"name": "Admin", "description": "Administrative metrics and audit operations"},
         ],
     )
+
+    # Add audit middleware
+    app.add_middleware(AuditMiddleware)
 
     # Configure strict CORS middleware
     app.add_middleware(
@@ -70,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(v1_exports_router)
     app.include_router(v1_ui_schema_router)
     app.include_router(v1_viewer_router)
+    app.include_router(v1_admin_router)
 
     # Include legacy /api routes for backward compatibility with existing tests
     app.include_router(viewer_router)

@@ -1,9 +1,14 @@
 """FastAPI router for Project Management endpoints in PyBI v1 REST API."""
 
+import os
+from pathlib import Path
+import tempfile
 from typing import List, Union
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, Body
+from fastapi.responses import FileResponse
 
+from pybi.alm.bundler import ProjectBundler
 from pybi.api.schemas import (
     ProjectCreate,
     ProjectResponse,
@@ -17,6 +22,7 @@ from pybi.api.v1.models import (
     ProjectSummary,
     ProjectUpdateRequest,
 )
+from pybi.core.semantic_model import CoreSemanticModel
 import pybi.storage.project_manager as pm
 from pybi.core.storage import default_storage, sanitize_project_id
 
@@ -115,6 +121,80 @@ def delete_project(project_id: str) -> MessageResponse:
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
     return MessageResponse(message=f"Project '{project_id}' deleted successfully", success=True)
+
+
+@router.get("/{project_id}/semantic/schema")
+def get_semantic_schema(project_id: str) -> dict:
+    """Retrieve semantic model schema for specified project."""
+    if not default_storage.project_exists(project_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+    p_dir = default_storage.get_project_data_dir(project_id)
+    yaml_path = os.path.join(os.path.dirname(p_dir), "semantic_model.yaml")
+
+    if os.path.exists(yaml_path):
+        model = CoreSemanticModel.load_yaml_file(yaml_path)
+    else:
+        model = CoreSemanticModel(name=f"{project_id}_semantic_model", tables=[], relationships=[])
+
+    return model.to_dict()
+
+
+@router.post("/{project_id}/semantic/schema")
+def save_semantic_schema(project_id: str, schema: dict = Body(...)) -> dict:
+    """Save or update semantic model schema for specified project."""
+    if not default_storage.project_exists(project_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+    try:
+        model = CoreSemanticModel.from_dict(schema)
+        p_dir = default_storage.get_project_data_dir(project_id)
+        yaml_path = os.path.join(os.path.dirname(p_dir), "semantic_model.yaml")
+        model.save_yaml_file(yaml_path)
+        return {"message": "Semantic schema saved successfully", "schema": model.to_dict()}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid semantic schema: {e}")
+
+
+@router.get("/{project_id}/export")
+def export_project_bundle(project_id: str):
+    """Export project as a portable .pybi ZIP bundle."""
+    if not default_storage.project_exists(project_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+    temp_dir = tempfile.gettempdir()
+    bundle_path = os.path.join(temp_dir, f"{project_id}.pybi")
+    out_file = ProjectBundler.create_bundle(project_id, output_path=bundle_path)
+
+    return FileResponse(
+        path=out_file,
+        filename=f"{project_id}.pybi",
+        media_type="application/zip",
+    )
+
+
+@router.post("/import", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+async def import_project_bundle(file: UploadFile = File(...)) -> ProjectResponse:
+    """Import a .pybi project bundle archive."""
+    if not file.filename.endswith(".pybi"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be a .pybi bundle archive")
+
+    content = await file.read()
+    temp_dir = tempfile.gettempdir()
+    temp_bundle = os.path.join(temp_dir, f"import_{file.filename}")
+
+    with open(temp_bundle, "wb") as f:
+        f.write(content)
+
+    try:
+        pid = ProjectBundler.extract_bundle(temp_bundle)
+        proj_data = pm.get_project(pid)
+        return _to_project_response(proj_data)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Error importing bundle: {e}")
+    finally:
+        if os.path.exists(temp_bundle):
+            os.remove(temp_bundle)
 
 
 @router.post("/{project_id}/files", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED)

@@ -78,7 +78,7 @@ def validate_pipeline(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) 
     for node in nodes:
         kind = node_kind(node)
         node_id = node.get("id", "unknown")
-        if kind in ("Filter", "Select", "GroupBy", "Pivot", "AddColumn", "Output") and not parents[node_id]:
+        if kind in ("Filter", "Select", "GroupBy", "Pivot", "Unpivot", "FillDown", "RenameColumn", "CastColumn", "SplitColumn", "TextTransform", "Deduplicate", "ConditionalColumn", "IndexColumn", "AddColumn", "Output") and not parents[node_id]:
             problems.append(f"Node '{node_id}' ({kind}) needs at least one incoming connection.")
         if kind in ("DataSource",) and parents[node_id]:
             problems.append(f"Node '{node_id}' (Data Source) must not have incoming connections.")

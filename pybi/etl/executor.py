@@ -372,6 +372,24 @@ class ETLExecutor:
                 transform_type = "join"
             elif "pivot" in label_lower:
                 transform_type = "pivot"
+            elif "unpivot" in label_lower:
+                transform_type = "unpivot"
+            elif "fill" in label_lower:
+                transform_type = "fill_down"
+            elif "rename" in label_lower:
+                transform_type = "rename_column"
+            elif "cast" in label_lower:
+                transform_type = "cast_column"
+            elif "split" in label_lower:
+                transform_type = "split_column"
+            elif "format" in label_lower or "text" in label_lower:
+                transform_type = "text_transform"
+            elif "dedup" in label_lower or "distinct" in label_lower or "unique" in label_lower:
+                transform_type = "deduplicate"
+            elif "cond" in label_lower or "if" in label_lower:
+                transform_type = "conditional_column"
+            elif "index" in label_lower:
+                transform_type = "index_column"
 
         if not transform_type:
             transform_type = "filter"
@@ -479,6 +497,170 @@ class ETLExecutor:
                 aggregate_function=agg_fn,
             )
             return pivoted_df, f"Pivoted on {on_cols} with aggregate '{agg_fn}': {len(pivoted_df)} rows"
+
+        elif transform_type == "unpivot":
+            index_cols = _as_key_list(data.get("index"))
+            on_cols = _as_key_list(data.get("on"))
+            var_name = data.get("variable_name") or "variable"
+            val_name = data.get("value_name") or "value"
+            if not on_cols:
+                raise ValueError(f"Unpivot node '{node_id}' requires unpivot columns in 'on'.")
+            unpivoted_df = parent_df.unpivot(
+                index=index_cols if index_cols else None,
+                on=on_cols,
+                variable_name=var_name,
+                value_name=val_name,
+            )
+            return unpivoted_df, f"Unpivoted columns {on_cols}: {len(unpivoted_df)} rows"
+
+        elif transform_type in ("fill_down", "filldown"):
+            cols = _as_key_list(data.get("columns"))
+            order_by = data.get("order_by")
+            if not cols:
+                raise ValueError(f"Fill Down node '{node_id}' requires target columns.")
+            df_to_fill = parent_df
+            if order_by and order_by in df_to_fill.columns:
+                df_to_fill = df_to_fill.sort(order_by)
+            exprs = [pl.col(c).forward_fill() for c in cols]
+            filled_df = df_to_fill.with_columns(exprs)
+            return filled_df, f"Filled down columns {cols}: {len(filled_df)} rows"
+
+        elif transform_type in ("rename_column", "rename"):
+            mapping = data.get("mapping") or {}
+            if not mapping and data.get("column_mapping"):
+                raw_map = str(data.get("column_mapping"))
+                mapping = {}
+                for chunk in raw_map.split(","):
+                    if ":" in chunk:
+                        old_c, new_c = chunk.split(":", 1)
+                        if old_c.strip() and new_c.strip():
+                            mapping[old_c.strip()] = new_c.strip()
+            if not mapping:
+                raise ValueError(f"Rename Column node '{node_id}' requires a column mapping.")
+            renamed_df = parent_df.rename(mapping)
+            return renamed_df, f"Renamed columns {mapping}: {len(renamed_df)} rows"
+
+        elif transform_type in ("cast_column", "cast"):
+            casts = data.get("casts") or {}
+            if not casts and data.get("type_mapping"):
+                raw_map = str(data.get("type_mapping"))
+                casts = {}
+                for chunk in raw_map.split(","):
+                    if ":" in chunk:
+                        c, t = chunk.split(":", 1)
+                        if c.strip() and t.strip():
+                            casts[c.strip()] = t.strip()
+            if not casts:
+                raise ValueError(f"Cast Column node '{node_id}' requires a type mapping.")
+
+            polars_types = {
+                "text": pl.Utf8, "string": pl.Utf8, "varchar": pl.Utf8,
+                "int": pl.Int64, "integer": pl.Int64, "bigint": pl.Int64,
+                "float": pl.Float64, "double": pl.Float64, "numeric": pl.Float64,
+                "boolean": pl.Boolean, "bool": pl.Boolean,
+                "date": pl.Date, "timestamp": pl.Datetime, "datetime": pl.Datetime,
+            }
+            exprs = [
+                pl.col(c).cast(polars_types.get(t.lower(), pl.Utf8))
+                for c, t in casts.items()
+            ]
+            casted_df = parent_df.with_columns(exprs)
+            return casted_df, f"Casted columns {casts}: {len(casted_df)} rows"
+
+        elif transform_type in ("split_column", "split"):
+            col = data.get("column")
+            delim = data.get("delimiter") if data.get("delimiter") is not None else " "
+            new_cols = _as_key_list(data.get("new_columns"))
+            if not col:
+                raise ValueError(f"Split Column node '{node_id}' requires a source column.")
+            if not new_cols:
+                raise ValueError(f"Split Column node '{node_id}' requires new column names.")
+
+            split_df = parent_df.with_columns(pl.col(col).str.split(delim).alias("_split_parts"))
+            exprs = [
+                pl.col("_split_parts").list.get(i).alias(col_name)
+                for i, col_name in enumerate(new_cols)
+            ]
+            res_df = split_df.with_columns(exprs).drop("_split_parts")
+            return res_df, f"Split column '{col}' into {new_cols}: {len(res_df)} rows"
+
+        elif transform_type in ("text_transform", "text"):
+            cols = _as_key_list(data.get("columns"))
+            act = (data.get("transform_action") or data.get("action") or "trim").lower()
+            if not cols:
+                raise ValueError(f"Text Transform node '{node_id}' requires target columns.")
+
+            exprs = []
+            for c in cols:
+                if act == "trim":
+                    exprs.append(pl.col(c).str.strip_chars())
+                elif act in ("upper", "uppercase"):
+                    exprs.append(pl.col(c).str.to_uppercase())
+                elif act in ("lower", "lowercase"):
+                    exprs.append(pl.col(c).str.to_lowercase())
+                elif act == "clean":
+                    exprs.append(pl.col(c).str.replace_all(r"[^a-zA-Z0-9 ]", ""))
+            transformed_df = parent_df.with_columns(exprs)
+            return transformed_df, f"Applied text action '{act}' to columns {cols}: {len(transformed_df)} rows"
+
+        elif transform_type in ("deduplicate", "distinct"):
+            cols = _as_key_list(data.get("columns"))
+            if cols:
+                dedup_df = parent_df.unique(subset=cols)
+            else:
+                dedup_df = parent_df.unique()
+            return dedup_df, f"Deduplicated rows ({cols if cols else 'all columns'}): {len(dedup_df)} rows remaining"
+
+        elif transform_type in ("conditional_column", "conditional"):
+            new_col = (data.get("new_column") or "conditional_col").strip()
+            if_cond = data.get("if_condition") or data.get("condition")
+            then_val = data.get("then_value") or data.get("then")
+            else_val = data.get("else_value") if data.get("else_value") is not None else data.get("else")
+            cases = data.get("cases") or []
+
+            if not if_cond and not cases:
+                raise ValueError(f"Conditional Column node '{node_id}' requires an IF condition or cases.")
+
+            if cases:
+                parts = []
+                for item in cases:
+                    cond = item.get("when") or item.get("if_condition")
+                    val = item.get("then") or item.get("then_value")
+                    v_str = f"'{val}'" if isinstance(val, str) else str(val)
+                    parts.append(f"WHEN {cond} THEN {v_str}")
+                e_str = f"'{else_val}'" if isinstance(else_val, str) else str(else_val)
+                case_sql = f"CASE {' '.join(parts)} ELSE {e_str} END"
+            else:
+                t_str = f"'{then_val}'" if isinstance(then_val, str) else str(then_val)
+                e_str = f"'{else_val}'" if isinstance(else_val, str) else (str(else_val) if else_val is not None else "NULL")
+                case_sql = f"CASE WHEN {if_cond} THEN {t_str} ELSE {e_str} END"
+
+            temp_conn = self.duckdb_conn
+            temp_conn.register("source_df", parent_df)
+            try:
+                cond_df = temp_conn.query(f"SELECT *, {case_sql} AS {new_col} FROM source_df").pl()
+            finally:
+                try:
+                    temp_conn.unregister("source_df")
+                except Exception:
+                    pass
+            return cond_df, f"Added conditional column '{new_col}': {len(cond_df)} rows"
+
+        elif transform_type in ("index_column", "index"):
+            col_name = data.get("column_name") or "index"
+            start_val = int(data.get("start_value", 1))
+            inc_val = int(data.get("increment", 1))
+
+            if inc_val == 1 and start_val == 1:
+                idx_df = parent_df.with_row_index(name=col_name, offset=1)
+            elif inc_val == 1 and start_val == 0:
+                idx_df = parent_df.with_row_index(name=col_name, offset=0)
+            else:
+                df_idx = parent_df.with_row_index(name="_row_num", offset=0)
+                idx_df = df_idx.with_columns(
+                    (pl.col("_row_num") * inc_val + start_val).alias(col_name)
+                ).drop("_row_num")
+            return idx_df, f"Added index column '{col_name}' starting at {start_val}: {len(idx_df)} rows"
 
         elif transform_type in ("add_column", "addcolumn", "calculated_column"):
             new_column = (data.get("new_column") or data.get("column") or "").strip()

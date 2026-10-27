@@ -25,6 +25,7 @@ PyBI is designed as a decoupled, API-First Business Intelligence platform.
 │                      Core Analytical & Storage Engine                  │
 │  ┌───────────────────────┐  ┌───────────────────────────────────────┐ │
 │  │ Polars Engine (ETL)   │  │ DuckDB Engine (SQL & Query Folding)   │ │
+│  │ (Transforms & Nodes)  │  │ (Unpivot, FillDown, Conditional, etc.)│ │
 │  └───────────────────────┘  └───────────────────────────────────────┘ │
 │  ┌───────────────────────┐  ┌───────────────────────────────────────┐ │
 │  │ Semantic Model Engine │  │ Redis Cache & File Project Storage    │ │

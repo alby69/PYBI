@@ -11,7 +11,8 @@
 - **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, Semantic Queries, and Viewer with Pydantic schemas.
 - **Frontend Core:** NiceGUI + Vue 3 & Quasar with **Declarative JSON-to-UI Engine (`DynamicRenderer`)** consuming REST APIs.
 - **UI State Management:** Pinia / Vue Reactive Store (`uiStore.js`) fetching schemas from FastAPI (`/api/v1/ui/schema/{page_name}`)
-- **ETL Visual Canvas:** [Vue Flow (`@vue-flow/core`)](https://vueflow.dev/) wrapped as a custom UI element
+- **ETL Visual Canvas & Power Query Parity:** [Vue Flow (`@vue-flow/core`)](https://vueflow.dev/) with full Power Query Editor capabilities: Unpivot, Fill Down, Rename, Cast Type, Split Column, Text Format (Trim/Upper/Lower/Clean), Deduplicate, Conditional Column, and Index Column.
+- **Query Folding Pipeline:** Compiles complex ETL DAG visual transformations into optimized single-statement DuckDB SQL queries via Ibis & SQLGlot.
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom UI element
 - **Analytical Engine:** DuckDB + Polars
 - **Connectors & Caching:** SQLAlchemy (Snowflake, BigQuery, Postgres, SQLite), Redis Query Cache

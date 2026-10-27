@@ -3,8 +3,26 @@
 Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaforma BI open-source 100% Python, pensata come alternativa moderna e leggera a PowerBI Desktop.
 
 ## 📌 Stato Attuale
-- **Fasi Completate:** Fase 1 (Foundation & Scaffolding), Fase 2 (Core Data Engine & Visual Binding), Fase 2.5 (Advanced Analytics & Excel-like UX), Fase 3 (Persistence, Auth & Advanced Features), Fase 4 (Production Readiness & Polish), Fase 5 (Publishing & Export Engine) e Fase 6 (Decoupled REST API Architecture)
-- **Stato Progetto:** Release 1.0 General Availability (✅ Produzione Pronta con Architettura API REST Decoupled)
+- **Fasi Completate:** Fase 1 (Foundation & Scaffolding), Fase 2 (Core Data Engine & Visual Binding), Fase 2.5 (Advanced Analytics & Excel-like UX), Fase 3 (Persistence, Auth & Advanced Features), Fase 4 (Production Readiness & Polish), Fase 5 (Publishing & Export Engine), Fase 6 (Decoupled REST API Architecture) e Fase 7 (Power Query Editor Parity)
+- **Stato Progetto:** Release 1.1 General Availability (✅ Produzione Pronta con Power Query Editor Parity & SQL Query Folding)
+
+---
+
+## ⚡ Fase 7: Power Query Editor Parity & Advanced Transformations (✅ COMPLETATA)
+
+- [x] **Epic 1: Column & Shaping Transformations**
+  - [x] `UnpivotNode`: Trasformazione unpivot di colonne in attributi riga (`UNPIVOT` DuckDB / `df.unpivot` Polars).
+  - [x] `FillDownNode`: Riempimento valori mancanti (forward fill / `LAST_VALUE IGNORE NULLS`).
+  - [x] `RenameColumnNode`: Ridenominazione colonne con alias SQL e supporto mapping.
+  - [x] `CastColumnNode`: Conversione tipi di dato (Text, Int, Float, Boolean, Date, Timestamp).
+  - [x] `SplitColumnNode`: Divisione colonne di testo per delimitatore (`STR_SPLIT_PART`).
+  - [x] `TextTransformNode`: Formattazione testo (Trim, Upper, Lower, Clean).
+
+- [x] **Epic 2: Row & Advanced Transformations**
+  - [x] `DeduplicateNode`: Rimozione duplicati su intera tabella o sottoinsieme di colonne.
+  - [x] `ConditionalColumnNode`: Colonna condizionale dinamica (`CASE WHEN ... THEN ... ELSE ... END`).
+  - [x] `IndexColumnNode`: Colonna indice con valore iniziale e incremento personalizzabili.
+  - [x] **Single-Query SQL Query Folding:** Garanzia di compilazione ad una singola query SQL DuckDB/Ibis senza materializzazioni intermedie.
 
 ---
 

@@ -6,13 +6,22 @@ from .output import OutputNode
 from .source import DataSourceNode, SourceNode
 from .transform import (
     CalculatedColumnNode,
+    CastColumnNode,
+    ConditionalColumnNode,
+    DeduplicateNode,
+    FillDownNode,
     FilterNode,
     GroupByAggregateNode,
     GroupByNode,
+    IndexColumnNode,
     JoinNode,
     PivotNode,
+    RenameColumnNode,
     SelectColumnsNode,
     SelectNode,
+    SplitColumnNode,
+    TextTransformNode,
+    UnpivotNode,
 )
 
 __all__ = [
@@ -26,6 +35,15 @@ __all__ = [
     "GroupByAggregateNode",
     "JoinNode",
     "PivotNode",
+    "UnpivotNode",
+    "FillDownNode",
+    "RenameColumnNode",
+    "CastColumnNode",
+    "SplitColumnNode",
+    "TextTransformNode",
+    "DeduplicateNode",
+    "ConditionalColumnNode",
+    "IndexColumnNode",
     "CalculatedColumnNode",
     "CustomPythonNode",
     "OutputNode",

@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pybi.api.middleware.audit import AuditMiddleware, audit_store
 from pybi.api.v1.auth import router as v1_auth_router
 from pybi.api.v1.projects import router as v1_projects_router
 from pybi.api.v1.files import router as v1_files_router
@@ -20,12 +21,12 @@ from pybi.server.ui_schema import router as ui_schema_router
 
 
 def register_routers(app: FastAPI) -> None:
-    """Register all API routers (v1 + legacy) on the given FastAPI-compatible app.
+    """Register all API routers (v1 + legacy) on the given FastAPI-compatible app."""
+    # Admin metrics endpoint (Task 5.2)
+    @app.get("/api/v1/admin/usage-metrics", tags=["Admin"])
+    def get_usage_metrics():
+        return audit_store.get_metrics()
 
-    Used by ``create_app`` for the standalone REST server and by the NiceGUI app,
-    so both serve the same ``/api/...`` endpoints without mounting a sub-application
-    (mounting would shadow NiceGUI's dynamically registered routes such as uploads).
-    """
     # Include versioned v1 REST API routers
     app.include_router(v1_auth_router)
     app.include_router(v1_projects_router)
@@ -36,7 +37,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(v1_ui_schema_router)
     app.include_router(v1_viewer_router)
 
-    # Include legacy /api routes for backward compatibility with existing tests
+    # Include legacy /api routes for backward compatibility
     app.include_router(viewer_router)
     app.include_router(export_router)
     app.include_router(ui_schema_router)
@@ -47,7 +48,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="PyBI Analytics API",
         version="1.0.0",
-        description="Pure Decoupled API-First REST Server for PyBI (Python Business Intelligence Platform)",
+        description="Pure Decoupled API-First REST Server for PyBI",
         openapi_tags=[
             {"name": "Auth", "description": "Authentication and user session management"},
             {"name": "Projects", "description": "Project management, storage, and file upload operations"},
@@ -57,8 +58,12 @@ def create_app() -> FastAPI:
             {"name": "Exports", "description": "Async multi-format export and snapshot generation"},
             {"name": "UI Schema", "description": "Declarative Schema-Driven UI rendering specification"},
             {"name": "Viewer", "description": "Read-only published dashboard viewing endpoints"},
+            {"name": "Admin", "description": "Observability, usage metrics, and audit logging"},
         ],
     )
+
+    # Mount Audit Middleware (Task 5.1)
+    app.add_middleware(AuditMiddleware)
 
     # Configure strict CORS middleware
     app.add_middleware(

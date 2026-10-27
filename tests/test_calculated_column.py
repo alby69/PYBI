@@ -85,6 +85,31 @@ def test_apply_requires_a_column_name():
         apply_calculated_column(pl.DataFrame({"a": [1]}), "  ")
 
 
+def test_apply_custom_expression_concatenation_operators():
+    df = pl.DataFrame({
+        "NomeClienteSped": ["Acme Corp", "Beta LLC"],
+        "CittaClienteSped": ["Milano", "Torino"]
+    })
+
+    # Test double pipe operator ||
+    res_pipes = apply_calculated_column(
+        df,
+        "key_sped",
+        mode="expression",
+        expression="NomeClienteSped || '_' || CittaClienteSped"
+    )
+    assert res_pipes["key_sped"].to_list() == ["Acme Corp_Milano", "Beta LLC_Torino"]
+
+    # Test CONCAT function
+    res_concat = apply_calculated_column(
+        df,
+        "key_sped_concat",
+        mode="expression",
+        expression="CONCAT(NomeClienteSped, '_', CittaClienteSped)"
+    )
+    assert res_concat["key_sped_concat"].to_list() == ["Acme Corp_Milano", "Beta LLC_Torino"]
+
+
 def test_node_factory_builds_concat_node():
     data = build_node_data(
         "AddColumn",
@@ -265,13 +290,16 @@ def test_executor_expression_mode(tmp_path):
                 "transform_type": "add_column",
                 "new_column": "key_sped",
                 "mode": "expression",
-                "expression": "upper(nome) || '-' || upper(citta)",
+                "expression": "NomeClienteSped || '_' || CittaClienteSped",
             },
         },
     ]
     edges = [{"source": "source_1", "target": "calc_1"}]
 
+    # Create CSV with exact column names expected
+    _write_csv(tmp_path / "dati.csv", [{"NomeClienteSped": "anna", "CittaClienteSped": "roma"}])
+
     result = execute_dag({"nodes": nodes, "edges": edges}, base_dir=str(tmp_path))
 
     assert result.status == "success", result.error
-    assert result.dataframes["calc_1"]["key_sped"].to_list() == ["ANNA-ROMA"]
+    assert result.dataframes["calc_1"]["key_sped"].to_list() == ["anna_roma"]

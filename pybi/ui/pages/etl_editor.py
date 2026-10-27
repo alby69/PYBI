@@ -23,11 +23,9 @@ def create_etl_editor_page():
     ui.label('Power Query Editor - Visual Data Transformation').classes('text-2xl font-bold q-mb-xs')
     ui.label('Transforms single-table data sources sequentially using Applied Steps, column actions, and interactive preview.').classes('text-gray-600 q-mb-md')
 
-    # State variables
-    query_state = {
-        "query_name": "Sales_Data",
-        "source": {"type": "csv", "path": "sales_data.csv"},
-        "steps": [
+    # Per-table applied steps dictionary & current source table state
+    applied_steps_by_table: Dict[str, List[Dict[str, Any]]] = {
+        "sales_data.csv": [
             {
                 "id": "step_1",
                 "name": "Righe filtrate (region = 'EU')",
@@ -35,6 +33,14 @@ def create_etl_editor_page():
                 "params": {"condition": "region = 'EU'"}
             }
         ]
+    }
+    current_source_table: str = "sales_data.csv"
+
+    # State variables
+    query_state = {
+        "query_name": "Sales_Data",
+        "source": {"type": "csv", "path": current_source_table},
+        "steps": copy.deepcopy(applied_steps_by_table["sales_data.csv"])
     }
     active_step_index = len(query_state["steps"])  # 0 = Origine, 1..N = Step N
     active_df: Optional[pl.DataFrame] = None
@@ -51,10 +57,11 @@ def create_etl_editor_page():
 
     # --- Project switch handler ----------------------------------------------------
     def handle_project_switch(pid, action):
+        nonlocal current_source_table
         if action == 'create':
-            query_state["query_name"] = "Sales_Data"
-            query_state["source"] = {"type": "csv", "path": "sales_data.csv"}
-            query_state["steps"] = [
+            current_source_table = "sales_data.csv"
+            applied_steps_by_table.clear()
+            applied_steps_by_table["sales_data.csv"] = [
                 {
                     "id": "step_1",
                     "name": "Righe filtrate (region = 'EU')",
@@ -62,6 +69,9 @@ def create_etl_editor_page():
                     "params": {"condition": "region = 'EU'"}
                 }
             ]
+            query_state["query_name"] = "Sales_Data"
+            query_state["source"] = {"type": "csv", "path": current_source_table}
+            query_state["steps"] = copy.deepcopy(applied_steps_by_table["sales_data.csv"])
             save_pipeline(notify=False)
             log_container.push(f'[Project] Created "{pid}" with sample query.')
             ui.notify(f'Progetto "{pid}" creato.', type='positive')
@@ -90,10 +100,8 @@ def create_etl_editor_page():
             log_container.push(f'[Upload] File "{e.file.name}" salvato in: {file_path}')
             ui.notify(f'File "{e.file.name}" caricato con successo!', type='positive')
             refresh_file_list()
-            # Set as current source if none selected
-            query_state["source"] = {"type": "csv", "path": e.file.name}
-            source_select.value = e.file.name
-            update_preview()
+            # Set as current source table
+            update_source(e.file.name)
         except Exception as err:
             ui.notify(f'Errore durante il caricamento: {err}', type='negative')
 
@@ -121,6 +129,8 @@ def create_etl_editor_page():
         pid = project_manager.project_id
         if default_storage.delete_project_file(pid, filename):
             ui.notify(f'File "{filename}" eliminato.', type='positive')
+            if filename in applied_steps_by_table:
+                del applied_steps_by_table[filename]
             refresh_file_list()
         else:
             ui.notify(f'Impossibile eliminare "{filename}".', type='negative')
@@ -150,7 +160,7 @@ def create_etl_editor_page():
 
             source_select = ui.select(
                 options=get_source_options(),
-                value=query_state["source"].get("path", "sales_data.csv"),
+                value=current_source_table,
                 label='Origine Dati',
                 on_change=lambda e: update_source(e.value)
             ).classes('w-60').props('dense outlined')
@@ -199,15 +209,15 @@ def create_etl_editor_page():
 
     # --- Central Split-View: Data Grid (Left 3/4) + Applied Steps (Right 1/4) ------
     with ui.row().classes('w-full gap-4 items-start q-mb-md'):
-        # Left Panel: Data Grid
-        with ui.card().classes('flex-grow p-4 min-h-[450px] shadow-sm border border-slate-200').style('width: 72%'):
+        # Left Panel: Data Grid with horizontal and vertical overflow scrolling
+        with ui.card().classes('flex-grow p-4 min-h-[450px] shadow-sm border border-slate-200 overflow-x-auto overflow-y-auto min-w-0').style('width: 72%'):
             with ui.row().classes('w-full items-center justify-between q-mb-xs'):
                 preview_status_label = ui.label('Anteprima Dati').classes('font-bold text-base text-slate-800')
                 rows_count_label = ui.label('').classes('text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded')
 
-            grid_container = ui.column().classes('w-full overflow-x-auto min-h-[360px]')
+            grid_container = ui.column().classes('w-full overflow-x-auto min-h-[360px]').style('overflow-x: auto; overflow-y: auto; min-width: 100%;')
 
-        # Right Panel: Applied Steps (Passaggi Applicati)
+        # Right Panel: Applied Steps (Passaggi Applicati per Tabella)
         with ui.card().classes('p-4 shadow-sm border border-slate-200 bg-slate-50 min-h-[450px]').style('width: 26%'):
             ui.label('📋 Passaggi Applicati').classes('font-bold text-base text-slate-800 q-mb-xs')
             ui.label('Clicca su un passaggio per visualizzare l\'anteprima a quel punto.').classes('text-xs text-gray-500 q-mb-sm')
@@ -228,12 +238,25 @@ def create_etl_editor_page():
         status_label.set_text(f'State: Query name set to "{query_state["query_name"]}"')
 
     def update_source(filepath: str):
+        nonlocal current_source_table
         if not filepath:
             return
+
+        # Save current table steps before switching
+        if current_source_table:
+            applied_steps_by_table[current_source_table] = copy.deepcopy(query_state.get("steps", []))
+
+        current_source_table = filepath
+        source_select.value = current_source_table
+
+        # Load or initialize steps for the selected table
+        table_steps = applied_steps_by_table.get(current_source_table, [])
         query_state["source"] = {"type": "csv" if not filepath.endswith(".parquet") else "parquet", "path": filepath}
+        query_state["steps"] = copy.deepcopy(table_steps)
+
         record_history()
-        log_container.push(f'[Source] Impostata origine dati: {filepath}')
-        update_preview(step_idx=0)
+        log_container.push(f'[Source] Selezionata tabella sorgente: {filepath}')
+        update_preview(step_idx=len(query_state["steps"]))
 
     def apply_undo():
         prev = history.undo()
@@ -291,18 +314,18 @@ def create_etl_editor_page():
         rows_count_label.set_text(f'{len(df)} righe | {len(df.columns)} colonne')
 
         step_title = "Origine Dati" if active_step_index == 0 else query_state["steps"][active_step_index - 1]["name"]
-        preview_status_label.set_text(f'Anteprima: {step_title}')
+        preview_status_label.set_text(f'Anteprima ({current_source_table}): {step_title}')
 
         table_args = build_preview_table(df.head(1000))
 
         # Render custom interactive header controls above or inside NiceGUI table
         with grid_container:
-            # Header column action chips
-            with ui.row().classes('w-full gap-2 items-center q-mb-xs flex-wrap bg-slate-100 p-2 rounded border border-slate-200'):
-                ui.label('Azioni Colonna:').classes('text-xs font-bold text-slate-600')
+            # Header column action chips - non-wrapping single row with horizontal overflow scroll
+            with ui.row().classes('w-full gap-2 items-center q-mb-xs flex-nowrap overflow-x-auto bg-slate-100 p-2 rounded border border-slate-200').style('white-space: nowrap; overflow-x: auto; min-width: 100%;'):
+                ui.label('Azioni Colonna:').classes('text-xs font-bold text-slate-600 flex-shrink-0')
                 for col_name in df.columns:
                     col_type_str = str(df[col_name].dtype)
-                    with ui.button(f'{col_name} ({col_type_str})').props('dense outline size=xs icon-right=arrow_drop_down color=slate').classes('lowercase'):
+                    with ui.button(f'{col_name} ({col_type_str})').props('dense outline size=xs icon-right=arrow_drop_down color=slate').classes('lowercase flex-shrink-0').style('white-space: nowrap;'):
                         with ui.menu():
                             ui.menu_item(f'Rinomina "{col_name}"', on_click=lambda c=col_name: open_rename_dialog(c))
                             ui.menu_item('Modifica Tipo...', on_click=lambda c=col_name: open_cast_dialog(c))
@@ -311,11 +334,12 @@ def create_etl_editor_page():
                             ui.menu_item('Sostituisci Valori...', on_click=lambda c=col_name: open_replace_dialog(c))
                             ui.menu_item('Filtra per Colonna...', on_click=lambda c=col_name: open_filter_dialog(c))
 
-            # Table preview
-            if table_args['row_key']:
-                ui.table(**table_args).classes('w-full font-mono text-xs')
-            else:
-                ui.table(columns=table_args['columns'], rows=table_args['rows']).classes('w-full font-mono text-xs')
+            # Table preview container with horizontal scrolling
+            with ui.element('div').classes('w-full overflow-x-auto').style('overflow-x: auto; min-width: 100%;'):
+                if table_args['row_key']:
+                    ui.table(**table_args).classes('w-full font-mono text-xs')
+                else:
+                    ui.table(columns=table_args['columns'], rows=table_args['rows']).classes('w-full font-mono text-xs')
 
     def render_applied_steps_panel():
         steps_list_container.clear()
@@ -327,7 +351,7 @@ def create_etl_editor_page():
                 with ui.row().classes('w-full items-center justify-between'):
                     with ui.row().classes('items-center gap-2'):
                         ui.icon('settings', color='primary', size='xs')
-                        ui.label('Origine Dati').classes('text-xs font-semibold')
+                        ui.label(f'Origine ({current_source_table})').classes('text-xs font-semibold truncate')
                     ui.badge('0', color='primary').props('dense')
 
             # Steps 1..N
@@ -364,13 +388,17 @@ def create_etl_editor_page():
     def add_step(operation: str, name: str, params: Dict[str, Any]):
         record_history()
         new_step_id = f"step_{len(query_state['steps']) + 1}"
-        query_state["steps"].append({
+        new_step = {
             "id": new_step_id,
             "name": name,
             "operation": operation,
             "params": params,
-        })
-        log_container.push(f'[Step Aggiunto] {name} ({operation})')
+        }
+        query_state["steps"].append(new_step)
+        if current_source_table:
+            applied_steps_by_table[current_source_table] = copy.deepcopy(query_state["steps"])
+
+        log_container.push(f'[Step Aggiunto ({current_source_table})] {name} ({operation})')
         status_label.set_text('State: Modified, save to persist')
         update_preview(step_idx=len(query_state["steps"]))
 
@@ -378,7 +406,9 @@ def create_etl_editor_page():
         record_history()
         if 1 <= step_idx <= len(query_state["steps"]):
             removed = query_state["steps"].pop(step_idx - 1)
-            log_container.push(f'[Step Rimosso] {removed.get("name")}')
+            if current_source_table:
+                applied_steps_by_table[current_source_table] = copy.deepcopy(query_state["steps"])
+            log_container.push(f'[Step Rimosso ({current_source_table})] {removed.get("name")}')
         new_idx = min(step_idx - 1, len(query_state["steps"]))
         update_preview(step_idx=new_idx)
 
@@ -463,11 +493,38 @@ def create_etl_editor_page():
     def open_add_column_dialog():
         cols = active_df.columns if active_df is not None else []
         d = ui.dialog()
-        with d, ui.card().classes('w-[450px] p-4'):
+        with d, ui.card().classes('w-[550px] max-w-full p-4'):
             ui.label('Aggiungi Colonna Personalizzata').classes('font-bold text-lg q-mb-xs')
-            new_col_in = ui.input(label='Nome Nuova Colonna', value='nuova_colonna').classes('w-full')
-            expr_in = ui.input(label='Espressione SQL / Formula (es. amount * 1.2)', value='').classes('w-full')
-            ui.label(f'Colonne disponibili: {", ".join(cols)}').classes('text-xs text-gray-500 q-mt-xs')
+            new_col_in = ui.input(
+                label='Nome Nuova Colonna',
+                value='nuova_colonna',
+                placeholder='nuova_colonna'
+            ).classes('w-full').props('outlined dense')
+
+            expr_in = ui.input(
+                label='Espressione SQL / Formula',
+                value='',
+                placeholder='es. amount * 1.2 oppure NomeClienteSped || \'_\' || CittaClienteSped'
+            ).classes('w-full q-mt-xs').props('outlined dense')
+
+            ui.label(f'Colonne disponibili: {", ".join(cols)}').classes('text-xs text-slate-500 q-mt-xs font-mono')
+
+            # Expandable Interactive Help Guide (Task 1.3)
+            with ui.expansion('💡 Guida & Esempi Espressioni SQL', icon='help_outline').classes('w-full q-mt-sm bg-slate-50 border rounded text-xs'):
+                with ui.column().classes('p-2 gap-2 text-slate-700'):
+                    ui.label('💡 Esempi Pratici').classes('font-bold text-slate-900')
+                    ui.markdown(
+                        "- **Concatenazione**: `CONCAT(NomeClienteSped, '_', CittaClienteSped)` oppure `NomeClienteSped || '_' || CittaClienteSped`\n"
+                        "- **Matematica**: `prezzo * 1.22`\n"
+                        "- **Condizionale**: `CASE WHEN stato = 'OK' THEN 'Valido' ELSE 'Errore' END`"
+                    ).classes('text-xs text-slate-800')
+
+                    ui.label('📚 Funzioni Supportate (DuckDB/SQL)').classes('font-bold text-slate-900 q-mt-xs')
+                    ui.markdown(
+                        "- **Stringa**: `CONCAT()`, `UPPER()`, `LOWER()`, `SUBSTRING()`, `LENGTH()`, `TRIM()`\n"
+                        "- **Numerica**: `ROUND()`, `ABS()`, `CEIL()`, `FLOOR()`\n"
+                        "- **Logica / Null**: `COALESCE()`, `NULLIF()`, `CASE WHEN ... THEN ... END`"
+                    ).classes('text-xs text-slate-800')
 
             with ui.row().classes('w-full justify-end gap-2 q-mt-md'):
                 ui.button('Annulla', on_click=d.close).props('flat')
@@ -627,7 +684,11 @@ def create_etl_editor_page():
                     "steps": data.get("steps") or []
                 })
             query_name_input.value = query_state["query_name"]
-            source_select.value = query_state["source"].get("path", "sales_data.csv")
+            src_path = query_state["source"].get("path", "sales_data.csv")
+            source_select.value = src_path
+            current_source_table = src_path
+            applied_steps_by_table[current_source_table] = copy.deepcopy(query_state["steps"])
+
             log_container.push(f'[Storage] Caricata query ETL per progetto "{pid}".')
             status_label.set_text(f'State: Loaded from "{pid}"')
             if notify:
@@ -639,11 +700,14 @@ def create_etl_editor_page():
                 ui.notify(f'Impossibile caricare la query: {err}', type='negative')
 
     def reset_pipeline():
+        nonlocal current_source_table
+        current_source_table = "sales_data.csv"
+        applied_steps_by_table[current_source_table] = []
         query_state["query_name"] = "Sales_Data"
-        query_state["source"] = {"type": "csv", "path": "sales_data.csv"}
+        query_state["source"] = {"type": "csv", "path": current_source_table}
         query_state["steps"] = []
         query_name_input.value = query_state["query_name"]
-        source_select.value = "sales_data.csv"
+        source_select.value = current_source_table
         log_container.push('[Reset] Ripristinata query allo stato iniziale.')
         status_label.set_text('State: Reset completed')
         update_preview(step_idx=0)

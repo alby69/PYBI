@@ -20,7 +20,7 @@ STDLIB_AND_LOCAL = {
     'datetime', 'enum', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
     '__future__', 'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
-    'pybi',
+    'zipfile', 'pybi',
 }
 
 
@@ -99,7 +99,7 @@ def test_etl_connectors_are_importable():
     """Every connector must import with the declared dependencies installed.
 
     pybi.etl.connectors imports its connectors eagerly, so a single missing
-    dependency breaks the whole ETL package and makes /etl-editor return HTTP
+    dependency breaks the whole ETL package and makes /etl-editor returned HTTP
     500 in Docker.
     """
     import importlib

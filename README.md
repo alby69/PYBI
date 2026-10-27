@@ -6,6 +6,19 @@
 
 ---
 
+## 🔥 Novità ETL & UI/UX (Fase 6 Updates)
+
+- **Miglioramenti UI/UX Editor ETL:**
+  - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.
+  - **State Management dei Passaggi Applicati per Tabella:** Gestione indipendente dello stato `appliedStepsByTable` nello store Vue (`uiStore.js`) e nel Power Query Editor, per conservare ed aggiornare i passaggi specifici di ciascuna tabella sorgente selezionata.
+  - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).
+- **Potenziamento Engine ETL Backend:** Supporto completo all'operatore di concatenazione standard DuckDB `||` e alla funzione `CONCAT()` durante la creazione di colonne calcolate (`Add Custom Column`).
+- **Fondamenta Fase 6 (Enterprise Parity & Hardening):**
+  - **Semantic Layer Foundations (`pybi/core/query_resolver.py`):** Risoluzione automatica di query multi-tabella con clausole `JOIN` automatiche in DuckDB tramite `SemanticQueryResolver`.
+  - **Dynamic Row-Level Security (RLS Engine in `pybi/core/rls_engine.py`):** Iniezione dinamica e sicura di clausole `WHERE` basate sui claims dell'utente autenticato (`allowed_regions`, `user_id`, `department`).
+
+---
+
 ## 🏛️ Architecture & Stack (Decoupled API-First Engine)
 
 - **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, Semantic Queries, and Viewer with Pydantic schemas.

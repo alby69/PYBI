@@ -2,8 +2,9 @@
 
 from typing import List, Union
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 
+from pybi.alm.bundler import ProjectBundler
 from pybi.api.schemas import (
     ProjectCreate,
     ProjectResponse,
@@ -84,6 +85,18 @@ def create_project(req: Union[ProjectCreate, ProjectCreateRequest]) -> ProjectRe
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post("/import", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+async def import_project_bundle(file: UploadFile = File(...)) -> MessageResponse:
+    """Import a .pybi ZIP project package."""
+    content = await file.read()
+    res = ProjectBundler.import_bundle(content)
+    pid = res.get("project_id", "imported")
+    return MessageResponse(
+        message=f"Project package imported successfully as '{pid}'",
+        success=True,
+    )
+
+
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(project_id: str) -> ProjectResponse:
     """Load project details by project_id."""
@@ -92,6 +105,20 @@ def get_project(project_id: str) -> ProjectResponse:
         return _to_project_response(data)
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+
+@router.get("/{project_id}/export")
+def export_project_bundle(project_id: str) -> Response:
+    """Export project bundle as a .pybi ZIP archive."""
+    if not default_storage.project_exists(project_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
+
+    bundle_bytes = ProjectBundler.export_bundle(project_id)
+    return Response(
+        content=bundle_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={project_id}.pybi"},
+    )
 
 
 @router.put("/{project_id}", response_model=ProjectResponse)

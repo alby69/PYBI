@@ -73,11 +73,13 @@ class WidgetConfigurator:
                 value=self.current_widget.get('source', sources[0] if sources else '')
             ).classes('w-full mb-3')
 
+            ui.label('Semantic Model Selection (Task 1.3)').classes('text-xs font-bold text-slate-700 mt-2 mb-1')
+
             dims_str = ", ".join(self.current_widget.get('dimensions', [])) if isinstance(self.current_widget.get('dimensions'), list) else str(self.current_widget.get('dimensions', ''))
             meas_str = ", ".join(self.current_widget.get('measures', [])) if isinstance(self.current_widget.get('measures'), list) else str(self.current_widget.get('measures', ''))
 
-            dims_inp = ui.input('Dimensions (comma-separated)', value=dims_str).classes('w-full mb-2')
-            meas_inp = ui.input('Measures (comma-separated)', value=meas_str).classes('w-full mb-2')
+            dims_inp = ui.input('Semantic Dimensions (comma-separated)', value=dims_str).classes('w-full mb-2').props('placeholder="e.g. region, customer_id"')
+            meas_inp = ui.input('Calculated Measures (comma-separated)', value=meas_str).classes('w-full mb-2').props('placeholder="e.g. total_sales, avg_revenue"')
 
             val_inp = sub_inp = chart_type_select = metric_select = None
             pivot_rows_inp = pivot_cols_inp = pivot_vals_inp = pivot_agg_select = pivot_filters_inp = None

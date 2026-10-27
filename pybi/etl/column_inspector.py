@@ -5,8 +5,6 @@ property panel can offer real column names (instead of free text) for
 Select / Group By / Join / Pivot nodes.
 """
 
-from __future__ import annotations
-
 import sqlite3
 from typing import Any, Dict, List, Optional
 

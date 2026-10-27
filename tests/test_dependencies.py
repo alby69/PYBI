@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 STDLIB_AND_LOCAL = {
     'abc', 'ast', 'asyncio', 'collections', 'concurrent', 'contextlib', 'copy', 'csv', 'dataclasses',
     'datetime', 'enum', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
-    'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
+    '__future__', 'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
     'pybi',
 }

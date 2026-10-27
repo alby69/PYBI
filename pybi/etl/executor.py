@@ -51,6 +51,27 @@ def _check_join_keys(node_id: str, df: pl.DataFrame, keys: List[str], side: str)
         )
 
 
+def _quote_identifier(name: str) -> str:
+    """Quote a table/column identifier for DuckDB."""
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _list_temporary_tables(conn: duckdb.DuckDBPyConnection) -> List[str]:
+    """Return the ``_pybi_tmp_*`` tables registered on a DuckDB connection.
+
+    ibis' ``list_tables()`` calls ``fetch_arrow_table()``, which newer DuckDB
+    releases renamed to ``to_arrow_table()``. Querying ``information_schema``
+    directly keeps the executor working with both old and new versions.
+    """
+    try:
+        rows = conn.query(
+            "SELECT DISTINCT table_name FROM information_schema.tables"
+        ).fetchall()
+    except Exception:
+        return []
+    return [str(row[0]) for row in rows if str(row[0]).startswith("_pybi_tmp_")]
+
+
 def configure_duckdb_connection(
     conn: duckdb.DuckDBPyConnection,
     threads: Optional[int] = None,
@@ -133,21 +154,22 @@ class ETLExecutor:
         raw_sql = self.compiler.compile(dag, source_expr)
         optimized_sql = self.optimizer.optimize(raw_sql)
 
-        for table in self.ibis_con.list_tables():
-            if table.startswith("_pybi_tmp_"):
-                df_tmp = self.ibis_con.table(table).execute()
+        ibis_conn = getattr(self.ibis_con, "con", None)
+        if ibis_conn is not None:
+            for table in _list_temporary_tables(ibis_conn):
+                df_tmp = ibis_conn.query(f"SELECT * FROM {_quote_identifier(table)}").pl()
                 self.duckdb_conn.register(table, df_tmp)
 
-        if hasattr(self.ibis_con, "con") and hasattr(self.ibis_con.con, "execute"):
+        # ``execute(...).pl()`` no longer works on recent DuckDB releases: the
+        # connection returned by ``execute`` lost the Polars conversion helper.
+        # ``query(...).pl()`` is available on both old and new versions.
+        if ibis_conn is not None:
             try:
-                res_duck = self.ibis_con.con.execute(optimized_sql)
-                result_df = res_duck.pl()
+                result_df = ibis_conn.query(optimized_sql).pl()
             except Exception:
-                res_duck = self.duckdb_conn.execute(optimized_sql)
-                result_df = res_duck.pl()
+                result_df = self.duckdb_conn.query(optimized_sql).pl()
         else:
-            res_duck = self.duckdb_conn.execute(optimized_sql)
-            result_df = res_duck.pl()
+            result_df = self.duckdb_conn.query(optimized_sql).pl()
 
         return result_df, raw_sql, optimized_sql
 

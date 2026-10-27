@@ -212,7 +212,7 @@ class SemanticQueryResolver:
 
         sql = self.resolve_to_sql(request, source_df=source_df)
 
-        res_df = self.duckdb_conn.execute(sql).pl()
+        res_df = self.duckdb_conn.query(sql).pl()
 
         rows = res_df.to_dicts()
         columns = res_df.columns

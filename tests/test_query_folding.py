@@ -117,3 +117,33 @@ def test_etl_executor_nodes_end_to_end():
     assert set(result_df["category"].to_list()) == {"A", "B", "C"}
     assert "WHERE" in raw_sql.upper() or "FILTER" in raw_sql.upper()
     assert "GROUP BY" in opt_sql.upper()
+
+
+def test_etl_executor_materializes_non_foldable_node():
+    """A non-foldable node creates a temporary table that execute_nodes must resolve.
+
+    The transfer used to rely on ibis' ``list_tables()``, which broke with newer
+    DuckDB releases because it calls the removed ``fetch_arrow_table()`` API.
+    """
+    executor = ETLExecutor()
+    source_df = pl.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+
+    def double_y(pl_df: pl.DataFrame) -> pl.DataFrame:
+        return pl_df.with_columns((pl.col("y") * 2).alias("y"))
+
+    dag = [
+        FilterNode("f1", column="x", operator=">", value=1),
+        CustomPythonNode("c1", transform_fn=double_y),
+        GroupByNode(
+            "g1",
+            group_cols=["x"],
+            agg_col="y",
+            agg_func="sum",
+            output_alias="total",
+        ),
+    ]
+
+    result_df, raw_sql, opt_sql = executor.execute_nodes(dag, source_df=source_df)
+
+    assert "_pybi_tmp_c1_" in raw_sql
+    assert result_df.to_dicts() == [{"x": 2, "total": 10}, {"x": 3, "total": 12}]

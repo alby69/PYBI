@@ -11,8 +11,6 @@ Both the executor and the live preview in the property panel use the helpers
 below, so what you see in the panel is exactly what the pipeline computes.
 """
 
-from __future__ import annotations
-
 from typing import Any, Iterable, List, Optional
 
 import duckdb

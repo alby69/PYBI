@@ -313,7 +313,7 @@ def _compute_server_pivot_duckdb(
 
     if not group_fields:
         q = f"SELECT {', '.join(select_exprs[len(group_fields):])} FROM source_tbl{where_sql}"
-        res = conn.execute(q).fetchall()
+        res = conn.query(q).fetchall()
         cells = [float(res[0][i]) if res and res[0][i] is not None else 0.0 for i in range(len(val_specs))]
         return {
             'valueSpecs': val_specs,
@@ -325,7 +325,7 @@ def _compute_server_pivot_duckdb(
 
     group_str = ", ".join([f'"{g}"' for g in group_fields])
     q = f"SELECT {', '.join(select_exprs)} FROM source_tbl{where_sql} GROUP BY {group_str}"
-    res_df = conn.execute(q).pl()
+    res_df = conn.query(q).pl()
 
     row_keys_set = set()
     col_keys_set = set()

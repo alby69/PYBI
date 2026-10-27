@@ -119,7 +119,7 @@ def test_viewer_switches_dashboard_per_project(page):
 
 
 def test_viewer_is_read_only(page):
-    expect(page.get_by_text('READ ONLY')).to_be_visible()
+    expect(page.get_by_text('READ ONLY').first).to_be_visible()
     items = page.locator('.vgl-item:not(.vgl-item--placeholder)')
     count = items.count()
     assert count >= 1

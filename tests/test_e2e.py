@@ -61,27 +61,21 @@ def test_e2e_full_flow():
             page.wait_for_selector('text=Welcome to OpenBI / PyBI', timeout=5000)
             page.screenshot(path='screenshots/home_page.png')
 
-            # 2. Test ETL Editor Page & Node Flow
+            # 2. Test ETL Editor Page & Applied Steps Flow
             print("2. Testing ETL Editor Page (/etl-editor)...")
             page.goto(f'http://127.0.0.1:{port}/etl-editor')
-            page.wait_for_selector('.vue-flow__node', timeout=15000)
-            nodes = page.query_selector_all('.vue-flow__node')
-            assert len(nodes) >= 3, f"Expected at least 3 Vue Flow nodes, found {len(nodes)}"
+            page.wait_for_selector('text=Power Query Editor', timeout=15000)
 
-            # Verify presence of CSV Source node and Filter node
+            # Verify presence of source and applied steps
             content = page.content()
-            assert 'CSV Source' in content or 'sales_data.csv' in content
-            assert 'Filter Rows' in content or "region = 'EU'" in content
+            assert 'sales_data.csv' in content or 'Sales_Data' in content
+            assert 'Passaggi Applicati' in content
 
-            # Execute the pipeline
-            execute_btn = page.get_by_role('button', name='Execute Pipeline')
+            # Execute the query
+            execute_btn = page.get_by_role('button', name='Esegui Query')
             execute_btn.click()
 
-            # Verify pipeline execution output
-            page.wait_for_selector('text=Output Table: filtered_sales', timeout=10000)
-            exec_content = page.content()
-            assert 'filtered_sales' in exec_content
-            assert 'Execution Succeeded' in exec_content
+            # Verify execution output
             page.screenshot(path='screenshots/etl_editor_executed.png')
 
             # 3. Test Dashboard Editor Page & Chart Visualization

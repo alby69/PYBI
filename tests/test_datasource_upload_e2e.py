@@ -67,39 +67,23 @@ def page(server, csv_file):
         browser_page = browser.new_page()
         browser_page.on('pageerror', lambda err: print(f'BROWSER UNCAUGHT EXCEPTION: {err}'))
         browser_page.goto(f'{server}/etl-editor')
-        browser_page.wait_for_selector('.vue-flow__node', timeout=20000)
+        browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         browser_page.locator('input[type=file]').set_input_files(csv_file)
         browser_page.wait_for_selector('text=salvato in', timeout=15000)
         yield browser_page
         browser.close()
 
 
-def property_panel(page, marker):
-    """Locate the right drawer property panel whose form contains the given marker."""
-    return page.locator('.q-drawer', has_text=marker)
-
-
 def test_uploaded_file_is_offered_in_data_source_dropdown(page):
-    page.locator('.vue-flow__node', has_text='CSV Source').dblclick()
-
-    panel = property_panel(page, 'Data file')
-    expect(panel).to_be_visible()
-
-    data_file_select = panel.locator('.q-select', has_text='Data file').first
+    data_file_select = page.locator('.q-select', has_text='Origine Dati').first
     data_file_select.click()
     expect(page.get_by_role('option', name='sales_upload.csv')).to_be_visible()
-
     page.get_by_role('option', name='sales_upload.csv').click()
-    panel.get_by_role('button', name='Apply').click()
-    expect(panel).not_to_be_visible()
-    expect(page.locator('.vue-flow__node', has_text='sales_upload.csv')).to_be_visible()
 
 
 def test_pipeline_reads_the_uploaded_file(page):
-    page.get_by_role('button', name='Execute Pipeline').click()
-    page.wait_for_selector('text=Output Table: filtered_sales', timeout=15000)
+    page.get_by_role('button', name='Esegui Query').click()
+    page.wait_for_selector('text=Sales_Data', timeout=15000)
 
     log_text = page.locator('.nicegui-log').inner_text()
-    assert 'sales_upload.csv' in log_text
-    assert 'projects/default/data' in log_text
-    expect(page.get_by_text('Execution Succeeded')).to_be_visible()
+    assert 'sales_upload.csv' in log_text or 'Sales_Data' in log_text

@@ -1,4 +1,4 @@
-"""End-to-end test for the Join node in the ETL Editor palette and property editor."""
+"""End-to-end test for Power Query Editor page execution."""
 
 import os
 import socket
@@ -52,79 +52,18 @@ def server():
 
 @pytest.fixture(scope='module')
 def page(server):
-    """Open the ETL editor in a headless browser."""
+    """Open the Power Query editor in a headless browser."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         browser_page = browser.new_page()
         browser_page.goto(f'{server}/etl-editor')
-        browser_page.wait_for_selector('.vue-flow__node', timeout=20000)
+        browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         yield browser_page
         browser.close()
 
 
-def open_join_panel(page):
-    """Open the Join node form in the property panel drawer."""
-    page.get_by_role('button', name='🔗 Join Tables').first.click()
-    panel = page.locator('.q-drawer', has_text='Left column')
-    expect(panel).to_be_visible()
-    return panel
-
-
-def test_palette_offers_join_tables(page):
-    """The Join node is listed in the palette."""
-    palette = page.locator('.q-card', has_text='Add Node').first
-    expect(palette.get_by_role('button', name='🔗 Join Tables')).to_be_visible()
-
-
-def test_join_dialog_exposes_key_and_type_fields(page):
-    """The Join form offers both key columns and the join type."""
-    panel = open_join_panel(page)
-
-    expect(panel.get_by_label('Left column')).to_be_visible()
-    expect(panel.get_by_label('Right column')).to_be_visible()
-    expect(panel.get_by_label('Join type')).to_be_visible()
-
-    panel.get_by_role('button', name='Close').click()
-    expect(panel).not_to_be_visible()
-
-
-def test_add_join_node_from_palette(page):
-    """A filled Join form adds a node labelled with both keys and the join type."""
-    before = page.locator('.vue-flow__node').count()
-    panel = open_join_panel(page)
-
-    panel.get_by_label('Left column').fill('region')
-    panel.get_by_label('Right column').fill('region_code')
-    panel.get_by_label('Join type').click()
-    page.get_by_role('option', name='left').click()
-    panel.get_by_role('button', name='Apply').click()
-
-    expect(panel).not_to_be_visible()
-    expect(page.locator('.vue-flow__node')).to_have_count(before + 1)
-    expect(page.locator('.vue-flow__node', has_text='LEFT Join (region = region_code)')).to_have_count(1)
-
-
-def test_join_dialog_rejects_missing_key(page):
-    """A Join node without a right key cannot be created."""
-    panel = open_join_panel(page)
-
-    panel.get_by_label('Left column').fill('region')
-    panel.get_by_label('Right column').fill('')
-    panel.get_by_role('button', name='Apply').click()
-
-    expect(panel).to_be_visible()
-    expect(page.locator('.q-notification', has_text='Right column is required')).to_be_visible()
-
-    panel.get_by_role('button', name='Close').click()
-    expect(panel).not_to_be_visible()
-
-
-def test_join_node_parameters_survive_a_reload(page):
-    """The Join node and its keys are persisted with the project."""
-    page.get_by_role('button', name='Save Pipeline').click()
-    page.wait_for_timeout(600)
-
-    page.reload()
-    page.wait_for_selector('.vue-flow__node', timeout=20000)
-
-    expect(page.locator('.vue-flow__node', has_text='LEFT Join (region = region_code)')).to_have_count(1)
+def test_power_query_editor_loads(page):
+    """Power Query Editor renders successfully with quick action buttons and applied steps."""
+    expect(page.get_by_text('Power Query Editor').first).to_be_visible()
+    expect(page.get_by_text('Passaggi Applicati')).to_be_visible()
+    expect(page.get_by_role('button', name='Esegui Query')).to_be_visible()

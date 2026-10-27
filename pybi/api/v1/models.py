@@ -118,6 +118,23 @@ class FileListResponse(BaseModel):
 # ETL Models
 # ==========================================
 
+class ETLStep(BaseModel):
+    """Linear ETL step representation for Applied Steps pipeline."""
+
+    id: str = Field(description="Unique step identifier")
+    name: str = Field(description="Display step name (e.g., 'Righe filtrate')")
+    operation: str = Field(description="Operation type (e.g. filter, cast_column, add_column)")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Operation configuration parameters")
+
+
+class ETLQuery(BaseModel):
+    """Linear ETL Query representation containing source definition and sequential steps."""
+
+    query_name: str = Field(default="Sales_Data", description="Human readable query name")
+    source: Dict[str, Any] = Field(default_factory=dict, description="Source definition dictionary")
+    steps: List[ETLStep] = Field(default_factory=list, description="Sequential list of applied ETL steps")
+
+
 class ETLNodeSchema(BaseModel):
     """Representation of a node in an ETL Vue Flow DAG."""
 
@@ -139,27 +156,32 @@ class ETLEdgeSchema(BaseModel):
 
 
 class ETLDAGSchema(BaseModel):
-    """Representation of an entire ETL pipeline DAG."""
+    """Representation of an entire ETL pipeline DAG or linear Query."""
 
     nodes: List[ETLNodeSchema] = Field(default_factory=list, description="List of DAG nodes")
     edges: List[ETLEdgeSchema] = Field(default_factory=list, description="List of DAG edges")
+    query_name: Optional[str] = Field(default=None, description="Linear query name")
+    source: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Linear source definition")
+    steps: Optional[List[ETLStep]] = Field(default_factory=list, description="Linear applied steps")
 
 
 class SaveETLDAGRequest(BaseModel):
-    """Payload for saving an ETL DAG for a project."""
+    """Payload for saving an ETL DAG or linear query for a project."""
 
-    dag: ETLDAGSchema = Field(description="ETL DAG configuration to save")
+    dag: Optional[ETLDAGSchema] = Field(default=None, description="ETL DAG configuration to save")
+    query: Optional[ETLQuery] = Field(default=None, description="Linear ETL query configuration to save")
 
 
 class ETLExecuteRequest(BaseModel):
-    """Payload for requesting execution of an ETL DAG."""
+    """Payload for requesting execution of an ETL pipeline."""
 
     project_id: Optional[str] = Field(default=None, description="Associated project ID")
     dag: Optional[ETLDAGSchema] = Field(default=None, description="Optional explicit DAG override")
+    query: Optional[ETLQuery] = Field(default=None, description="Optional explicit linear Query override")
 
 
 class ETLExecuteResponse(BaseModel):
-    """Execution output summary of an ETL DAG."""
+    """Execution output summary of an ETL pipeline."""
 
     status: str = Field(description="Execution status: success | error")
     logs: List[str] = Field(default_factory=list, description="Execution execution logs")
@@ -168,17 +190,20 @@ class ETLExecuteResponse(BaseModel):
 
 
 class ETLPreviewRequest(BaseModel):
-    """Payload for previewing node data in an ETL pipeline."""
+    """Payload for previewing node/step data in an ETL pipeline."""
 
     project_id: Optional[str] = Field(default=None, description="Associated project ID")
-    node_id: str = Field(description="Node ID to preview output for")
+    node_id: Optional[str] = Field(default=None, description="Optional Node ID to preview output for")
+    step_index: Optional[int] = Field(default=None, description="Optional step index (0..k) to preview linear query output for")
     limit: int = Field(default=100, description="Maximum number of rows to return")
+    query: Optional[ETLQuery] = Field(default=None, description="Optional explicit query override to preview")
 
 
 class ETLPreviewResponse(BaseModel):
-    """Preview output data for an ETL node."""
+    """Preview output data for an ETL node or step."""
 
-    node_id: str = Field(description="Node ID previewed")
+    node_id: Optional[str] = Field(default=None, description="Node or Step ID previewed")
+    step_index: Optional[int] = Field(default=None, description="Step index previewed")
     columns: List[str] = Field(default_factory=list, description="List of column names")
     rows: List[Dict[str, Any]] = Field(default_factory=list, description="Preview row records")
     total_rows: int = Field(description="Total rows in preview result")

@@ -34,6 +34,12 @@ Questo documento definisce le fasi di sviluppo del progetto PYBI, una piattaform
   - [ ] Task 5.1: Middleware FastAPI per audit logging accesses/queries.
   - [ ] Task 5.2: Endpoint `GET /api/v1/admin/usage-metrics`.
 
+- [x] **Epic 6: Refactoring UI ETL Power Query Style (Applied Steps)**
+  - [x] Task 6.1: Modelli Pydantic `ETLStep` ed `ETLQuery` per rappresentazione lineare della pipeline.
+  - [x] Task 6.2: Esecuzione sequenziale `execute_linear_etl` e anteprima intermedia per `step_index` in `pybi/etl/executor.py`.
+  - [x] Task 6.3: Nuova UI ETL Editor a 3 pannelli (Header, Data Grid interattiva con menu contestuali di colonna, Pannello Passaggi Applicati).
+  - [x] Task 6.4: Endpoint API v1 `/api/v1/projects/{id}/etl/query`, `/execute` e `/preview` aggiornati.
+
 ---
 
 ## 🌐 Fase 5: Publishing & Export Engine (✅ COMPLETATA)

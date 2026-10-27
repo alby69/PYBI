@@ -178,6 +178,56 @@ def test_etl_endpoints():
     assert "category" in prev_data["columns"]
 
 
+def test_etl_linear_query_endpoints():
+    """Test v1 ETL linear query save, execute, and step index preview endpoints."""
+    pid = "v1_etl_proj"
+    client.post("/api/v1/projects", json={"project_id": pid, "name": "ETL Linear Query Project"})
+
+    csv_bytes = b"category,amount\nA,100\nB,200\nA,300\n"
+    client.post(
+        f"/api/v1/projects/{pid}/files",
+        files={"file": ("sales.csv", csv_bytes, "text/csv")},
+    )
+
+    linear_query = {
+        "query_name": "Sales_Query",
+        "source": {"type": "csv", "path": "sales.csv"},
+        "steps": [
+            {
+                "id": "s1",
+                "name": "Righe filtrate",
+                "operation": "filter",
+                "params": {"condition": "amount > 150"},
+            }
+        ]
+    }
+
+    # Save via PUT /etl/query
+    save_res = client.put(f"/api/v1/projects/{pid}/etl/query", json={"query": linear_query})
+    assert save_res.status_code == 200
+
+    # Get via GET /etl/query
+    get_res = client.get(f"/api/v1/projects/{pid}/etl/query")
+    assert get_res.status_code == 200
+    data = get_res.json()
+    assert data["query_name"] == "Sales_Query"
+    assert len(data["steps"]) == 1
+
+    # Execute via POST /etl/execute
+    exec_res = client.post(f"/api/v1/projects/{pid}/etl/execute", json={"project_id": pid})
+    assert exec_res.status_code == 200
+    assert exec_res.json()["status"] == "success"
+
+    # Preview Step Output via POST /etl/preview with step_index
+    prev_res = client.post(
+        f"/api/v1/projects/{pid}/etl/preview",
+        json={"project_id": pid, "step_index": 1, "limit": 10},
+    )
+    assert prev_res.status_code == 200
+    prev_data = prev_res.json()
+    assert prev_data["total_rows"] == 2
+
+
 def test_dashboards_endpoints():
     """Test v1 Dashboard endpoints including POST create dashboard."""
     pid = "v1_dash_proj"

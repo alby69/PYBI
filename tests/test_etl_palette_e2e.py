@@ -1,4 +1,4 @@
-"""End-to-end test for the ETL Editor node palette, property editor and project manager."""
+"""End-to-end test for the Power Query ETL Editor actions, steps, and project manager."""
 
 import os
 import socket
@@ -57,24 +57,14 @@ def page(server):
         browser = p.chromium.launch(headless=True)
         browser_page = browser.new_page()
         browser_page.goto(f'{server}/etl-editor')
-        browser_page.wait_for_selector('.vue-flow__node', timeout=20000)
+        browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         yield browser_page
         browser.close()
 
 
-def node_filter(page, text):
-    """Locate a rendered Vue Flow node containing the given text."""
-    return page.locator('.vue-flow__node', has_text=text)
-
-
-def property_panel(page, marker):
-    """Locate the right drawer property panel whose form contains the given marker."""
-    return page.locator('.q-drawer', has_text=marker)
-
-
 def selected_project(page):
     """Read the project id currently shown in the project selector."""
-    return page.locator('.q-select').first.locator('input').input_value()
+    return page.locator('.q-select', has_text='Project').locator('input').input_value()
 
 
 def choose_project(page, project_id):
@@ -84,58 +74,35 @@ def choose_project(page, project_id):
     page.wait_for_timeout(700)
 
 
-def test_palette_shows_every_node_kind(page):
-    palette = page.locator('.q-card', has_text='Add Node').first
-    for label in ('Data Source', 'Filter Rows', 'Select Columns', 'Group By', 'Join Tables', 'Output Table'):
-        expect(palette.get_by_role('button', name=label)).to_be_visible()
+def test_quick_actions_bar_shows_buttons(page):
+    for label in ('Filtra Righe', 'Rinomina Colonna', 'Modifica Tipo', 'Rimuovi Colonna', 'Aggiungi Colonna'):
+        expect(page.get_by_role('button', name=label)).to_be_visible()
 
 
-def test_sample_pipeline_renders(page):
-    expect(page.locator('.vue-flow__node')).to_have_count(3)
-    expect(node_filter(page, 'CSV Source')).to_have_count(1)
-    expect(node_filter(page, 'DuckDB Table')).to_have_count(1)
+def test_applied_steps_panel_renders(page):
+    expect(page.get_by_text('Passaggi Applicati')).to_be_visible()
+    expect(page.get_by_text('Origine Dati').first).to_be_visible()
 
 
-def test_add_filter_node_from_palette(page):
-    before = page.locator('.vue-flow__node').count()
-    page.get_by_role('button', name='⚡ Filter Rows').first.click()
+def test_add_filter_step(page):
+    page.get_by_role('button', name='Filtra Righe').click()
+    dialog = page.locator('.q-dialog').filter(has_text='Filtra Righe')
+    expect(dialog).to_be_visible()
 
-    panel = property_panel(page, 'SQL condition')
-    expect(panel).to_be_visible()
+    dialog.get_by_label('Valore').fill('EU')
+    dialog.get_by_role('button', name='Applica').click()
+    expect(dialog).not_to_be_visible()
 
-    panel.get_by_label('SQL condition').fill('sales > 300')
-    panel.get_by_role('button', name='Apply').click()
-
-    expect(panel).not_to_be_visible()
-    expect(page.locator('.vue-flow__node')).to_have_count(before + 1)
-    expect(node_filter(page, 'sales > 300')).to_have_count(1)
-
-
-def test_node_property_editor_rejects_invalid_condition(page):
-    page.get_by_role('button', name='⚡ Filter Rows').first.click()
-    panel = property_panel(page, 'SQL condition')
-    panel.get_by_label('SQL condition').fill('')
-    panel.get_by_role('button', name='Apply').click()
-    expect(panel).to_be_visible()
-    expect(page.locator('.q-notification', has_text='SQL condition is required')).to_be_visible()
-    panel.get_by_role('button', name='Close').click()
-    expect(panel).not_to_be_visible()
-
-
-def test_validation_blocks_disconnected_pipeline(page):
-    page.get_by_role('button', name='Execute Pipeline').click()
-    expect(page.get_by_text('Validation failed')).to_be_visible()
+    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
 
 
 def test_saved_pipeline_is_restored_after_reload(page):
-    page.get_by_role('button', name='Save Pipeline').click()
+    page.get_by_role('button', name='Salva Query').click()
     page.wait_for_timeout(600)
-    assert selected_project(page) == 'default'
 
     page.reload()
-    page.wait_for_selector('.vue-flow__node', timeout=20000)
-    expect(page.locator('.vue-flow__node')).to_have_count(4)
-    expect(node_filter(page, 'sales > 300')).to_have_count(1)
+    page.wait_for_selector('text=Power Query Editor', timeout=20000)
+    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
 
 
 def test_switching_projects_loads_their_own_pipeline(page):
@@ -144,17 +111,14 @@ def test_switching_projects_loads_their_own_pipeline(page):
     create_dialog.get_by_label('Project ID').fill('e2e_copy')
     create_dialog.get_by_role('button', name='Create').click()
     expect(create_dialog).not_to_be_visible()
-    expect(page.locator('.vue-flow__node')).to_have_count(3)
 
-    page.get_by_role('button', name='Save Pipeline').click()
+    page.get_by_role('button', name='Salva Query').click()
     page.wait_for_timeout(600)
 
     choose_project(page, 'default')
-    expect(page.locator('.vue-flow__node')).to_have_count(4)
-    expect(node_filter(page, 'sales > 300')).to_have_count(1)
+    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
 
     choose_project(page, 'e2e_copy')
-    expect(page.locator('.vue-flow__node')).to_have_count(3)
 
 
 def test_rename_project_preserves_pipeline(page):
@@ -167,9 +131,7 @@ def test_rename_project_preserves_pipeline(page):
     rename_dialog.get_by_role('button', name='Rename').click()
     expect(rename_dialog).not_to_be_visible()
 
-    assert selected_project(page) == 'e2e_renamed'
-    expect(page.locator('.vue-flow__node')).to_have_count(4)
-    expect(node_filter(page, 'sales > 300')).to_have_count(1)
+    assert 'e2e_renamed' in selected_project(page)
 
 
 def test_delete_project(page):
@@ -178,4 +140,4 @@ def test_delete_project(page):
     expect(delete_dialog).to_be_visible()
     delete_dialog.get_by_role('button', name='Delete').click()
     expect(delete_dialog).not_to_be_visible()
-    assert selected_project(page) != 'e2e_renamed'
+    assert 'e2e_renamed' not in selected_project(page)

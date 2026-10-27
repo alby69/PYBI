@@ -24,10 +24,11 @@ PyBI offre router FastAPI dedicati per la gestione completa delle risorse:
 - `PUT /api/v1/projects/{id}`: Aggiornamento metadati.
 - `DELETE /api/v1/projects/{id}`: Eliminazione progetto.
 
-### Gestione ETL Pipeline
-- `GET /api/v1/projects/{id}/etl/dag`: Recupera il DAG salvato.
-- `PUT /api/v1/projects/{id}/etl/dag`: Salva il DAG (`{"nodes": [], "edges": []}`).
-- `POST /api/v1/projects/{id}/etl/execute`: Esegue la pipeline.
+### Gestione ETL Query (Power Query Applied Steps)
+- `GET /api/v1/projects/{id}/etl/query`: Recupera la query ETL con Passaggi Applicati (`ETLQuery`).
+- `PUT /api/v1/projects/{id}/etl/query`: Salva la query (`{"query_name": "Sales_Data", "source": {...}, "steps": [...]}`).
+- `POST /api/v1/projects/{id}/etl/execute`: Esegue la pipeline di trasformazione sequenziale.
+- `POST /api/v1/projects/{id}/etl/preview`: Anteprima intermedia dei dati fino ad uno specifico `step_index`.
 - `GET /api/v1/projects/{id}/etl/jobs/{job_id}`: Polling dello stato del job.
 
 ### Gestione Multi-Dashboard
@@ -57,6 +58,44 @@ Accedi a: http://localhost:8080
 ```bash
 pip install -r requirements.txt
 python3 -m pybi.main
+```
+
+---
+
+## 3.1 ETL Editor in stile Power Query (Applied Steps)
+
+L'editor ETL di PyBI adotta un'interfaccia a 3 pannelli ispirata a **Power Query Editor**:
+1. **Header Superiore**: Nome Query, Selettore Origine Dati (CSV, Parquet, SQLite) e Barra Strumenti delle Trasformazioni Rapide.
+2. **Pannello Centrale (Data Grid)**: Visualizza l'anteprima dei dati in una griglia interattiva con menu contestuali per ogni colonna (Rinomina, Modifica Tipo, Rimuovi, Filtra, Aggiungi Colonna).
+3. **Pannello Destro (Passaggi Applicati)**: Lista cronologica sequenziale delle trasformazioni. Cliccando su un passaggio intermedio, la Data Grid aggiorna l'anteprima dei dati fino a quel punto specifico.
+
+#### Esempio Struttura Query ETL JSON (`ETLQuery`):
+```json
+{
+  "query_name": "Sales_Data",
+  "source": {
+    "type": "csv",
+    "path": "sales_data.csv"
+  },
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "Righe filtrate (region = 'EU')",
+      "operation": "filter",
+      "params": {
+        "condition": "region = 'EU'"
+      }
+    },
+    {
+      "id": "step_2",
+      "name": "Rinomina colonna 'amount' -> 'ricavo'",
+      "operation": "rename_column",
+      "params": {
+        "mapping": {"amount": "ricavo"}
+      }
+    }
+  ]
+}
 ```
 
 ---

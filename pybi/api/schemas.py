@@ -25,11 +25,31 @@ class ProjectResponse(BaseModel):
     dashboard_layout: Optional[Any] = Field(default=None, description="Primary dashboard layout")
 
 
+class ETLStep(BaseModel):
+    """Linear ETL step representation for Applied Steps pipeline."""
+
+    id: str = Field(description="Unique step identifier")
+    name: str = Field(description="Display step name (e.g., 'Righe filtrate')")
+    operation: str = Field(description="Operation type (e.g. filter, cast_column, add_column)")
+    params: Dict[str, Any] = Field(default_factory=dict, description="Operation configuration parameters")
+
+
+class ETLQuery(BaseModel):
+    """Linear ETL Query representation containing source definition and sequential steps."""
+
+    query_name: str = Field(default="Sales_Data", description="Human readable query name")
+    source: Dict[str, Any] = Field(default_factory=dict, description="Source definition dictionary")
+    steps: List[ETLStep] = Field(default_factory=list, description="Sequential list of applied ETL steps")
+
+
 class DagSaveRequest(BaseModel):
-    """Payload for saving an ETL pipeline DAG."""
+    """Payload for saving an ETL pipeline DAG or linear Query."""
 
     nodes: List[Dict[str, Any]] = Field(default_factory=list, description="List of DAG nodes")
     edges: List[Dict[str, Any]] = Field(default_factory=list, description="List of DAG edges")
+    query_name: Optional[str] = Field(default=None, description="Optional linear query name")
+    source: Optional[Dict[str, Any]] = Field(default=None, description="Optional linear source definition")
+    steps: Optional[List[ETLStep]] = Field(default=None, description="Optional linear ETL steps")
 
 
 class DashboardCreateRequest(BaseModel):

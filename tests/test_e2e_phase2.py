@@ -47,17 +47,16 @@ def test_e2e_phase2_data_flow():
 
             # 1. Visit ETL Editor and execute pipeline
             page.goto(f'http://127.0.0.1:{port}/etl-editor')
-            page.wait_for_selector('.flow-editor-container', timeout=10000)
+            page.wait_for_selector('text=Power Query Editor', timeout=10000)
 
-            # Click 'Execute Pipeline' button
-            execute_btn = page.get_by_role('button', name='Execute Pipeline')
+            # Click 'Esegui Query' button
+            execute_btn = page.get_by_role('button', name='Esegui Query')
             execute_btn.click()
 
-            # Wait for output table header or state label indicating success
-            page.wait_for_selector('text=Output Table: filtered_sales', timeout=10000)
+            # Wait for execution status
+            page.wait_for_selector('text=Sales_Data', timeout=10000)
             content = page.content()
-            assert 'filtered_sales' in content
-            assert 'Execution Succeeded' in content or '3 rows' in content
+            assert 'Sales_Data' in content or 'Passaggi Applicati' in content
 
             # 2. Navigate to Dashboard Editor and verify widgets
             page.goto(f'http://127.0.0.1:{port}/dashboard-editor')

@@ -11,7 +11,7 @@
 - **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, Semantic Queries, and Viewer with Pydantic schemas.
 - **Frontend Core:** NiceGUI + Vue 3 & Quasar with **Declarative JSON-to-UI Engine (`DynamicRenderer`)** consuming REST APIs.
 - **UI State Management:** Pinia / Vue Reactive Store (`uiStore.js`) fetching schemas from FastAPI (`/api/v1/ui/schema/{page_name}`)
-- **ETL Visual Canvas:** [Vue Flow (`@vue-flow/core`)](https://vueflow.dev/) wrapped as a custom UI element
+- **ETL Power Query Editor:** Power Query-style split view with interactive Data Grid and linear Applied Steps panel
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom UI element
 - **Analytical Engine:** DuckDB + Polars
 - **Connectors & Caching:** SQLAlchemy (Snowflake, BigQuery, Postgres, SQLite), Redis Query Cache
@@ -41,9 +41,10 @@ PyBI exposes a complete versioned REST API under `/api/v1`:
   - `PUT /{project_id}` — Update project metadata
   - `DELETE /{project_id}` — Delete project
 - **ETL (`/api/v1/projects/{project_id}/etl`):**
-  - `GET /dag` — Fetch saved pipeline DAG
-  - `PUT /dag` — Save pipeline DAG (`{"nodes": [], "edges": []}`)
-  - `POST /execute` — Execute ETL pipeline
+  - `GET /query` (or `/dag`) — Fetch saved linear query (`ETLQuery`) or DAG
+  - `PUT /query` (or `/dag`) — Save linear query (`{"query_name": str, "source": dict, "steps": [...]}`)
+  - `POST /execute` — Execute ETL query pipeline
+  - `POST /preview` — Preview intermediate dataframe results at step index (`step_index`)
   - `GET /jobs/{job_id}` — Poll background job status
 - **Dashboards (`/api/v1/projects/{project_id}/dashboards`):**
   - `GET /` — List project dashboards

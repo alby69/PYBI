@@ -53,19 +53,13 @@ def test_etl_editor_page():
             page.on("pageerror", lambda err: print(f"BROWSER UNCAUGHT EXCEPTION: {err}"))
 
             page.goto(f'http://127.0.0.1:{port}/etl-editor')
-            page.wait_for_selector('.flow-editor-container', timeout=10000)
-
-            # Wait for nodes to be rendered
-            page.wait_for_selector('.vue-flow__node', timeout=15000)
-
-            nodes = page.query_selector_all('.vue-flow__node')
-            print(f"Found {len(nodes)} Vue Flow nodes rendered on canvas.")
-            assert len(nodes) >= 3, f"Expected at least 3 nodes, found {len(nodes)}"
+            page.wait_for_selector('text=Power Query Editor', timeout=10000)
 
             content = page.content()
-            assert 'CSV Source' in content
-            assert 'Filter Rows' in content
-            assert 'DuckDB Table' in content
+            assert 'Power Query Editor' in content
+            assert 'Passaggi Applicati' in content
+            assert 'Origine Dati' in content
+            assert 'Righe filtrate' in content
 
             browser.close()
             print("ETL Editor test passed successfully!")

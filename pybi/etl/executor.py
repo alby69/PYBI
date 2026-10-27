@@ -174,10 +174,18 @@ class ETLExecutor:
         return result_df, raw_sql, optimized_sql
 
     def execute(self, dag: Dict[str, Any]) -> ETLResult:
-        """Execute a visual DAG defined by nodes and edges."""
+        """Execute a visual DAG or linear Applied Steps query."""
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
         logs: List[str] = []
+
+        # If linear query format with steps or active source is provided (and no DAG nodes), execute linear ETL
+        has_linear_steps = bool(dag.get("steps"))
+        has_linear_source = bool(dag.get("source")) and isinstance(dag.get("source"), dict) and len(dag.get("source")) > 0
+        if (has_linear_steps or has_linear_source) and not nodes:
+            return self.execute_linear_etl(dag)
+        elif not nodes and not has_linear_steps and not has_linear_source:
+            return ETLResult(status="success", logs=["No nodes or linear query steps found in ETL configuration."])
 
         if not nodes:
             return ETLResult(status="success", logs=["No nodes found in DAG."])
@@ -680,6 +688,372 @@ class ETLExecutor:
         else:
             return parent_df, f"Unknown transform '{transform_type}', passing data through"
 
+    def _apply_step_op(self, df: pl.DataFrame, operation: str, params: Dict[str, Any]) -> pl.DataFrame:
+        """Apply a single linear step operation on a Polars DataFrame."""
+        op = (operation or "").lower().strip()
+        if op == "filter":
+            cond = params.get("condition") or params.get("predicate")
+            if not cond:
+                col = params.get("column")
+                operator = params.get("operator", "==")
+                val = params.get("value")
+                if col and val is not None:
+                    val_str = f"'{val}'" if isinstance(val, str) else str(val)
+                    op_sql = "=" if operator in ("==", "=") else operator
+                    cond = f"{col} {op_sql} {val_str}"
+            if cond:
+                temp_conn = self.duckdb_conn
+                temp_conn.register("source_df", df)
+                try:
+                    df = temp_conn.query(f"SELECT * FROM source_df WHERE {cond}").pl()
+                finally:
+                    try:
+                        temp_conn.unregister("source_df")
+                    except Exception:
+                        pass
+            return df
+
+        elif op in ("select", "select_columns"):
+            cols = _as_key_list(params.get("columns") or params.get("cols"))
+            if cols:
+                valid_cols = [c for c in cols if c in df.columns]
+                if valid_cols:
+                    df = df.select(valid_cols)
+            return df
+
+        elif op in ("remove_column", "remove_columns", "drop_column"):
+            cols = _as_key_list(params.get("column") or params.get("columns"))
+            if cols:
+                df = df.drop([c for c in cols if c in df.columns])
+            return df
+
+        elif op in ("remove_other_columns", "keep_columns"):
+            keep = _as_key_list(params.get("keep_columns") or params.get("columns"))
+            if keep:
+                valid_keep = [c for c in keep if c in df.columns]
+                if valid_keep:
+                    df = df.select(valid_keep)
+            return df
+
+        elif op in ("rename_column", "rename"):
+            mapping = params.get("mapping") or {}
+            if not mapping and params.get("old_column") and params.get("new_column"):
+                mapping = {params["old_column"]: params["new_column"]}
+            if mapping:
+                valid_map = {k: v for k, v in mapping.items() if k in df.columns}
+                if valid_map:
+                    df = df.rename(valid_map)
+            return df
+
+        elif op in ("cast_column", "cast", "change_type"):
+            casts = params.get("casts") or {}
+            if not casts and params.get("column") and params.get("target_type"):
+                casts = {params["column"]: params["target_type"]}
+            if casts:
+                polars_types = {
+                    "text": pl.Utf8, "string": pl.Utf8, "varchar": pl.Utf8,
+                    "int": pl.Int64, "integer": pl.Int64, "bigint": pl.Int64,
+                    "float": pl.Float64, "double": pl.Float64, "numeric": pl.Float64,
+                    "boolean": pl.Boolean, "bool": pl.Boolean,
+                    "date": pl.Date, "timestamp": pl.Datetime, "datetime": pl.Datetime,
+                }
+                exprs = [
+                    pl.col(c).cast(polars_types.get(str(t).lower(), pl.Utf8))
+                    for c, t in casts.items() if c in df.columns
+                ]
+                if exprs:
+                    df = df.with_columns(exprs)
+            return df
+
+        elif op in ("add_column", "calculated_column", "custom_column"):
+            new_col = params.get("new_column") or params.get("column") or "custom_col"
+            mode = params.get("mode") or ("expression" if params.get("expression") else "concat")
+            expr = params.get("expression")
+            cols = params.get("columns")
+            sep = params.get("separator")
+            df = apply_calculated_column(
+                df,
+                new_col,
+                mode=mode,
+                columns=cols,
+                separator=sep,
+                expression=expr,
+                trim=bool(params.get("trim", True)),
+            )
+            return df
+
+        elif op in ("conditional_column", "conditional"):
+            new_col = params.get("new_column") or "conditional_col"
+            if_cond = params.get("if_condition") or params.get("condition")
+            then_val = params.get("then_value") or params.get("then")
+            else_val = params.get("else_value") if params.get("else_value") is not None else params.get("else")
+            cases = params.get("cases") or []
+
+            if cases:
+                parts = []
+                for item in cases:
+                    c = item.get("when") or item.get("if_condition")
+                    v = item.get("then") or item.get("then_value")
+                    v_str = f"'{v}'" if isinstance(v, str) else str(v)
+                    parts.append(f"WHEN {c} THEN {v_str}")
+                e_str = f"'{else_val}'" if isinstance(else_val, str) else str(else_val)
+                case_sql = f"CASE {' '.join(parts)} ELSE {e_str} END"
+            elif if_cond:
+                t_str = f"'{then_val}'" if isinstance(then_val, str) else str(then_val)
+                e_str = f"'{else_val}'" if isinstance(else_val, str) else (str(else_val) if else_val is not None else "NULL")
+                case_sql = f"CASE WHEN {if_cond} THEN {t_str} ELSE {e_str} END"
+            else:
+                return df
+
+            temp_conn = self.duckdb_conn
+            temp_conn.register("source_df", df)
+            try:
+                df = temp_conn.query(f"SELECT *, {case_sql} AS {new_col} FROM source_df").pl()
+            finally:
+                try:
+                    temp_conn.unregister("source_df")
+                except Exception:
+                    pass
+            return df
+
+        elif op in ("deduplicate", "distinct", "remove_duplicates"):
+            cols = _as_key_list(params.get("columns"))
+            if cols:
+                valid_cols = [c for c in cols if c in df.columns]
+                df = df.unique(subset=valid_cols) if valid_cols else df.unique()
+            else:
+                df = df.unique()
+            return df
+
+        elif op in ("replace_values", "replace"):
+            col = params.get("column")
+            old_val = params.get("old_value")
+            new_val = params.get("new_value")
+            if col and col in df.columns and old_val is not None and new_val is not None:
+                df = df.with_columns(
+                    pl.when(pl.col(col) == old_val).then(pl.lit(new_val)).otherwise(pl.col(col)).alias(col)
+                )
+            return df
+
+        elif op in ("text_transform", "format", "text"):
+            cols = _as_key_list(params.get("columns") or params.get("column"))
+            act = (params.get("action") or params.get("transform_action") or "trim").lower()
+            if cols:
+                exprs = []
+                for c in cols:
+                    if c in df.columns:
+                        if act == "trim":
+                            exprs.append(pl.col(c).str.strip_chars())
+                        elif act in ("upper", "uppercase"):
+                            exprs.append(pl.col(c).str.to_uppercase())
+                        elif act in ("lower", "lowercase"):
+                            exprs.append(pl.col(c).str.to_lowercase())
+                        elif act == "clean":
+                            exprs.append(pl.col(c).str.replace_all(r"[^a-zA-Z0-9 ]", ""))
+                if exprs:
+                    df = df.with_columns(exprs)
+            return df
+
+        elif op in ("split_column", "split"):
+            col = params.get("column")
+            delim = params.get("delimiter") if params.get("delimiter") is not None else " "
+            new_cols = _as_key_list(params.get("new_columns"))
+            if col and col in df.columns and new_cols:
+                split_df = df.with_columns(pl.col(col).str.split(delim).alias("_split_parts"))
+                exprs = [
+                    pl.col("_split_parts").list.get(i).alias(col_name)
+                    for i, col_name in enumerate(new_cols)
+                ]
+                df = split_df.with_columns(exprs).drop("_split_parts")
+            return df
+
+        elif op in ("sort", "sort_rows", "order_by"):
+            cols = _as_key_list(params.get("by") or params.get("column") or params.get("columns"))
+            descending = bool(params.get("descending", False))
+            if cols:
+                valid_cols = [c for c in cols if c in df.columns]
+                if valid_cols:
+                    df = df.sort(valid_cols, descending=descending)
+            return df
+
+        elif op in ("group_by", "groupby"):
+            group_cols = _as_key_list(params.get("group_by") or params.get("by") or params.get("columns"))
+            aggs = params.get("aggregations", {})
+            if group_cols:
+                valid_group = [c for c in group_cols if c in df.columns]
+                if valid_group:
+                    if aggs:
+                        agg_exprs = []
+                        for col_name, agg_func in aggs.items():
+                            if col_name in df.columns and hasattr(pl.col(col_name), agg_func):
+                                agg_exprs.append(getattr(pl.col(col_name), agg_func)())
+                        df = df.group_by(valid_group).agg(agg_exprs) if agg_exprs else df.group_by(valid_group).first()
+                    else:
+                        df = df.group_by(valid_group).first()
+            return df
+
+        elif op == "unpivot":
+            index_cols = _as_key_list(params.get("index"))
+            on_cols = _as_key_list(params.get("on"))
+            var_name = params.get("variable_name") or "variable"
+            val_name = params.get("value_name") or "value"
+            if on_cols:
+                df = df.unpivot(
+                    index=index_cols if index_cols else None,
+                    on=on_cols,
+                    variable_name=var_name,
+                    value_name=val_name,
+                )
+            return df
+
+        elif op == "pivot":
+            index_cols = _as_key_list(params.get("index"))
+            on_cols = _as_key_list(params.get("on"))
+            val_cols = _as_key_list(params.get("values"))
+            agg_fn = params.get("aggregate_function") or "sum"
+            if on_cols:
+                df = df.pivot(
+                    on=on_cols,
+                    index=index_cols if index_cols else None,
+                    values=val_cols if val_cols else None,
+                    aggregate_function=agg_fn,
+                )
+            return df
+
+        elif op in ("fill_down", "filldown"):
+            cols = _as_key_list(params.get("columns"))
+            if cols:
+                valid_cols = [c for c in cols if c in df.columns]
+                if valid_cols:
+                    exprs = [pl.col(c).forward_fill() for c in valid_cols]
+                    df = df.with_columns(exprs)
+            return df
+
+        elif op in ("index_column", "index"):
+            col_name = params.get("column_name") or "index"
+            start_val = int(params.get("start_value", 1))
+            inc_val = int(params.get("increment", 1))
+            if inc_val == 1 and start_val == 1:
+                df = df.with_row_index(name=col_name, offset=1)
+            elif inc_val == 1 and start_val == 0:
+                df = df.with_row_index(name=col_name, offset=0)
+            else:
+                df_idx = df.with_row_index(name="_row_num", offset=0)
+                df = df_idx.with_columns(
+                    (pl.col("_row_num") * inc_val + start_val).alias(col_name)
+                ).drop("_row_num")
+            return df
+
+        else:
+            return df
+
+    def execute_linear_etl(
+        self,
+        query: Union[Dict[str, Any], Any],
+        stop_at_step_index: Optional[int] = None,
+    ) -> ETLResult:
+        """Execute linear Applied Steps ETL query sequentially."""
+        logs: List[str] = []
+        if hasattr(query, "model_dump"):
+            query_dict = query.model_dump()
+        elif isinstance(query, dict):
+            query_dict = query
+        else:
+            query_dict = {}
+
+        query_name = query_dict.get("query_name") or "Sales_Data"
+        source_info = query_dict.get("source") or {}
+        raw_steps = query_dict.get("steps") or []
+
+        step_dataframes: Dict[str, pl.DataFrame] = {}
+        logs.append(f"Starting execution for linear query '{query_name}' with {len(raw_steps)} steps")
+
+        # 1. Load source
+        source_type = (source_info.get("type") or source_info.get("source_type") or "").lower()
+        filepath = source_info.get("path") or source_info.get("file_path") or source_info.get("filepath")
+        table_name = source_info.get("table") or source_info.get("table_name")
+
+        try:
+            if source_type in ("postgres", "postgresql"):
+                uri = source_info.get("uri") or filepath
+                q = source_info.get("query") or table_name or "SELECT 1"
+                curr_df = read_postgres(uri, q)
+                logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from PostgreSQL")
+            elif source_type == "sqlite" and filepath:
+                resolved_path = resolve_data_path(filepath, self.base_dir)
+                curr_df = read_sqlite(resolved_path, query_or_table=table_name)
+                logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from SQLite file '{resolved_path}'")
+            elif source_type == "parquet" and filepath:
+                resolved_path = resolve_data_path(filepath, self.base_dir)
+                curr_df = read_parquet(resolved_path)
+                logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from Parquet file '{resolved_path}'")
+            elif filepath:
+                resolved_path = resolve_data_path(filepath, self.base_dir)
+                sep = source_info.get("csv_separator") or "auto"
+                curr_df = read_csv(resolved_path, separator=sep)
+                logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from CSV file '{resolved_path}'")
+            elif table_name:
+                curr_df = self.duckdb_conn.query(f"SELECT * FROM {_quote_identifier(table_name)}").pl()
+                logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from DuckDB table '{table_name}'")
+            else:
+                default_path = resolve_data_path("sales_data.csv", self.base_dir)
+                if os.path.exists(default_path):
+                    curr_df = read_csv(default_path)
+                    logs.append(f"[Step 0: Origine] Loaded {len(curr_df)} rows from default file '{default_path}'")
+                else:
+                    curr_df = pl.DataFrame()
+                    logs.append("[Step 0: Origine] Empty source data")
+        except Exception as err:
+            err_msg = f"Failed to load source data for query '{query_name}': {err}"
+            logs.append(f"[Step 0: Origine] FAILED: {err}")
+            return ETLResult(status="error", logs=logs, error=err_msg)
+
+        step_dataframes["step_0"] = curr_df
+        step_dataframes["source"] = curr_df
+
+        if stop_at_step_index is not None and stop_at_step_index >= 0:
+            target_steps = raw_steps[:stop_at_step_index]
+        else:
+            target_steps = raw_steps
+
+        for idx, step in enumerate(target_steps, start=1):
+            if isinstance(step, dict):
+                step_id = step.get("id") or f"step_{idx}"
+                step_name = step.get("name") or step.get("label") or f"Passaggio {idx}"
+                op = step.get("operation") or step.get("type") or "filter"
+                params = step.get("params") or step.get("config") or {}
+            else:
+                step_id = getattr(step, "id", f"step_{idx}")
+                step_name = getattr(step, "name", f"Passaggio {idx}")
+                op = getattr(step, "operation", "filter")
+                params = getattr(step, "params", {})
+
+            try:
+                curr_df = self._apply_step_op(curr_df, op, params)
+                step_dataframes[step_id] = curr_df
+                step_dataframes[f"step_{idx}"] = curr_df
+                logs.append(f"[Step {idx}: {step_name}] Executed '{op}' -> {len(curr_df)} rows, {len(curr_df.columns)} columns")
+            except Exception as err:
+                err_msg = f"Error at step {idx} '{step_name}' ({op}): {err}"
+                logs.append(f"[Step {idx}: {step_name}] FAILED: {err}")
+                return ETLResult(
+                    status="error",
+                    dataframes=step_dataframes,
+                    output_tables={query_name: curr_df},
+                    logs=logs,
+                    error=err_msg,
+                )
+
+        output_tables = {query_name: curr_df}
+        self.model_engine.register_dataframe(query_name, curr_df)
+
+        return ETLResult(
+            status="success",
+            dataframes=step_dataframes,
+            output_tables=output_tables,
+            logs=logs,
+        )
+
 
 def execute_dag(
     dag: Dict[str, Any],
@@ -688,7 +1062,7 @@ def execute_dag(
     threads: Optional[int] = None,
     max_memory: Optional[str] = None,
 ) -> ETLResult:
-    """Convenience function to execute an ETL DAG."""
+    """Convenience function to execute an ETL DAG or linear query."""
     executor = ETLExecutor(
         duckdb_conn=duckdb_conn,
         base_dir=base_dir,
@@ -696,3 +1070,14 @@ def execute_dag(
         max_memory=max_memory,
     )
     return executor.execute(dag)
+
+
+def execute_linear_etl(
+    query: Union[Dict[str, Any], Any],
+    duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
+    base_dir: Optional[str] = None,
+    stop_at_step_index: Optional[int] = None,
+) -> ETLResult:
+    """Convenience function to execute a linear Applied Steps ETL query."""
+    executor = ETLExecutor(duckdb_conn=duckdb_conn, base_dir=base_dir)
+    return executor.execute_linear_etl(query, stop_at_step_index=stop_at_step_index)

@@ -4,7 +4,23 @@ from typing import Any, Dict, List, Optional, Tuple
 from pybi.ui.theme import NODE_COLORS
 
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
-TRANSFORM_TYPES = ("filter", "select", "groupby", "join", "pivot", "add_column")
+TRANSFORM_TYPES = (
+    "filter",
+    "select",
+    "groupby",
+    "join",
+    "pivot",
+    "unpivot",
+    "fill_down",
+    "rename_column",
+    "cast_column",
+    "split_column",
+    "text_transform",
+    "deduplicate",
+    "conditional_column",
+    "index_column",
+    "add_column",
+)
 OUTPUT_TYPES = ("duckdb", "sqlite")
 AGGREGATIONS = ("sum", "mean", "min", "max", "count", "first", "last", "median", "std", "n_unique")
 JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
@@ -261,6 +277,15 @@ KIND_PREFIX = {
     "GroupBy": "group",
     "Join": "join",
     "Pivot": "pivot",
+    "Unpivot": "unpivot",
+    "FillDown": "fill",
+    "RenameColumn": "rename",
+    "CastColumn": "cast",
+    "SplitColumn": "split",
+    "TextTransform": "text",
+    "Deduplicate": "dedup",
+    "ConditionalColumn": "cond",
+    "IndexColumn": "idx",
     "AddColumn": "calc",
     "Output": "output",
 }
@@ -273,6 +298,23 @@ _TRANSFORM_KIND = {
     "join": "Join",
     "inner_join": "Join",
     "pivot": "Pivot",
+    "unpivot": "Unpivot",
+    "fill_down": "FillDown",
+    "filldown": "FillDown",
+    "rename_column": "RenameColumn",
+    "rename": "RenameColumn",
+    "cast_column": "CastColumn",
+    "cast": "CastColumn",
+    "split_column": "SplitColumn",
+    "split": "SplitColumn",
+    "text_transform": "TextTransform",
+    "text": "TextTransform",
+    "deduplicate": "Deduplicate",
+    "distinct": "Deduplicate",
+    "conditional_column": "ConditionalColumn",
+    "conditional": "ConditionalColumn",
+    "index_column": "IndexColumn",
+    "index": "IndexColumn",
     "add_column": "AddColumn",
     "addcolumn": "AddColumn",
     "calculated_column": "AddColumn",
@@ -325,6 +367,33 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
         else:
             val_cols = str(vals)
         return f"{icon} Pivot ({val_cols} on {on_cols})"
+    if kind == "Unpivot":
+        on_cols = ", ".join(data.get("on", [])) if isinstance(data.get("on"), list) else str(data.get("on") or "")
+        return f"{icon} Unpivot ({on_cols})"
+    if kind == "FillDown":
+        cols = ", ".join(data.get("columns", [])) if isinstance(data.get("columns"), list) else str(data.get("columns") or "")
+        return f"{icon} Fill Down ({cols})"
+    if kind == "RenameColumn":
+        return f"{icon} Rename Columns"
+    if kind == "CastColumn":
+        return f"{icon} Change Data Types"
+    if kind == "SplitColumn":
+        col = data.get("column") or ""
+        delim = data.get("delimiter") or " "
+        return f"{icon} Split {col} ['{delim}']"
+    if kind == "TextTransform":
+        act = data.get("transform_action") or "trim"
+        cols = ", ".join(data.get("columns", [])) if isinstance(data.get("columns"), list) else str(data.get("columns") or "")
+        return f"{icon} {act.capitalize()} ({cols})"
+    if kind == "Deduplicate":
+        cols = ", ".join(data.get("columns", [])) if isinstance(data.get("columns"), list) else str(data.get("columns") or "")
+        return f"{icon} Deduplicate ({cols if cols else 'all'})"
+    if kind == "ConditionalColumn":
+        new_col = data.get("new_column") or "conditional_col"
+        return f"{icon} If-Then ({new_col})"
+    if kind == "IndexColumn":
+        col_name = data.get("column_name") or "index"
+        return f"{icon} Index ({col_name})"
     if kind == "AddColumn":
         new_column = data.get("new_column") or "new_column"
         if (data.get("mode") or "concat") == "expression":
@@ -448,6 +517,146 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
             "on": on,
             "values": val_cols,
             "aggregate_function": agg_fn,
+        }
+
+    if kind == "Unpivot":
+        index = values.get("index")
+        index = [c.strip() for c in index.split(",") if c.strip()] if isinstance(index, str) else list(index or [])
+        on = values.get("on")
+        on = [c.strip() for c in on.split(",") if c.strip()] if isinstance(on, str) else list(on or [])
+        if not on:
+            raise ValueError("At least one column to unpivot is required for an Unpivot node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "unpivot",
+            "index": index,
+            "on": on,
+            "variable_name": (values.get("variable_name") or "variable").strip(),
+            "value_name": (values.get("value_name") or "value").strip(),
+        }
+
+    if kind == "FillDown":
+        cols = values.get("columns")
+        cols = [c.strip() for c in cols.split(",") if c.strip()] if isinstance(cols, str) else list(cols or [])
+        if not cols:
+            raise ValueError("At least one column to fill is required for a Fill Down node.")
+        order_by = (values.get("order_by") or "").strip()
+        return {
+            "node_type": "Transform",
+            "transform_type": "fill_down",
+            "columns": cols,
+            "order_by": order_by or None,
+        }
+
+    if kind == "RenameColumn":
+        raw_map = values.get("column_mapping")
+        m = {}
+        if isinstance(raw_map, dict):
+            m = raw_map
+        elif isinstance(raw_map, str):
+            for chunk in raw_map.split(","):
+                if ":" in chunk:
+                    old_c, new_c = chunk.split(":", 1)
+                    if old_c.strip() and new_c.strip():
+                        m[old_c.strip()] = new_c.strip()
+        if not m:
+            raise ValueError("Rename mapping 'old_name:new_name' is required for a Rename Column node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "rename_column",
+            "mapping": m,
+            "column_mapping": raw_map,
+        }
+
+    if kind == "CastColumn":
+        raw_map = values.get("type_mapping")
+        c_dict = {}
+        if isinstance(raw_map, dict):
+            c_dict = raw_map
+        elif isinstance(raw_map, str):
+            for chunk in raw_map.split(","):
+                if ":" in chunk:
+                    c, t = chunk.split(":", 1)
+                    if c.strip() and t.strip():
+                        c_dict[c.strip()] = t.strip()
+        if not c_dict:
+            raise ValueError("Type mapping 'column:type' is required for a Change Data Type node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "cast_column",
+            "casts": c_dict,
+            "type_mapping": raw_map,
+        }
+
+    if kind == "SplitColumn":
+        col = (values.get("column") or "").strip()
+        if not col:
+            raise ValueError("Source column is required for a Split Column node.")
+        new_cols = values.get("new_columns")
+        new_cols = [c.strip() for c in new_cols.split(",") if c.strip()] if isinstance(new_cols, str) else list(new_cols or [])
+        if not new_cols:
+            raise ValueError("At least one output column name is required for a Split Column node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "split_column",
+            "column": col,
+            "delimiter": values.get("delimiter") if values.get("delimiter") is not None else " ",
+            "new_columns": new_cols,
+        }
+
+    if kind == "TextTransform":
+        cols = values.get("columns")
+        cols = [c.strip() for c in cols.split(",") if c.strip()] if isinstance(cols, str) else list(cols or [])
+        if not cols:
+            raise ValueError("Target columns are required for a Format Text node.")
+        act = (values.get("transform_action") or "trim").strip()
+        return {
+            "node_type": "Transform",
+            "transform_type": "text_transform",
+            "columns": cols,
+            "transform_action": act,
+        }
+
+    if kind == "Deduplicate":
+        cols = values.get("columns")
+        cols = [c.strip() for c in cols.split(",") if c.strip()] if isinstance(cols, str) else list(cols or [])
+        return {
+            "node_type": "Transform",
+            "transform_type": "deduplicate",
+            "columns": cols,
+        }
+
+    if kind == "ConditionalColumn":
+        new_col = (values.get("new_column") or "").strip()
+        if not new_col:
+            raise ValueError("New column name is required for a Conditional Column node.")
+        if_cond = (values.get("if_condition") or "").strip()
+        if not if_cond:
+            raise ValueError("IF condition is required for a Conditional Column node.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "conditional_column",
+            "new_column": new_col,
+            "if_condition": if_cond,
+            "then_value": values.get("then_value"),
+            "else_value": values.get("else_value"),
+        }
+
+    if kind == "IndexColumn":
+        col_name = (values.get("column_name") or "index").strip()
+        if not col_name:
+            raise ValueError("Index column name is required for an Index Column node.")
+        try:
+            start_val = int(values.get("start_value", 1))
+            inc_val = int(values.get("increment", 1))
+        except ValueError:
+            raise ValueError("Start value and increment must be integers.")
+        return {
+            "node_type": "Transform",
+            "transform_type": "index_column",
+            "column_name": col_name,
+            "start_value": start_val,
+            "increment": inc_val,
         }
 
     if kind == "AddColumn":
@@ -585,6 +794,70 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
             "on": on,
             "values": values,
             "aggregate_function": data.get("aggregate_function") or "sum",
+        }
+    if kind == "Unpivot":
+        index = data.get("index") or []
+        on = data.get("on") or []
+        if isinstance(index, list):
+            index = ", ".join(str(c) for c in index)
+        if isinstance(on, list):
+            on = ", ".join(str(c) for c in on)
+        return {
+            "index": index,
+            "on": on,
+            "variable_name": data.get("variable_name") or "variable",
+            "value_name": data.get("value_name") or "value",
+        }
+    if kind == "FillDown":
+        cols = data.get("columns") or []
+        if isinstance(cols, list):
+            cols = ", ".join(str(c) for c in cols)
+        return {
+            "columns": cols,
+            "order_by": data.get("order_by") or "",
+        }
+    if kind == "RenameColumn":
+        mapping = data.get("mapping") or {}
+        map_str = data.get("column_mapping") or ", ".join(f"{k}:{v}" for k, v in mapping.items())
+        return {"column_mapping": map_str}
+    if kind == "CastColumn":
+        casts = data.get("casts") or {}
+        casts_str = data.get("type_mapping") or ", ".join(f"{k}:{v}" for k, v in casts.items())
+        return {"type_mapping": casts_str}
+    if kind == "SplitColumn":
+        new_cols = data.get("new_columns") or []
+        if isinstance(new_cols, list):
+            new_cols = ", ".join(str(c) for c in new_cols)
+        return {
+            "column": data.get("column") or "",
+            "delimiter": data.get("delimiter") if data.get("delimiter") is not None else " ",
+            "new_columns": new_cols,
+        }
+    if kind == "TextTransform":
+        cols = data.get("columns") or []
+        if isinstance(cols, list):
+            cols = ", ".join(str(c) for c in cols)
+        return {
+            "columns": cols,
+            "transform_action": data.get("transform_action") or "trim",
+        }
+    if kind == "Deduplicate":
+        cols = data.get("columns") or []
+        if isinstance(cols, list):
+            cols = ", ".join(str(c) for c in cols)
+        return {"columns": cols}
+    if kind == "ConditionalColumn":
+        return {
+            "new_column": data.get("new_column") or "conditional_col",
+            "if_condition": data.get("if_condition") or data.get("condition") or "",
+            "then_value": data.get("then_value") or data.get("then") or "",
+            "else_value": data.get("else_value") if data.get("else_value") is not None else (data.get("else") or ""),
+        }
+    if kind == "IndexColumn":
+        return {
+            "column_name": data.get("column_name") or "index",
+            "start_value": str(data.get("start_value", 1)),
+            "increment": str(data.get("increment", 1)),
         }
     if kind == "AddColumn":
         columns = data.get("columns") or []

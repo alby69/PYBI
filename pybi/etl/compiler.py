@@ -11,13 +11,22 @@ import polars as pl
 from pybi.core.exceptions import CompilationError, FoldingError
 from pybi.etl.nodes import (
     CalculatedColumnNode,
+    CastColumnNode,
+    ConditionalColumnNode,
     DataSourceNode,
+    DeduplicateNode,
+    FillDownNode,
     FilterNode,
     GroupByNode,
+    IndexColumnNode,
     JoinNode,
     OutputNode,
     PivotNode,
+    RenameColumnNode,
     SelectNode,
+    SplitColumnNode,
+    TextTransformNode,
+    UnpivotNode,
 )
 
 log = logging.getLogger(__name__)
@@ -182,6 +191,42 @@ class ETLCompiler:
                     cte_queries[node_id] = node_obj.to_sql_expr_two_tables(left_sql, right_sql)
                 elif transform_type == "pivot":
                     node_obj = PivotNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type == "unpivot":
+                    node_obj = UnpivotNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("fill_down", "filldown"):
+                    node_obj = FillDownNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("rename_column", "rename"):
+                    node_obj = RenameColumnNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("cast_column", "cast"):
+                    node_obj = CastColumnNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("split_column", "split"):
+                    node_obj = SplitColumnNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("text_transform", "text"):
+                    node_obj = TextTransformNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("deduplicate", "distinct"):
+                    node_obj = DeduplicateNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("conditional_column", "conditional"):
+                    node_obj = ConditionalColumnNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("index_column", "index"):
+                    node_obj = IndexColumnNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
                 elif transform_type in ("add_column", "addcolumn", "calculated_column"):

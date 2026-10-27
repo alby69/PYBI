@@ -37,7 +37,47 @@ def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
             return CoreSemanticModel.load_yaml_file(filepath)
         except Exception:
             pass
-    return CoreSemanticModel(name=f"{project_id}_semantic_model", tables=[], relationships=[], rls_rules=[])
+
+    # Return default populated sample model if model file does not exist yet
+    t1 = SemanticTable(
+        name='sales',
+        source_table='sales_data',
+        columns=[
+            SemanticColumn(name='sale_id', column_name='sale_id', data_type='integer', is_key=True),
+            SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=False),
+            SemanticColumn(name='region', column_name='region', data_type='string'),
+            SemanticColumn(name='amount', column_name='amount', data_type='float'),
+            SemanticColumn(name='cost', column_name='cost', data_type='float'),
+        ],
+        measures=[
+            SemanticMeasure(name='Total_Sales', expression='SUM(amount)', agg_func='SUM', label='Total Sales'),
+            SemanticMeasure(name='Margine_Lordo', expression='SUM(amount) - SUM(cost)', agg_func='CUSTOM', label='Margine Lordo')
+        ]
+    )
+    t2 = SemanticTable(
+        name='stores',
+        source_table='store_dim',
+        columns=[
+            SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=True),
+            SemanticColumn(name='store_name', column_name='store_name', data_type='string'),
+            SemanticColumn(name='country', column_name='country', data_type='string'),
+        ]
+    )
+    r1 = SemanticRelationship(
+        from_table='sales',
+        from_column='store_id',
+        to_table='stores',
+        to_column='store_id',
+        cardinality=Cardinality.MANY_TO_ONE,
+        join_type=JoinType.LEFT,
+        is_active=True,
+    )
+    return CoreSemanticModel(
+        name=f"{project_id}_semantic_model",
+        tables=[t1, t2],
+        relationships=[r1],
+        rls_rules=[]
+    )
 
 
 def save_project_semantic_model(project_id: str, model: CoreSemanticModel) -> str:
@@ -76,6 +116,7 @@ def create_model_editor_page():
         ui.button('Save Model (YAML)', on_click=lambda: save_model()).props('color=positive icon=save dense')
         ui.button('Generate from Schema', on_click=lambda: auto_generate_schema()).props('color=secondary icon=auto_awesome dense')
         ui.button('Gestisci relazioni', on_click=lambda: open_manage_relationships_dialog()).props('color=primary icon=settings_ethernet dense')
+        ui.button('Adatta alla finestra', on_click=lambda: flow_editor.fit_view()).props('color=dark icon=zoom_out_map dense')
         ui.button('Add Measure', on_click=lambda: open_add_measure_dialog()).props('color=info icon=functions dense')
         ui.button('Add RLS Rule', on_click=lambda: open_add_rls_dialog()).props('color=warning icon=security dense')
         ui.separator().props('vertical')
@@ -124,16 +165,81 @@ def create_model_editor_page():
     def auto_generate_schema():
         pid = project_manager.project_id
         files = default_storage.list_project_files(pid)
-        if not files:
+        data_dir = default_storage.get_project_data_dir(pid)
+
+        tables = []
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in ['.csv', '.parquet', '.sqlite', '.db']:
+                continue
+            tbl_name = os.path.splitext(f)[0]
+            full_p = os.path.join(data_dir, f)
+
+            cols = []
+            measures = []
+
+            try:
+                if ext == '.csv':
+                    import polars as pl
+                    from pybi.etl.connectors import read_csv
+                    df = read_csv(full_p, n_rows=100)
+                    for col_name, dtype in df.schema.items():
+                        col_type = str(dtype).lower()
+                        if 'int' in col_type or 'float' in col_type or 'decimal' in col_type or 'double' in col_type:
+                            data_type = 'number'
+                        elif 'bool' in col_type:
+                            data_type = 'boolean'
+                        elif 'date' in col_type or 'time' in col_type:
+                            data_type = 'datetime'
+                        else:
+                            data_type = 'string'
+
+                        is_key = col_name.lower().endswith('id') or col_name.lower() == 'id'
+                        cols.append(SemanticColumn(name=col_name, column_name=col_name, data_type=data_type, is_key=is_key))
+
+                        # Create default measure for numeric columns
+                        if data_type == 'number' and not is_key:
+                            measures.append(SemanticMeasure(name=f'sum_{col_name}', expression=f'SUM({col_name})', agg_func='SUM', label=f'Sum of {col_name}'))
+
+                elif ext == '.parquet':
+                    import polars as pl
+                    schema = pl.scan_parquet(full_p).collect_schema()
+                    for col_name, dtype in schema.items():
+                        col_type = str(dtype).lower()
+                        if 'int' in col_type or 'float' in col_type or 'decimal' in col_type or 'double' in col_type:
+                            data_type = 'number'
+                        elif 'bool' in col_type:
+                            data_type = 'boolean'
+                        elif 'date' in col_type or 'time' in col_type:
+                            data_type = 'datetime'
+                        else:
+                            data_type = 'string'
+
+                        is_key = col_name.lower().endswith('id') or col_name.lower() == 'id'
+                        cols.append(SemanticColumn(name=col_name, column_name=col_name, data_type=data_type, is_key=is_key))
+            except Exception as err:
+                print(f"Error inspecting {f}: {err}")
+
+            if not cols:
+                cols = [
+                    SemanticColumn(name=f'{tbl_name}_id', column_name=f'{tbl_name}_id', data_type='number', is_key=True),
+                    SemanticColumn(name='name', column_name='name', data_type='string'),
+                    SemanticColumn(name='value', column_name='value', data_type='number')
+                ]
+
+            tables.append(SemanticTable(name=tbl_name, source_table=tbl_name, columns=cols, measures=measures))
+
+        if not tables:
+            # Fallback default tables if no files exist
             t1 = SemanticTable(
                 name='sales',
                 source_table='sales_data',
                 columns=[
-                    SemanticColumn(name='sale_id', column_name='sale_id', data_type='integer', is_key=True),
-                    SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=False),
+                    SemanticColumn(name='sale_id', column_name='sale_id', data_type='number', is_key=True),
+                    SemanticColumn(name='store_id', column_name='store_id', data_type='number', is_key=False),
                     SemanticColumn(name='region', column_name='region', data_type='string'),
-                    SemanticColumn(name='amount', column_name='amount', data_type='float'),
-                    SemanticColumn(name='cost', column_name='cost', data_type='float'),
+                    SemanticColumn(name='amount', column_name='amount', data_type='number'),
+                    SemanticColumn(name='cost', column_name='cost', data_type='number'),
                 ],
                 measures=[
                     SemanticMeasure(name='Total_Sales', expression='SUM(amount)', agg_func='SUM', label='Total Sales'),
@@ -144,39 +250,20 @@ def create_model_editor_page():
                 name='stores',
                 source_table='store_dim',
                 columns=[
-                    SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=True),
+                    SemanticColumn(name='store_id', column_name='store_id', data_type='number', is_key=True),
                     SemanticColumn(name='store_name', column_name='store_name', data_type='string'),
                     SemanticColumn(name='country', column_name='country', data_type='string'),
                 ]
             )
-            current_model.tables = [t1, t2]
-            current_model.relationships = [
-                SemanticRelationship(
-                    from_table='sales',
-                    from_column='store_id',
-                    to_table='stores',
-                    to_column='store_id',
-                    cardinality=Cardinality.MANY_TO_ONE,
-                    join_type=JoinType.LEFT,
-                    is_active=True,
-                )
-            ]
-        else:
-            tables = []
-            for f in files:
-                tbl_name = os.path.splitext(f)[0]
-                cols = [
-                    SemanticColumn(name=f'{tbl_name}_id', column_name=f'{tbl_name}_id', data_type='integer', is_key=True),
-                    SemanticColumn(name='name', column_name='name', data_type='string'),
-                    SemanticColumn(name='value', column_name='value', data_type='float')
-                ]
-                meas = [
-                    SemanticMeasure(name=f'total_{tbl_name}', expression='SUM(value)', agg_func='SUM')
-                ]
-                tables.append(SemanticTable(name=tbl_name, source_table=tbl_name, columns=cols, measures=meas))
-            current_model.tables = tables
+            tables = [t1, t2]
 
-        ui.notify('Schema generated automatically!', type='positive')
+        current_model.tables = tables
+        # Autodetect relationships between newly generated tables
+        new_rels = autodetect_relationships(tables, current_model.relationships)
+        if new_rels:
+            current_model.relationships.extend(new_rels)
+
+        ui.notify('Schema generated automatically from real data files!', type='positive')
         save_model()
 
     def update_columns_for_table(table_name: str, dropdown_target: ui.select):

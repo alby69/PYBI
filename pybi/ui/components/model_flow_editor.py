@@ -70,3 +70,7 @@ class ModelFlowEditor(ui.element, component='model_flow_editor.js'):
     def on_change(self, handler: Callable) -> 'ModelFlowEditor':
         self.on('change', handler)
         return self
+
+    def fit_view(self) -> None:
+        """Trigger canvas zoom and fit view in browser."""
+        self.run_method('fitView')

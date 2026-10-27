@@ -1,4 +1,4 @@
-import { VueFlow, Handle } from 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.42.0/dist/vue-flow-core.mjs';
+import { VueFlow, Handle, Panel, useVueFlow } from 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.42.0/dist/vue-flow-core.mjs';
 
 export default {
     template: `
@@ -9,6 +9,7 @@ export default {
                 :fit-view-on-init="true"
                 class="vue-flow-theme-default"
                 style="height: 100%; width: 100%;"
+                @pane-ready="onPaneReady"
                 @node-drag-stop="onNodeDragStop"
                 @node-click="onNodeClick"
                 @edge-click="onEdgeClick"
@@ -16,6 +17,18 @@ export default {
                 @nodes-change="emitChange"
                 @edges-change="emitChange"
             >
+                <Panel position="top-right" class="flex gap-2 bg-white/90 p-1.5 rounded-lg border border-slate-200 shadow-sm backdrop-blur-sm">
+                    <button
+                        type="button"
+                        @click="fitView"
+                        class="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded transition-colors flex items-center gap-1 border border-slate-300"
+                        title="Adatta alla finestra (Fit View)"
+                    >
+                        <span>🔍</span>
+                        <span>Adatta alla finestra</span>
+                    </button>
+                </Panel>
+
                 <template #node-table_card="props">
                     <div
                         class="table-card bg-white border-2 rounded-lg shadow-md min-w-[220px] max-w-[280px] overflow-hidden transition-all duration-150"
@@ -81,7 +94,12 @@ export default {
     `,
     components: {
         VueFlow,
-        Handle
+        Handle,
+        Panel
+    },
+    setup() {
+        const { fitView } = useVueFlow();
+        return { fitView };
     },
     props: {
         nodes: {
@@ -121,6 +139,13 @@ export default {
                 nodes: this.localNodes,
                 edges: this.localEdges
             });
+        },
+        onPaneReady() {
+            setTimeout(() => {
+                if (this.fitView) {
+                    this.fitView({ padding: 0.2 });
+                }
+            }, 100);
         },
         onNodeClick(payload) {
             const node = payload && payload.node ? payload.node : null;

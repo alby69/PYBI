@@ -10,6 +10,7 @@ NODE_COLORS: Dict[str, Dict[str, str]] = {
     'Select': {'bg': '#ede9fe', 'border': '#7c3aed', 'text': '#6d28d9', 'icon': '🔍'},
     'GroupBy': {'bg': '#fce7f3', 'border': '#db2777', 'text': '#be185d', 'icon': '📊'},
     'Join': {'bg': '#ffedd5', 'border': '#ea580c', 'text': '#c2410c', 'icon': '🔗'},
+    'AddColumn': {'bg': '#ecfccb', 'border': '#65a30d', 'text': '#4d7c0f', 'icon': '🧮'},
     'Output': {'bg': '#dcfce7', 'border': '#16a34a', 'text': '#15803d', 'icon': '💾'},
 }
 

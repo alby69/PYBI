@@ -6,6 +6,7 @@ from nicegui import ui
 
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
+from pybi.etl.column_inspector import ColumnResolver, source_columns
 from pybi.etl.executor import execute_dag
 from pybi.etl.node_factory import (
     NODE_KINDS,
@@ -165,6 +166,7 @@ def create_etl_editor_page():
     def get_search_items():
         return [{'id': n.get('id'), 'label': n.get('label'), 'kind': node_kind(n)} for n in flow.nodes]
 
+
     def on_search_select(item):
         node_id = item.get('id')
         if node_id:
@@ -251,10 +253,71 @@ def create_etl_editor_page():
             log_container.push(f'[Node Deleted] {node_id} "{removed.get("label", "")}"')
         status_label.set_text('State: Pipeline modified, save to persist')
 
+    def project_base_dir():
+        try:
+            return default_storage.get_project_data_dir(project_manager.project_id)
+        except Exception:
+            return None
+
+    def source_columns_for(values):
+        return source_columns(
+            values.get('source_type') or 'csv',
+            (values.get('file_path') or '').strip(),
+            csv_separator=values.get('csv_separator') or 'auto',
+            query=(values.get('query') or '').strip() or None,
+            base_dir=project_base_dir(),
+        )
+
+    def join_columns_for(node_id):
+        resolver = ColumnResolver(flow.nodes, flow.edges, base_dir=project_base_dir())
+        labels = resolver.input_labels(node_id)
+        sides = []
+        for index, label in enumerate(labels[:2]):
+            title = 'Left input' if index == 0 else 'Right input'
+            sides.append((f'{title} — {label}', resolver.input_columns(node_id, index)))
+        return sides
+
+    def upstream_columns_for(node_id):
+        resolver = ColumnResolver(flow.nodes, flow.edges, base_dir=project_base_dir())
+        return resolver.input_columns(node_id, 0)
+
+    def upstream_sample_for(node_id):
+        """Execute the upstream part of the DAG and return a small preview frame."""
+        resolver = ColumnResolver(flow.nodes, flow.edges, base_dir=project_base_dir())
+        parents = resolver.parents.get(node_id, [])
+        if not parents:
+            return None
+        target = parents[0]
+        keep = set()
+        stack = [target]
+        while stack:
+            current = stack.pop()
+            if current in keep:
+                continue
+            keep.add(current)
+            stack.extend(resolver.parents.get(current, []))
+        nodes = [node for node in flow.nodes if node.get('id') in keep]
+        edges = [
+            edge for edge in flow.edges
+            if edge.get('source') in keep and edge.get('target') in keep
+        ]
+        try:
+            result = execute_dag({'nodes': nodes, 'edges': edges}, base_dir=project_base_dir())
+        except Exception:  # noqa: BLE001 - the preview is best effort
+            return None
+        if result.status != 'success':
+            return None
+        frame = result.dataframes.get(target)
+        return frame.head(20) if frame is not None else None
+
     property_panel = PropertyPanel(
         on_save=on_property_save,
         on_delete=on_property_delete,
         file_options=lambda: default_storage.list_project_files(project_manager.project_id),
+        source_columns_provider=source_columns_for,
+        join_columns_provider=join_columns_for,
+        upstream_columns_provider=upstream_columns_for,
+        sample_frame_provider=upstream_sample_for,
     )
 
     # --- Canvas event handlers --------------------------------------------

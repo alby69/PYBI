@@ -5,6 +5,11 @@ from typing import Any, Dict, List, Optional
 import ibis.expr.types as ir
 import polars as pl
 from pybi.core.exceptions import ValidationError
+from pybi.etl.calculated import (
+    apply_calculated_column,
+    build_calculated_expression,
+    quote_identifier,
+)
 from .base import BaseETLNode
 
 
@@ -350,3 +355,53 @@ class PivotNode(BaseETLNode):
         table_expr = _format_input_table(input_table)
 
         return f"PIVOT {table_expr} ON {on_str} USING {agg_fn}({val_str}) {index_str}".strip()
+
+
+class CalculatedColumnNode(BaseETLNode):
+    """Add (or replace) a calculated column built from the input data."""
+
+    @property
+    def foldable(self) -> bool:
+        # The expression is plain DuckDB SQL, so materialize with Polars/DuckDB
+        # and let the compiler continue from the resulting table.
+        return False
+
+    def validate(self) -> List[str]:
+        errors: List[str] = []
+        new_column = str(self.data.get("new_column") or "").strip()
+        if not new_column:
+            errors.append(f"Add Column node '{self.node_id}' missing the new column name.")
+        try:
+            build_calculated_expression(
+                mode=self.data.get("mode") or "concat",
+                columns=self.data.get("columns"),
+                separator=self.data.get("separator"),
+                expression=self.data.get("expression"),
+                trim=bool(self.data.get("trim", True)),
+            )
+        except ValueError as err:
+            errors.append(f"Add Column node '{self.node_id}': {err}")
+        return errors
+
+    def transform_fn(self, df: pl.DataFrame) -> pl.DataFrame:
+        return apply_calculated_column(
+            df,
+            new_column=self.data.get("new_column") or "",
+            mode=self.data.get("mode") or "concat",
+            columns=self.data.get("columns"),
+            separator=self.data.get("separator"),
+            expression=self.data.get("expression"),
+            trim=bool(self.data.get("trim", True)),
+        )
+
+    def to_sql_expr(self, input_table: str) -> str:
+        expr = build_calculated_expression(
+            mode=self.data.get("mode") or "concat",
+            columns=self.data.get("columns"),
+            separator=self.data.get("separator"),
+            expression=self.data.get("expression"),
+            trim=bool(self.data.get("trim", True)),
+        )
+        target = quote_identifier(self.data.get("new_column") or "new_column")
+        table_expr = _format_input_table(input_table)
+        return f"SELECT *, {expr} AS {target} FROM {table_expr}"

@@ -5,6 +5,7 @@ from .custom import CustomPythonNode
 from .output import OutputNode
 from .source import DataSourceNode, SourceNode
 from .transform import (
+    CalculatedColumnNode,
     FilterNode,
     GroupByAggregateNode,
     GroupByNode,
@@ -25,6 +26,7 @@ __all__ = [
     "GroupByAggregateNode",
     "JoinNode",
     "PivotNode",
+    "CalculatedColumnNode",
     "CustomPythonNode",
     "OutputNode",
 ]

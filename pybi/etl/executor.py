@@ -17,31 +17,17 @@ from pybi.etl.optimizer import SQLOptimizer
 from pybi.model.engine import ModelEngine
 from pybi.etl.nodes.output import OutputNode
 
-from .connectors import (
+from pybi.etl.connectors import (
     read_csv,
     read_parquet,
     read_postgres,
     read_sqlite,
 )
-from .node_factory import JOIN_TYPES
+from pybi.etl.node_factory import JOIN_TYPES
+from pybi.etl.calculated import apply_calculated_column
+from pybi.etl.paths import resolve_data_path
 
 log = logging.getLogger(__name__)
-
-
-def resolve_data_path(filepath: str, base_dir: Optional[str] = None) -> str:
-    """Resolve a data file path against the project data folder."""
-    if not filepath or not base_dir:
-        return filepath
-    if os.path.isabs(filepath) and os.path.exists(filepath):
-        return filepath
-    candidates = []
-    if not os.path.isabs(filepath):
-        candidates.append(os.path.join(base_dir, filepath))
-    candidates.append(os.path.join(base_dir, os.path.basename(filepath)))
-    for candidate in candidates:
-        if os.path.exists(candidate):
-            return candidate
-    return filepath
 
 
 def _as_key_list(value: Any) -> List[str]:
@@ -354,6 +340,8 @@ class ETLExecutor:
             label_lower = label.lower()
             if "filter" in label_lower:
                 transform_type = "filter"
+            elif "add column" in label_lower or "calculated column" in label_lower:
+                transform_type = "add_column"
             elif "select" in label_lower:
                 transform_type = "select"
             elif "group" in label_lower:
@@ -469,6 +457,21 @@ class ETLExecutor:
                 aggregate_function=agg_fn,
             )
             return pivoted_df, f"Pivoted on {on_cols} with aggregate '{agg_fn}': {len(pivoted_df)} rows"
+
+        elif transform_type in ("add_column", "addcolumn", "calculated_column"):
+            new_column = (data.get("new_column") or data.get("column") or "").strip()
+            if not new_column:
+                raise ValueError(f"Add Column node '{node_id}' requires a name for the new column.")
+            result_df = apply_calculated_column(
+                parent_df,
+                new_column,
+                mode=data.get("mode") or "concat",
+                columns=data.get("columns"),
+                separator=data.get("separator"),
+                expression=data.get("expression"),
+                trim=bool(data.get("trim", True)),
+            )
+            return result_df, f"Added calculated column '{new_column}': {len(result_df)} rows"
 
         else:
             return parent_df, f"Unknown transform '{transform_type}', passing data through"

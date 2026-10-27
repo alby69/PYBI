@@ -3,7 +3,14 @@
 from typing import Dict, Type
 from pybi.core.interfaces import ETLNode
 from .source import DataSourceNode
-from .transform import FilterNode, SelectNode, GroupByNode, JoinNode, PivotNode
+from .transform import (
+    CalculatedColumnNode,
+    FilterNode,
+    GroupByNode,
+    JoinNode,
+    PivotNode,
+    SelectNode,
+)
 from .output import OutputNode
 
 NODE_REGISTRY: Dict[str, Type[ETLNode]] = {
@@ -13,6 +20,7 @@ NODE_REGISTRY: Dict[str, Type[ETLNode]] = {
     "GroupBy": GroupByNode,
     "Join": JoinNode,
     "Pivot": PivotNode,
+    "AddColumn": CalculatedColumnNode,
     "Output": OutputNode,
 }
 
@@ -23,6 +31,9 @@ _TRANSFORM_NODES: Dict[str, Type[ETLNode]] = {
     "group_by": GroupByNode,
     "join": JoinNode,
     "pivot": PivotNode,
+    "add_column": CalculatedColumnNode,
+    "addcolumn": CalculatedColumnNode,
+    "calculated_column": CalculatedColumnNode,
 }
 
 

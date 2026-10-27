@@ -10,6 +10,7 @@ import polars as pl
 
 from pybi.core.exceptions import CompilationError, FoldingError
 from pybi.etl.nodes import (
+    CalculatedColumnNode,
     DataSourceNode,
     FilterNode,
     GroupByNode,
@@ -181,6 +182,10 @@ class ETLCompiler:
                     cte_queries[node_id] = node_obj.to_sql_expr_two_tables(left_sql, right_sql)
                 elif transform_type == "pivot":
                     node_obj = PivotNode(node_id, data=data)
+                    parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
+                    cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
+                elif transform_type in ("add_column", "addcolumn", "calculated_column"):
+                    node_obj = CalculatedColumnNode(node_id, data=data)
                     parent_sql = cte_queries.get(parents[0]) if parents else "source_df"
                     cte_queries[node_id] = node_obj.to_sql_expr(parent_sql)
 

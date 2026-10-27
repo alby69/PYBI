@@ -19,6 +19,29 @@ from pybi.export.router import router as export_router
 from pybi.server.ui_schema import router as ui_schema_router
 
 
+def register_routers(app: FastAPI) -> None:
+    """Register all API routers (v1 + legacy) on the given FastAPI-compatible app.
+
+    Used by ``create_app`` for the standalone REST server and by the NiceGUI app,
+    so both serve the same ``/api/...`` endpoints without mounting a sub-application
+    (mounting would shadow NiceGUI's dynamically registered routes such as uploads).
+    """
+    # Include versioned v1 REST API routers
+    app.include_router(v1_auth_router)
+    app.include_router(v1_projects_router)
+    app.include_router(v1_files_router)
+    app.include_router(v1_etl_router)
+    app.include_router(v1_dashboards_router)
+    app.include_router(v1_exports_router)
+    app.include_router(v1_ui_schema_router)
+    app.include_router(v1_viewer_router)
+
+    # Include legacy /api routes for backward compatibility with existing tests
+    app.include_router(viewer_router)
+    app.include_router(export_router)
+    app.include_router(ui_schema_router)
+
+
 def create_app() -> FastAPI:
     """Create and configure pure FastAPI application instance with API v1 routes."""
     app = FastAPI(
@@ -61,20 +84,8 @@ def create_app() -> FastAPI:
             content={"detail": detail, "code": "API_ERROR"},
         )
 
-    # Include versioned v1 REST API routers
-    app.include_router(v1_auth_router)
-    app.include_router(v1_projects_router)
-    app.include_router(v1_files_router)
-    app.include_router(v1_etl_router)
-    app.include_router(v1_dashboards_router)
-    app.include_router(v1_exports_router)
-    app.include_router(v1_ui_schema_router)
-    app.include_router(v1_viewer_router)
-
-    # Include legacy /api routes for backward compatibility with existing tests
-    app.include_router(viewer_router)
-    app.include_router(export_router)
-    app.include_router(ui_schema_router)
+    # Include versioned v1 REST API routers and legacy /api routes
+    register_routers(app)
 
     return app
 

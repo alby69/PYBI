@@ -13,6 +13,7 @@ from pybi.etl.nodes.ui_schema import (
     OUTPUT_TYPES,
     AGGREGATIONS,
     JOIN_TYPES,
+    CALCULATED_MODES,
     PIVOT_STYLE,
     NODE_KINDS,
     KIND_PREFIX,
@@ -77,12 +78,26 @@ def validate_pipeline(nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) 
     for node in nodes:
         kind = node_kind(node)
         node_id = node.get("id", "unknown")
-        if kind in ("Filter", "Select", "GroupBy", "Pivot", "Output") and not parents[node_id]:
+        if kind in ("Filter", "Select", "GroupBy", "Pivot", "AddColumn", "Output") and not parents[node_id]:
             problems.append(f"Node '{node_id}' ({kind}) needs at least one incoming connection.")
         if kind in ("DataSource",) and parents[node_id]:
             problems.append(f"Node '{node_id}' (Data Source) must not have incoming connections.")
         if kind == "Output" and len(parents[node_id]) > 1:
             problems.append(f"Node '{node_id}' (Output) only reads its first input.")
+        if kind == "AddColumn" and len(parents[node_id]) > 1:
+            problems.append(f"Node '{node_id}' (Add Calculated Column) only reads its first input.")
+        if kind == "AddColumn":
+            data = node.get("data") or {}
+            if not str(data.get("new_column") or "").strip():
+                problems.append(f"Node '{node_id}' (Add Calculated Column) needs a name for the new column.")
+            mode = (data.get("mode") or "concat").lower()
+            if mode == "expression":
+                if not str(data.get("expression") or "").strip():
+                    problems.append(f"Node '{node_id}' (Add Calculated Column) needs a SQL expression.")
+            elif not data.get("columns"):
+                problems.append(
+                    f"Node '{node_id}' (Add Calculated Column) needs at least one column to concatenate."
+                )
         if kind == "Join":
             incoming = len(parents[node_id])
             if incoming == 1:
@@ -104,6 +119,7 @@ __all__ = [
     "OUTPUT_TYPES",
     "AGGREGATIONS",
     "JOIN_TYPES",
+    "CALCULATED_MODES",
     "PIVOT_STYLE",
     "NODE_KINDS",
     "KIND_PREFIX",

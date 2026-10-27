@@ -82,11 +82,21 @@ class FilterContext:
         conditions = []
         for f in filters:
             if f.operator == "IN":
-                vals = ", ".join([f"'{str(v).replace("'", "''")}'" if isinstance(v, str) else str(v) for v in f.values])
+                vals_list = []
+                for v in f.values:
+                    if isinstance(v, str):
+                        v_str = str(v).replace("'", "''")
+                        vals_list.append(f"'{v_str}'")
+                    else:
+                        vals_list.append(str(v))
+                vals = ", ".join(vals_list)
                 conditions.append(f"{f.column} IN ({vals})")
             else:
                 val = f.values[0] if f.values else ""
-                val_repr = f"'{str(val).replace("'", "''")}'" if isinstance(val, str) else str(val)
+                if isinstance(val, str):
+                    val_repr = "'" + str(val).replace("'", "''") + "'"
+                else:
+                    val_repr = str(val)
                 conditions.append(f"{f.column} {f.operator} {val_repr}")
 
         return "WHERE " + " AND ".join(conditions)

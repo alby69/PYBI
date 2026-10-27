@@ -22,10 +22,6 @@ def setup_routes():
         ui.label('Python Business Intelligence Platform - Power BI Style Workspace').classes('text-gray-600 q-mb-lg')
 
         with ui.row().classes('gap-4 flex-wrap'):
-            ui.button('Data (ETL)', on_click=lambda: ui.navigate.to('/etl-editor')).props('color=primary icon=account_tree')
-            ui.button('Model View', on_click=lambda: ui.navigate.to('/model-editor')).props('color=indigo icon=account_tree')
-            ui.button('Report (Dashboard)', on_click=lambda: ui.navigate.to('/dashboard-editor')).props('color=secondary icon=dashboard')
-            ui.button('Public Viewer', on_click=lambda: ui.navigate.to('/viewer')).props('color=positive icon=visibility')
             ui.button('Welcome Tour', on_click=wizard.open).props('outline color=info icon=auto_awesome')
 
     @ui.page('/etl-editor')
@@ -53,6 +49,13 @@ def setup_routes():
 @click.option('--host', default='0.0.0.0', help='Host to bind NiceGUI server to')
 def cli(port: int, host: str):
     setup_routes()
+
+    # Serve the REST API from the same app instead of mounting a sub-application:
+    # a mount at '' would shadow NiceGUI's runtime-registered routes (e.g. uploads).
+    from nicegui import app as nicegui_app
+    from pybi.api.main import register_routers
+    register_routers(nicegui_app)
+
     ui.run(title='PyBI - OpenBI Platform', host=host, port=port, reload=False, show=False)
 
 if __name__ in {"__main__", "__mp_main__"}:

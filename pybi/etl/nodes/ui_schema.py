@@ -4,10 +4,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from pybi.ui.theme import NODE_COLORS
 
 SOURCE_TYPES = ("csv", "parquet", "sqlite")
-TRANSFORM_TYPES = ("filter", "select", "groupby", "join", "pivot")
+TRANSFORM_TYPES = ("filter", "select", "groupby", "join", "pivot", "add_column")
 OUTPUT_TYPES = ("duckdb", "sqlite")
 AGGREGATIONS = ("sum", "mean", "min", "max", "count", "first", "last", "median", "std", "n_unique")
 JOIN_TYPES = ("inner", "left", "right", "full", "cross", "semi", "anti")
+CALCULATED_MODES = ("concat", "expression")
 
 PIVOT_STYLE = {"background": "#FFF8E1", "border": "2px solid #FFA000", "borderRadius": "8px", "padding": "10px"}
 
@@ -169,6 +170,59 @@ NODE_KINDS: Dict[str, Dict[str, Any]] = {
             },
         ],
     },
+    "AddColumn": {
+        "label": "Add Calculated Column",
+        "icon": "🧮",
+        "style": {"background": NODE_COLORS["AddColumn"]["bg"], "border": f"2px solid {NODE_COLORS['AddColumn']['border']}", "borderRadius": "8px", "padding": "10px"},
+        "fields": [
+            {
+                "key": "new_column",
+                "label": "New column name",
+                "kind": "text",
+                "default": "new_column",
+                "help": "Name of the column to add (or replace) in the table, e.g. key_sped.",
+            },
+            {
+                "key": "mode",
+                "label": "How to build it",
+                "kind": "choice",
+                "options": {
+                    "concat": "Concatenate text columns (A + separator + B)",
+                    "expression": "Custom SQL expression",
+                },
+                "default": "concat",
+                "help": "Use the guided text concatenation, or write any DuckDB SQL expression.",
+            },
+            {
+                "key": "columns",
+                "label": "Columns to concatenate (in order)",
+                "kind": "columns",
+                "default": "",
+                "help": "Pick the text columns in the order you want them joined. You can add more by typing a name.",
+            },
+            {
+                "key": "separator",
+                "label": "Separator",
+                "kind": "text",
+                "default": "_",
+                "help": "Text placed between the columns, e.g. _ or a space or -.",
+            },
+            {
+                "key": "trim",
+                "label": "Trim spaces around values",
+                "kind": "bool",
+                "default": True,
+                "help": "Removes leading/trailing spaces from each value before joining (recommended for join keys).",
+            },
+            {
+                "key": "expression",
+                "label": "SQL expression",
+                "kind": "text",
+                "default": "",
+                "help": "Used only in expression mode, e.g. upper(trim(\"Nome\")) || '_' || trim(\"Citta\").",
+            },
+        ],
+    },
     "Output": {
         "label": "Output Table",
         "icon": NODE_COLORS["Output"]["icon"],
@@ -207,6 +261,7 @@ KIND_PREFIX = {
     "GroupBy": "group",
     "Join": "join",
     "Pivot": "pivot",
+    "AddColumn": "calc",
     "Output": "output",
 }
 
@@ -218,6 +273,9 @@ _TRANSFORM_KIND = {
     "join": "Join",
     "inner_join": "Join",
     "pivot": "Pivot",
+    "add_column": "AddColumn",
+    "addcolumn": "AddColumn",
+    "calculated_column": "AddColumn",
 }
 
 
@@ -267,6 +325,15 @@ def build_label(kind: str, data: Dict[str, Any]) -> str:
         else:
             val_cols = str(vals)
         return f"{icon} Pivot ({val_cols} on {on_cols})"
+    if kind == "AddColumn":
+        new_column = data.get("new_column") or "new_column"
+        if (data.get("mode") or "concat") == "expression":
+            return f"{icon} Add Column ({new_column} = SQL)"
+        columns = data.get("columns") or []
+        if isinstance(columns, str):
+            columns = [part.strip() for part in columns.split(",") if part.strip()]
+        separator = data.get("separator") if data.get("separator") is not None else "_"
+        return f"{icon} Add Column ({new_column} = {' + '.join(str(c) for c in columns)} [{separator}])"
     if kind == "Output":
         table_name = data.get("table_name", "")
         if data.get("output_type") == "sqlite":
@@ -383,6 +450,45 @@ def build_node_data(kind: str, values: Dict[str, Any]) -> Dict[str, Any]:
             "aggregate_function": agg_fn,
         }
 
+    if kind == "AddColumn":
+        new_column = str(values.get("new_column") or "").strip()
+        if not new_column:
+            raise ValueError("The name of the new column is required.")
+        if '"' in new_column or "\n" in new_column:
+            raise ValueError('The column name cannot contain double quotes or line breaks.')
+        mode = (values.get("mode") or "concat").lower()
+        if mode not in CALCULATED_MODES:
+            raise ValueError(f"Unsupported calculated column mode '{mode}'. Supported: {', '.join(CALCULATED_MODES)}.")
+        data: Dict[str, Any] = {
+            "node_type": "Transform",
+            "transform_type": "add_column",
+            "new_column": new_column,
+            "mode": mode,
+        }
+        if mode == "expression":
+            expression = str(values.get("expression") or "").strip()
+            if not expression:
+                raise ValueError("A SQL expression is required in expression mode.")
+            data["expression"] = expression
+            return data
+
+        raw_columns = values.get("columns")
+        columns = (
+            [c.strip() for c in raw_columns.split(",") if c.strip()]
+            if isinstance(raw_columns, str)
+            else [str(c).strip() for c in (raw_columns or []) if str(c).strip()]
+        )
+        separator = values.get("separator")
+        trim = values.get("trim", True)
+        if isinstance(trim, str):
+            trim = trim.strip().lower() not in ("false", "0", "no", "off", "")
+        # An empty column list is allowed so the node can be created first and
+        # wired to an input later; validate_pipeline reports it before running.
+        data["columns"] = columns
+        data["separator"] = "_" if separator is None else str(separator)
+        data["trim"] = bool(trim)
+        return data
+
     if kind == "Output":
         table_name = (values.get("table_name") or "").strip()
         if not table_name:
@@ -479,6 +585,21 @@ def node_values(node: Dict[str, Any]) -> Dict[str, Any]:
             "on": on,
             "values": values,
             "aggregate_function": data.get("aggregate_function") or "sum",
+        }
+    if kind == "AddColumn":
+        columns = data.get("columns") or []
+        if isinstance(columns, list):
+            columns = ", ".join(str(c) for c in columns)
+        mode = (data.get("mode") or "concat").lower()
+        if mode not in CALCULATED_MODES:
+            mode = "concat"
+        return {
+            "new_column": data.get("new_column") or data.get("column") or "",
+            "mode": mode,
+            "columns": columns,
+            "separator": data.get("separator") if data.get("separator") is not None else "_",
+            "trim": bool(data.get("trim", True)),
+            "expression": data.get("expression") or "",
         }
     return {
         "table_name": data.get("table_name") or "",

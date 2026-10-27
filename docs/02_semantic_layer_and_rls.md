@@ -64,7 +64,25 @@ rls_rules:
 
 ---
 
-## 3. Automatic Multi-Table JOIN Resolution
+## 3. Gestione delle Relazioni tramite UI (Vista Modello Stile Power BI)
+
+La **Model View** di PyBI fornisce un'esperienza utente pari a quella di Power BI per l'ispezione grafica e la modifica delle relazioni fra le tabelle semantiche.
+
+### Flusso di lavoro passo-passo per l'utente:
+1. **Aprire la Vista Modello:** Selezionare `/model-editor` dal menu di navigazione superiore.
+2. **Creare una relazione tramite drag-and-drop:**
+   - Nel canvas principale Vue Flow, trascinare una linea di connessione (edge) muovendosi dal **punto di aggancio (handle)** di un campo/colonna specifico in una scheda tabella al campo di destinazione in un'altra tabella.
+3. **Modificare le proprietà reattive:**
+   - Cliccare su qualsiasi linea di relazione per caricarla nel **Pannello delle Proprietà a destra**.
+   - Selezionare o modificare la *Tabella di Origine/Destinazione* (i dropdown del *Campo di Origine/Destinazione* si popolano reattivamente con le relative colonne).
+   - Ajustare la *Cardinalità* (`1:1`, `1:*`, `*:1`, `*:*`), il *Tipo di Join* (`LEFT`, `INNER`, `RIGHT`, `FULL`) o disattivare la relazione (toggle *Active*). Le relazioni attive appaiono come linee continue, quelle inattive come linee tratteggiate.
+4. **Rilevamento Automatico (Autodetect):**
+   - Cliccare sul pulsante **"Gestisci relazioni"** nella barra degli strumenti per aprire la finestra di dialogo modale.
+   - Cliccare su **"Rileva automaticamente"** (Autodetect) per scansionare automaticamente i campi delle tabelle del modello e proporre relazioni tra colonne con nome e tipo di dato identici.
+
+---
+
+## 4. Automatic Multi-Table JOIN Resolution
 
 When a semantic query requests dimensions or measures across multiple tables (e.g. `stores.country` dimension with `sales.total_revenue` measure), `SemanticQueryResolver` automatically:
 1. Identifies the primary table (`sales`).

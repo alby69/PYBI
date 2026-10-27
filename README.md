@@ -6,7 +6,14 @@
 
 ---
 
-## 🔥 Novità ETL & UI/UX (Fase 6 Updates)
+## 🔥 Novità Vista Modello & ETL UI/UX
+
+- **✨ Novità: Vista Modello in stile Power BI:**
+  - **Canvas grafico Vue Flow per la gestione delle relazioni:** Creazione grafica delle relazioni fra tabelle tramite trascinamento diretto (drag-and-drop) a livello di singolo campo/colonna.
+  - **Visualizzazione differenziata delle relazioni:** Linee continue per relazioni attive (`is_active: true`) e tratteggiate (`stroke-dasharray: 5,5`) per relazioni inattive.
+  - **Pannello delle Proprietà Reattivo a Destra:** Selezione interattiva di Tabella/Campo di Origine e Destinazione con aggiornamento dinamico delle colonne, modifica della Cardinalità (`1:1`, `1:*`, `*:1`, `*:*`), del Tipo di Join (`LEFT`, `INNER`, `RIGHT`, `FULL`) e dello stato Attivo.
+  - **Finestra Modale "Gestisci relazioni" & Autodetect:** Dialogo centralizzato con pulsante **"Rileva automaticamente"** (Autodetect) che analizza la struttura del modello per proporre relazioni valide in base a nomi di colonna e tipi di dato corrispondenti.
+  ![Vista Modello Relazioni](screenshots/model_view_relationships.png)
 
 - **Miglioramenti UI/UX Editor ETL:**
   - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.

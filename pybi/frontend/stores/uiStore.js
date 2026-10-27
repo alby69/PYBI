@@ -5,7 +5,9 @@ export const state = reactive({
     activePage: '',
     loading: false,
     error: null,
-    pageState: {}
+    pageState: {},
+    currentSourceTable: null,
+    appliedStepsByTable: {}
 });
 
 export const useUIStore = () => {
@@ -52,9 +54,40 @@ export const useUIStore = () => {
         }
     }
 
+    function setCurrentSourceTable(tableName) {
+        state.currentSourceTable = tableName;
+        if (tableName && !state.appliedStepsByTable[tableName]) {
+            state.appliedStepsByTable[tableName] = [];
+        }
+    }
+
+    function getStepsForTable(tableName) {
+        const target = tableName || state.currentSourceTable;
+        if (!target) return [];
+        return state.appliedStepsByTable[target] || [];
+    }
+
+    function setStepsForTable(tableName, steps) {
+        if (!tableName) return;
+        state.appliedStepsByTable[tableName] = steps || [];
+    }
+
+    function addStepForTable(tableName, step) {
+        const target = tableName || state.currentSourceTable;
+        if (!target) return;
+        if (!state.appliedStepsByTable[target]) {
+            state.appliedStepsByTable[target] = [];
+        }
+        state.appliedStepsByTable[target].push(step);
+    }
+
     return {
         state,
         loadSchema,
-        triggerAction
+        triggerAction,
+        setCurrentSourceTable,
+        getStepsForTable,
+        setStepsForTable,
+        addStepForTable
     };
 };

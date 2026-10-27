@@ -53,6 +53,7 @@ def test_semantic_model_instantiation_and_yaml_roundtrip():
         to_column="store_id",
         cardinality=Cardinality.MANY_TO_ONE,
         join_type=JoinType.LEFT,
+        is_active=True,
     )
 
     rls = RLSRule(
@@ -98,6 +99,34 @@ def test_semantic_model_instantiation_and_yaml_roundtrip():
 
         file_reloaded = SemanticModel.load_yaml_file(file_path)
         assert file_reloaded.name == "enterprise_sales_model"
+
+
+def test_autodetect_relationships():
+    from pybi.core.semantic_model import autodetect_relationships
+
+    t1 = SemanticTable(
+        name="orders",
+        source_table="orders_tbl",
+        columns=[
+            SemanticColumn(name="order_id", column_name="order_id", data_type="integer", is_key=True),
+            SemanticColumn(name="customer_id", column_name="customer_id", data_type="integer", is_key=False),
+        ],
+    )
+    t2 = SemanticTable(
+        name="customers",
+        source_table="customers_tbl",
+        columns=[
+            SemanticColumn(name="customer_id", column_name="customer_id", data_type="integer", is_key=True),
+            SemanticColumn(name="name", column_name="name", data_type="string"),
+        ],
+    )
+    rels = autodetect_relationships([t1, t2])
+    assert len(rels) == 1
+    assert rels[0].from_table == "orders"
+    assert rels[0].from_column == "customer_id"
+    assert rels[0].to_table == "customers"
+    assert rels[0].to_column == "customer_id"
+    assert rels[0].is_active is True
 
 
 def test_semantic_query_resolver_multi_table_join():

@@ -57,6 +57,7 @@ class SemanticRelationship(BaseModel):
     to_column: str = Field(..., description="Target column key")
     cardinality: Union[Cardinality, str] = Field(Cardinality.MANY_TO_ONE, description="Relationship cardinality")
     join_type: Union[JoinType, str] = Field(JoinType.LEFT, description="Join type: LEFT, INNER, etc.")
+    is_active: bool = Field(True, description="Whether relationship is active")
 
 
 class RLSRule(BaseModel):
@@ -156,6 +157,73 @@ class SemanticModel(BaseModel):
         """Load SemanticModel from YAML file."""
         content = Path(filepath).read_text(encoding="utf-8")
         return cls.from_yaml(content)
+
+
+def autodetect_relationships(
+    tables: List[SemanticTable],
+    existing_relationships: Optional[List[SemanticRelationship]] = None,
+) -> List[SemanticRelationship]:
+    """Scans tables for matching column names and data types to propose relationships.
+
+    Args:
+        tables: List of SemanticTable objects to scan.
+        existing_relationships: Existing relationships to avoid duplicating.
+
+    Returns:
+        List[SemanticRelationship]: List of newly detected relationships.
+    """
+    detected: List[SemanticRelationship] = []
+    existing_pairs = set()
+    if existing_relationships:
+        for r in existing_relationships:
+            existing_pairs.add((r.from_table, r.from_column, r.to_table, r.to_column))
+            existing_pairs.add((r.to_table, r.to_column, r.from_table, r.from_column))
+
+    for i in range(len(tables)):
+        for j in range(i + 1, len(tables)):
+            tbl1 = tables[i]
+            tbl2 = tables[j]
+            for c1 in tbl1.columns:
+                for c2 in tbl2.columns:
+                    # Match by column name and data type
+                    if c1.name.lower() == c2.name.lower() and c1.data_type.lower() == c2.data_type.lower():
+                        pair1 = (tbl1.name, c1.name, tbl2.name, c2.name)
+                        pair2 = (tbl2.name, c2.name, tbl1.name, c1.name)
+                        if pair1 in existing_pairs or pair2 in existing_pairs:
+                            continue
+
+                        # Determine default cardinality: if target is key/unique, MANY_TO_ONE (*:1)
+                        if c2.is_key and not c1.is_key:
+                            from_t, from_c = tbl1.name, c1.name
+                            to_t, to_c = tbl2.name, c2.name
+                            card = Cardinality.MANY_TO_ONE
+                        elif c1.is_key and not c2.is_key:
+                            from_t, from_c = tbl2.name, c2.name
+                            to_t, to_c = tbl1.name, c1.name
+                            card = Cardinality.MANY_TO_ONE
+                        elif c1.is_key and c2.is_key:
+                            from_t, from_c = tbl1.name, c1.name
+                            to_t, to_c = tbl2.name, c2.name
+                            card = Cardinality.ONE_TO_ONE
+                        else:
+                            from_t, from_c = tbl1.name, c1.name
+                            to_t, to_c = tbl2.name, c2.name
+                            card = Cardinality.MANY_TO_ONE
+
+                        rel = SemanticRelationship(
+                            from_table=from_t,
+                            from_column=from_c,
+                            to_table=to_t,
+                            to_column=to_c,
+                            cardinality=card,
+                            join_type=JoinType.LEFT,
+                            is_active=True,
+                        )
+                        detected.append(rel)
+                        existing_pairs.add(pair1)
+                        existing_pairs.add(pair2)
+
+    return detected
 
 
 CoreSemanticModel = SemanticModel

@@ -1,8 +1,7 @@
-"""Semantic Model Editor page implementation for visual model builder and YAML management."""
+"""Semantic Model Editor page implementation for visual Power BI-style Model View & Relationship Editor."""
 
 import os
 from typing import Dict, Any, List, Optional
-import yaml
 from nicegui import ui
 
 from pybi.core.semantic_model import (
@@ -14,12 +13,14 @@ from pybi.core.semantic_model import (
     RLSRule,
     Cardinality,
     JoinType,
+    autodetect_relationships,
 )
 from pybi.core.storage import default_storage
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.navbar import render_navbar
 from pybi.ui.shortcuts import render_shortcuts_help_button
 from pybi.ui.theme import default_theme
+from pybi.ui.components.model_flow_editor import ModelFlowEditor
 
 
 def get_semantic_model_path(project_id: str) -> str:
@@ -47,42 +48,71 @@ def save_project_semantic_model(project_id: str, model: CoreSemanticModel) -> st
 
 
 def create_model_editor_page():
-    """Render the Semantic Model View & Visual Relationship Builder page."""
+    """Render the Semantic Model View & Visual Relationship Builder page (Power BI style)."""
     render_navbar(active='/model-editor')
-    ui.label('Model View - Semantic Layer & Relationship Builder').classes('text-2xl font-bold q-mb-sm')
-    ui.label('Define semantic tables, visual relationships, calculated measures, and Row-Level Security (RLS) rules.').classes('text-gray-600 q-mb-md')
+    ui.label('Model View - Visual Table & Relationship Editor').classes('text-2xl font-bold q-mb-xs')
+    ui.label('Power BI-style visual data modeling: field-level drag-and-drop relationships, reactive properties panel, autodetect & RLS management.').classes('text-gray-600 q-mb-md text-sm')
 
     current_model: CoreSemanticModel = CoreSemanticModel(name='default_model')
+    selected_rel_index: Optional[int] = None
 
     def load_model_for_project():
-        nonlocal current_model
+        nonlocal current_model, selected_rel_index
         pid = project_manager.project_id
         current_model = load_project_semantic_model(pid)
+        selected_rel_index = None
         refresh_model_ui()
         status_label.set_text(f'State: Model loaded for "{pid}"')
 
     def handle_project_switch(pid, action):
         load_model_for_project()
 
-    with ui.row().classes('w-full items-center gap-4 q-mb-md'):
+    with ui.row().classes('w-full items-center gap-4 q-mb-sm'):
         project_manager = ProjectManager(value='default', on_switch=handle_project_switch)
         ui.space()
-        status_label = ui.label('State: Ready').classes('text-sm font-semibold text-blue-700')
+        status_label = ui.label('State: Ready').classes('text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded border border-blue-200')
 
-    with ui.row().classes('w-full gap-2 items-center q-mb-md'):
-        ui.button('Save Model (YAML)', on_click=lambda: save_model()).props('color=positive icon=save')
-        ui.button('Generate from Schema', on_click=lambda: auto_generate_schema()).props('color=secondary icon=auto_awesome')
-        ui.button('Add Relationship', on_click=lambda: open_add_relationship_dialog()).props('color=primary icon=add')
-        ui.button('Add Measure', on_click=lambda: open_add_measure_dialog()).props('color=info icon=functions')
-        ui.button('Add RLS Rule', on_click=lambda: open_add_rls_dialog()).props('color=warning icon=security')
+    with ui.row().classes('w-full gap-2 items-center q-mb-md bg-slate-100 p-2 rounded-lg border border-slate-200'):
+        ui.button('Save Model (YAML)', on_click=lambda: save_model()).props('color=positive icon=save dense')
+        ui.button('Generate from Schema', on_click=lambda: auto_generate_schema()).props('color=secondary icon=auto_awesome dense')
+        ui.button('Gestisci relazioni', on_click=lambda: open_manage_relationships_dialog()).props('color=primary icon=settings_ethernet dense')
+        ui.button('Add Measure', on_click=lambda: open_add_measure_dialog()).props('color=info icon=functions dense')
+        ui.button('Add RLS Rule', on_click=lambda: open_add_rls_dialog()).props('color=warning icon=security dense')
         ui.separator().props('vertical')
         render_shortcuts_help_button()
         default_theme.render_toggle_button()
 
-    # Cards layout container
-    tables_container = ui.row().classes('w-full gap-4 q-mb-md items-start')
-    rel_container = ui.card().classes('w-full q-mb-md p-4')
-    yaml_preview_container = ui.expansion('📄 View/Edit YAML Specification', icon='code').classes('w-full q-mb-md')
+    # Main Split View: Canvas on Left, Reactive Panel on Right
+    with ui.row().classes('w-full gap-4 items-start q-mb-md').style('min-height: 600px; display: flex; flex-wrap: nowrap;'):
+        # Canvas Container (70-75% width)
+        with ui.column().classes('flex-1 border rounded-lg bg-white p-2 shadow-sm').style('min-height: 600px; height: 620px;'):
+            flow_editor = ModelFlowEditor(nodes=[], edges=[]).classes('w-full h-full')
+
+        # Properties Panel Container (Right Sidebar ~ 25-30% width)
+        with ui.card().classes('w-80 shadow-md border border-slate-300 p-4 bg-white rounded-lg flex flex-col gap-3').style('min-height: 600px; height: 620px;'):
+            ui.label('⚙️ Proprietà Relazione').classes('font-bold text-base text-slate-800 border-b pb-2 w-full')
+
+            prop_from_tbl = ui.select([], label='Tabella di Origine (From Table)').classes('w-full')
+            prop_from_col = ui.select([], label='Campo di Origine (From Column)').classes('w-full')
+
+            prop_to_tbl = ui.select([], label='Tabella di Destinazione (To Table)').classes('w-full')
+            prop_to_col = ui.select([], label='Campo di Destinazione (To Column)').classes('w-full')
+
+            prop_cardinality = ui.select(['1:1', '1:*', '*:1', '*:*'], label='Cardinalità', value='*:1').classes('w-full')
+            prop_join_type = ui.select(['LEFT', 'INNER', 'RIGHT', 'FULL'], label='Tipo di Join', value='LEFT').classes('w-full')
+
+            with ui.row().classes('w-full items-center justify-between pt-1'):
+                ui.label('Stato Attivo (Active)').classes('text-xs font-semibold text-slate-700')
+                prop_is_active = ui.switch(value=True).props('dense color=primary')
+
+            with ui.row().classes('w-full gap-2 mt-auto pt-3 border-t'):
+                ui.button('Elimina Relazione', on_click=lambda: delete_selected_relationship()).props('color=negative icon=delete flat dense').classes('w-full')
+
+    # Accordion Sections for Measures, RLS Rules, and YAML Preview
+    with ui.expansion('📐 Calculated Measures & Row-Level Security (RLS)', icon='security').classes('w-full q-mb-md bg-white border rounded-lg'):
+        rel_container = ui.row().classes('w-full p-4 gap-4 items-start')
+
+    yaml_preview_container = ui.expansion('📄 View/Edit YAML Specification', icon='code').classes('w-full q-mb-md bg-white border rounded-lg')
 
     def save_model():
         pid = project_manager.project_id
@@ -95,13 +125,12 @@ def create_model_editor_page():
         pid = project_manager.project_id
         files = default_storage.list_project_files(pid)
         if not files:
-            # Fallback sample tables
             t1 = SemanticTable(
                 name='sales',
                 source_table='sales_data',
                 columns=[
                     SemanticColumn(name='sale_id', column_name='sale_id', data_type='integer', is_key=True),
-                    SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=True),
+                    SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=False),
                     SemanticColumn(name='region', column_name='region', data_type='string'),
                     SemanticColumn(name='amount', column_name='amount', data_type='float'),
                     SemanticColumn(name='cost', column_name='cost', data_type='float'),
@@ -128,7 +157,8 @@ def create_model_editor_page():
                     to_table='stores',
                     to_column='store_id',
                     cardinality=Cardinality.MANY_TO_ONE,
-                    join_type=JoinType.LEFT
+                    join_type=JoinType.LEFT,
+                    is_active=True,
                 )
             ]
         else:
@@ -149,118 +179,271 @@ def create_model_editor_page():
         ui.notify('Schema generated automatically!', type='positive')
         save_model()
 
+    def update_columns_for_table(table_name: str, dropdown_target: ui.select):
+        tbl = current_model.get_table(table_name)
+        if tbl:
+            cols = [c.name for c in tbl.columns]
+            dropdown_target.options = cols
+            if cols and dropdown_target.value not in cols:
+                dropdown_target.value = cols[0]
+        else:
+            dropdown_target.options = []
+
+    def on_from_table_change(e):
+        update_columns_for_table(e.value, prop_from_col)
+        update_selected_relationship_from_ui()
+
+    def on_to_table_change(e):
+        update_columns_for_table(e.value, prop_to_col)
+        update_selected_relationship_from_ui()
+
+    prop_from_tbl.on('update:model-value', on_from_table_change)
+    prop_to_tbl.on('update:model-value', on_to_table_change)
+    prop_from_col.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+    prop_to_col.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+    prop_cardinality.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+    prop_join_type.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+    prop_is_active.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+
+    def populate_properties_panel(rel_idx: Optional[int]):
+        nonlocal selected_rel_index
+        selected_rel_index = rel_idx
+        tables = [t.name for t in current_model.tables]
+        prop_from_tbl.options = tables
+        prop_to_tbl.options = tables
+
+        if rel_idx is not None and 0 <= rel_idx < len(current_model.relationships):
+            r = current_model.relationships[rel_idx]
+            prop_from_tbl.value = r.from_table
+            update_columns_for_table(r.from_table, prop_from_col)
+            prop_from_col.value = r.from_column
+
+            prop_to_tbl.value = r.to_table
+            update_columns_for_table(r.to_table, prop_to_col)
+            prop_to_col.value = r.to_column
+
+            card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
+            jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
+            prop_cardinality.value = card
+            prop_join_type.value = jtype
+            prop_is_active.value = getattr(r, 'is_active', True)
+        else:
+            if tables:
+                prop_from_tbl.value = tables[0]
+                update_columns_for_table(tables[0], prop_from_col)
+                prop_to_tbl.value = tables[1] if len(tables) > 1 else tables[0]
+                update_columns_for_table(prop_to_tbl.value, prop_to_col)
+
+    def update_selected_relationship_from_ui():
+        if selected_rel_index is None or selected_rel_index < 0 or selected_rel_index >= len(current_model.relationships):
+            return
+        r = current_model.relationships[selected_rel_index]
+        r.from_table = prop_from_tbl.value or r.from_table
+        r.from_column = prop_from_col.value or r.from_column
+        r.to_table = prop_to_tbl.value or r.to_table
+        r.to_column = prop_to_col.value or r.to_column
+        r.cardinality = prop_cardinality.value or r.cardinality
+        r.join_type = prop_join_type.value or r.join_type
+        r.is_active = prop_is_active.value
+
+        # Update edges visual style
+        refresh_canvas_edges()
+
+    def delete_selected_relationship():
+        nonlocal selected_rel_index
+        if selected_rel_index is not None and 0 <= selected_rel_index < len(current_model.relationships):
+            current_model.relationships.pop(selected_rel_index)
+            selected_rel_index = None
+            ui.notify('Relazione eliminata', type='info')
+            refresh_model_ui()
+
+    def refresh_canvas_edges():
+        edges = []
+        for idx, r in enumerate(current_model.relationships):
+            card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
+            jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
+            is_act = getattr(r, 'is_active', True)
+
+            edges.append({
+                'id': f'rel_{r.from_table}_{r.from_column}_{r.to_table}_{r.to_column}_{idx}',
+                'source': r.from_table,
+                'sourceHandle': r.from_column,
+                'target': r.to_table,
+                'targetHandle': r.to_column,
+                'label': card,
+                'data': {
+                    'rel_index': idx,
+                    'from_table': r.from_table,
+                    'from_column': r.from_column,
+                    'to_table': r.to_table,
+                    'to_column': r.to_column,
+                    'cardinality': card,
+                    'join_type': jtype,
+                    'is_active': is_act,
+                },
+                'style': {
+                    'stroke': '#2563eb' if is_act else '#94a3b8',
+                    'strokeWidth': 2,
+                    'strokeDasharray': 'none' if is_act else '5,5',
+                }
+            })
+        flow_editor.edges = edges
+
     def refresh_model_ui():
-        # 1. Render Tables as visual Cards
-        tables_container.clear()
-        with tables_container:
-            if not current_model.tables:
-                ui.label('No tables in semantic model. Click "Generate from Schema" or load project data files.').classes('text-gray-500 italic p-4')
-            else:
-                for tbl in current_model.tables:
-                    with ui.card().classes('w-72 shadow-md border border-blue-200 p-3 bg-white'):
-                        with ui.row().classes('w-full items-center justify-between border-b pb-2 mb-2'):
-                            ui.label(f'📊 {tbl.name}').classes('font-bold text-base text-blue-800')
-                            ui.label(f'[{tbl.source_table}]').classes('text-xs text-gray-500')
+        # Build Vue Flow Nodes from tables
+        nodes = []
+        x_offset = 50
+        y_offset = 50
 
-                        ui.label('Columns / Dimensions:').classes('text-xs font-semibold text-gray-600 mt-1')
-                        with ui.column().classes('w-full gap-1 pl-2 mb-2'):
-                            for col in tbl.columns:
-                                key_badge = '🔑 ' if col.is_key else '  '
-                                ui.label(f'{key_badge}{col.name} ({col.data_type})').classes('text-xs font-mono text-gray-700')
+        for idx, tbl in enumerate(current_model.tables):
+            nodes.append({
+                'id': tbl.name,
+                'type': 'table_card',
+                'position': {'x': x_offset + (idx % 3) * 320, 'y': y_offset + (idx // 3) * 350},
+                'data': {
+                    'label': tbl.name,
+                    'source_table': tbl.source_table,
+                    'columns': [c.model_dump(mode='json') for c in tbl.columns],
+                    'measures': [m.model_dump(mode='json') for m in tbl.measures],
+                }
+            })
+        flow_editor.nodes = nodes
+        refresh_canvas_edges()
+        populate_properties_panel(selected_rel_index)
 
-                        if tbl.measures:
-                            ui.label('Calculated Measures:').classes('text-xs font-semibold text-gray-600 mt-1')
-                            with ui.column().classes('w-full gap-1 pl-2'):
-                                for m in tbl.measures:
-                                    ui.label(f'📐 {m.name}: {m.expression or m.agg_func}').classes('text-xs font-mono text-blue-600')
-
-        # 2. Render Relationships & RLS Rules
+        # Render Measures & RLS section
         rel_container.clear()
         with rel_container:
-            ui.label('Visual Table Relationships & RLS Rules').classes('font-bold text-lg q-mb-xs text-gray-800')
+            # Measures table
+            with ui.column().classes('flex-1'):
+                ui.label('Calculated Measures:').classes('font-semibold text-sm text-slate-700 mb-1')
+                meas_rows = []
+                for tbl in current_model.tables:
+                    for m in tbl.measures:
+                        meas_rows.append({
+                            'table': tbl.name,
+                            'name': m.name,
+                            'expression': m.expression or m.agg_func,
+                            'label': m.label or ''
+                        })
+                if not meas_rows:
+                    ui.label('No measures defined.').classes('text-xs text-slate-500 italic')
+                else:
+                    cols = [
+                        {'name': 'table', 'label': 'Table', 'field': 'table', 'align': 'left'},
+                        {'name': 'name', 'label': 'Measure Name', 'field': 'name', 'align': 'left'},
+                        {'name': 'expression', 'label': 'Expression', 'field': 'expression', 'align': 'left'},
+                        {'name': 'label', 'label': 'Label', 'field': 'label', 'align': 'left'},
+                    ]
+                    ui.table(columns=cols, rows=meas_rows, row_key='name').classes('w-full')
 
-            with ui.row().classes('w-full gap-4 items-start'):
-                # Relationships table
-                with ui.column().classes('flex-1'):
-                    ui.label('Relationships:').classes('font-semibold text-sm text-gray-700 mb-1')
-                    if not current_model.relationships:
-                        ui.label('No relationships defined.').classes('text-xs text-gray-500 italic')
-                    else:
-                        rel_rows = []
-                        for idx, r in enumerate(current_model.relationships):
-                            card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
-                            jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
-                            rel_rows.append({
-                                'id': idx,
-                                'from': f'{r.from_table}.{r.from_column}',
-                                'cardinality': card,
-                                'to': f'{r.to_table}.{r.to_column}',
-                                'join_type': jtype
-                            })
-                        cols = [
-                            {'name': 'from', 'label': 'From Key', 'field': 'from', 'align': 'left'},
-                            {'name': 'cardinality', 'label': 'Cardinality', 'field': 'cardinality', 'align': 'center'},
-                            {'name': 'to', 'label': 'To Key', 'field': 'to', 'align': 'left'},
-                            {'name': 'join_type', 'label': 'Join Type', 'field': 'join_type', 'align': 'center'}
-                        ]
-                        ui.table(columns=cols, rows=rel_rows, row_key='id').classes('w-full')
+            # RLS Rules table
+            with ui.column().classes('flex-1'):
+                ui.label('Row-Level Security (RLS) Rules:').classes('font-semibold text-sm text-slate-700 mb-1')
+                if not current_model.rls_rules:
+                    ui.label('No RLS rules defined.').classes('text-xs text-slate-500 italic')
+                else:
+                    rls_rows = [
+                        {'name': r.name, 'target_table': r.target_table, 'filter': r.filter_expression}
+                        for r in current_model.rls_rules
+                    ]
+                    cols = [
+                        {'name': 'name', 'label': 'Rule Name', 'field': 'name', 'align': 'left'},
+                        {'name': 'target_table', 'label': 'Target Table', 'field': 'target_table', 'align': 'left'},
+                        {'name': 'filter', 'label': 'Filter Expression', 'field': 'filter', 'align': 'left'}
+                    ]
+                    ui.table(columns=cols, rows=rls_rows, row_key='name').classes('w-full')
 
-                # RLS Rules table
-                with ui.column().classes('flex-1'):
-                    ui.label('Row-Level Security (RLS) Rules:').classes('font-semibold text-sm text-gray-700 mb-1')
-                    if not current_model.rls_rules:
-                        ui.label('No RLS rules defined.').classes('text-xs text-gray-500 italic')
-                    else:
-                        rls_rows = [
-                            {'name': r.name, 'target_table': r.target_table, 'filter': r.filter_expression}
-                            for r in current_model.rls_rules
-                        ]
-                        cols = [
-                            {'name': 'name', 'label': 'Rule Name', 'field': 'name', 'align': 'left'},
-                            {'name': 'target_table', 'label': 'Target Table', 'field': 'target_table', 'align': 'left'},
-                            {'name': 'filter', 'label': 'Filter Expression', 'field': 'filter', 'align': 'left'}
-                        ]
-                        ui.table(columns=cols, rows=rls_rows, row_key='name').classes('w-full')
-
-        # 3. YAML Code Editor/Preview
+        # Code editor preview
         yaml_preview_container.clear()
         with yaml_preview_container:
             yaml_str = current_model.to_yaml()
-            ui.code(yaml_str, language='yaml').classes('w-full text-xs font-mono bg-gray-900 text-green-300 p-3 rounded')
+            ui.code(yaml_str, language='yaml').classes('w-full text-xs font-mono bg-slate-900 text-green-300 p-3 rounded')
+
+    # Event handlers for Vue Flow canvas
+    def handle_on_connect(e):
+        conn = e.args.get('connection', {})
+        source_tbl = conn.get('source')
+        source_col = conn.get('sourceHandle')
+        target_tbl = conn.get('target')
+        target_col = conn.get('targetHandle')
+
+        if source_tbl and source_col and target_tbl and target_col:
+            new_rel = SemanticRelationship(
+                from_table=source_tbl,
+                from_column=source_col,
+                to_table=target_tbl,
+                to_column=target_col,
+                cardinality=Cardinality.MANY_TO_ONE,
+                join_type=JoinType.LEFT,
+                is_active=True,
+            )
+            current_model.relationships.append(new_rel)
+            ui.notify(f'Relazione creata: {source_tbl}.{source_col} ➔ {target_tbl}.{target_col}', type='positive')
+            populate_properties_panel(len(current_model.relationships) - 1)
+            refresh_model_ui()
+
+    def handle_edge_click(e):
+        edge = e.args.get('edge', {})
+        data = edge.get('data', {})
+        idx = data.get('rel_index')
+        if idx is not None:
+            populate_properties_panel(idx)
+        else:
+            # Match edge parameters
+            src_tbl = edge.get('source')
+            src_col = edge.get('sourceHandle')
+            tgt_tbl = edge.get('target')
+            tgt_col = edge.get('targetHandle')
+            for i, r in enumerate(current_model.relationships):
+                if r.from_table == src_tbl and r.from_column == src_col and r.to_table == tgt_tbl and r.to_column == tgt_col:
+                    populate_properties_panel(i)
+                    break
+
+    flow_editor.on_connect(handle_on_connect)
+    flow_editor.on_edge_click(handle_edge_click)
 
     # Dialogs
-    def open_add_relationship_dialog():
-        tables = [t.name for t in current_model.tables]
-        if len(tables) < 2:
-            ui.notify('Need at least 2 tables to define a relationship. Run "Generate from Schema" first.', type='warning')
-            return
-
+    def open_manage_relationships_dialog():
         dialog = ui.dialog()
-        with dialog, ui.card().classes('w-96 p-4 gap-3'):
-            ui.label('Add Relationship').classes('text-lg font-bold')
-            from_tbl = ui.select(tables, label='From Table', value=tables[0]).classes('w-full')
-            from_col = ui.input('From Column', value='store_id').classes('w-full')
-            to_tbl = ui.select(tables, label='To Table', value=tables[1] if len(tables) > 1 else tables[0]).classes('w-full')
-            to_col = ui.input('To Column', value='store_id').classes('w-full')
-            cardinality = ui.select(['1:1', '1:*', '*:1', '*:*'], label='Cardinality', value='*:1').classes('w-full')
-            join_type = ui.select(['LEFT', 'INNER', 'RIGHT', 'FULL'], label='Join Type', value='LEFT').classes('w-full')
+        with dialog, ui.card().classes('w-[650px] p-4 gap-3'):
+            ui.label('Gestisci Relazioni').classes('text-lg font-bold text-slate-800')
 
-            def save_rel():
-                rel = SemanticRelationship(
-                    from_table=from_tbl.value,
-                    from_column=from_col.value,
-                    to_table=to_tbl.value,
-                    to_column=to_col.value,
-                    cardinality=cardinality.value,
-                    join_type=join_type.value
-                )
-                current_model.relationships.append(rel)
-                dialog.close()
-                save_model()
+            rel_rows = []
+            for idx, r in enumerate(current_model.relationships):
+                card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
+                jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
+                rel_rows.append({
+                    'id': idx,
+                    'from': f'{r.from_table}.{r.from_column}',
+                    'cardinality': card,
+                    'to': f'{r.to_table}.{r.to_column}',
+                    'join_type': jtype,
+                    'active': '✅ Active' if getattr(r, 'is_active', True) else '❌ Inactive'
+                })
+            cols = [
+                {'name': 'from', 'label': 'From Key', 'field': 'from', 'align': 'left'},
+                {'name': 'cardinality', 'label': 'Cardinality', 'field': 'cardinality', 'align': 'center'},
+                {'name': 'to', 'label': 'To Key', 'field': 'to', 'align': 'left'},
+                {'name': 'join_type', 'label': 'Join Type', 'field': 'join_type', 'align': 'center'},
+                {'name': 'active', 'label': 'Status', 'field': 'active', 'align': 'center'},
+            ]
+            ui.table(columns=cols, rows=rel_rows, row_key='id').classes('w-full')
 
-            with ui.row().classes('w-full justify-end gap-2 mt-2'):
-                ui.button('Cancel', on_click=dialog.close).props('flat dense')
-                ui.button('Add', on_click=save_rel).props('color=primary dense')
+            def run_autodetect():
+                new_rels = autodetect_relationships(current_model.tables, current_model.relationships)
+                if not new_rels:
+                    ui.notify('Nessuna nuova relazione rilevata automaticamente.', type='info')
+                else:
+                    current_model.relationships.extend(new_rels)
+                    ui.notify(f'Rilevate {len(new_rels)} nuove relazioni automaticamente!', type='positive')
+                    save_model()
+                    dialog.close()
+
+            with ui.row().classes('w-full justify-between items-center mt-3 pt-2 border-t'):
+                ui.button('Rileva automaticamente', on_click=run_autodetect).props('color=secondary icon=auto_awesome dense')
+                with ui.row().classes('gap-2'):
+                    ui.button('Chiudi', on_click=dialog.close).props('flat dense')
         dialog.open()
 
     def open_add_measure_dialog():
@@ -274,7 +457,7 @@ def create_model_editor_page():
             ui.label('Add Calculated Measure').classes('text-lg font-bold')
             target_tbl = ui.select(tables, label='Target Table', value=tables[0]).classes('w-full')
             m_name = ui.input('Measure Name', value='Margine_Lordo').classes('w-full')
-            m_expr = ui.input('Expression / DAX SQL Formula', value='SUM(amount) - SUM(cost)').classes('w-full')
+            m_expr = ui.input('Expression / Formula', value='SUM(amount) - SUM(cost)').classes('w-full')
             m_agg = ui.select(['SUM', 'AVG', 'COUNT', 'MIN', 'MAX', 'CUSTOM'], label='Aggregation Func', value='CUSTOM').classes('w-full')
             m_label = ui.input('Display Label', value='Margine Lordo').classes('w-full')
 

@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, Optional
 import polars as pl
+from pybi.model.dax_translator import DaxTranslator
 from pybi.model.engine import ModelEngine
 
 
@@ -16,35 +17,7 @@ class Measure:
 
     def to_sql_fragment(self) -> str:
         """Translate DAX-like expression into DuckDB SQL query fragment."""
-        expr = self.expression
-        expr = expr.replace("AVERAGE(", "AVG(")
-
-        if expr.startswith("DIVIDE(") and expr.endswith(")"):
-            inner_str = expr[7:-1]
-            parts = []
-            depth = 0
-            curr = []
-            for ch in inner_str:
-                if ch == '(':
-                    depth += 1
-                    curr.append(ch)
-                elif ch == ')':
-                    depth -= 1
-                    curr.append(ch)
-                elif ch == ',' and depth == 0:
-                    parts.append("".join(curr).strip())
-                    curr = []
-                else:
-                    curr.append(ch)
-            if curr:
-                parts.append("".join(curr).strip())
-
-            if len(parts) == 2:
-                num = parts[0].replace("AVERAGE(", "AVG(")
-                den = parts[1].replace("AVERAGE(", "AVG(")
-                return f"COALESCE({num} / NULLIF({den}, 0), 0)"
-
-        return expr
+        return DaxTranslator.translate(self.expression)
 
 
 class MeasureEvaluator:

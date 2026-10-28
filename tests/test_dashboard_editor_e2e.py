@@ -124,6 +124,7 @@ def test_delete_widget_removes_it_from_canvas(page):
     expect(drawer).to_be_visible()
 
     drawer.get_by_role('button', name='Delete').click()
+    page.get_by_role('button', name='Elimina').click()
 
     expect(drawer).not_to_be_visible()
     expect(widget_items(page)).to_have_count(before - 1)

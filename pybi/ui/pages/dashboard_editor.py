@@ -137,6 +137,20 @@ def create_dashboard_editor_page():
             n += 1
         return f'w{n}'
 
+    def persist_if_dashboard_exists() -> bool:
+        """Auto-save the current layout when a real dashboard is selected."""
+        dash_id = dashboard_manager.dashboard_id
+        if not dash_id:
+            return False
+        name = dashboard_manager._current_name() or dash_id
+        default_storage.save_dashboard(
+            project_manager.project_id,
+            dash_id,
+            name,
+            strip_widget_data(grid.layout),
+        )
+        return True
+
     def on_widget_configured(updated_widget):
         record_history()
         layout = list(grid.layout)
@@ -156,6 +170,8 @@ def create_dashboard_editor_page():
             layout.append(widget)
             log_container.push(f"[Config] Added widget {widget['i']} ({widget['title']}, {widget['type']})")
         grid.layout = bind_widget_data(layout)
+        if persist_if_dashboard_exists():
+            log_container.push('[Storage] Layout auto-saved.')
         status_label.set_text(f'State: {len(layout)} widget(s) on canvas')
 
     def on_widget_deleted(widget):
@@ -163,7 +179,10 @@ def create_dashboard_editor_page():
         layout = [item for item in grid.layout if item.get('i') != widget.get('i')]
         grid.layout = bind_widget_data(layout)
         log_container.push(f"[Config] Deleted widget {widget.get('i')} ({widget.get('title')})")
+        if persist_if_dashboard_exists():
+            log_container.push('[Storage] Layout auto-saved.')
         status_label.set_text(f'State: {len(layout)} widget(s) on canvas')
+        ui.notify(f'Widget "{widget.get("title", widget.get("i"))}" eliminato', type='info')
 
     configurator = WidgetConfigurator(on_save=on_widget_configured, on_delete=on_widget_deleted)
 
@@ -182,7 +201,13 @@ def create_dashboard_editor_page():
         if widget:
             configurator.open_widget(widget, available_sources=available_sources())
 
+    def on_grid_delete(e):
+        widget = (e.args or {}).get('widget')
+        if widget:
+            on_widget_deleted(widget)
+
     grid.on_edit_widget(on_grid_edit)
+    grid.on_delete_widget(on_grid_delete)
 
     with ui.row().classes('w-full gap-2 items-center q-mb-md'):
         ui.button('Add Widget', on_click=lambda: configurator.open_new_widget(available_sources=available_sources())).props('color=primary icon=add')

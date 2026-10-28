@@ -47,3 +47,7 @@ class DashboardGrid(ui.element, component='dashboard_grid.js'):
     def on_edit_widget(self, handler: Callable) -> 'DashboardGrid':
         self.on('edit_widget', handler)
         return self
+
+    def on_delete_widget(self, handler: Callable) -> 'DashboardGrid':
+        self.on('delete_widget', handler)
+        return self

@@ -6,9 +6,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Install dependencies
+# Upgrade pip and install dependencies with retries
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --upgrade pip --no-cache-dir && \
+    pip install --no-cache-dir --default-timeout=120 --retries=10 -r requirements.txt
 
 # Copy application files
 COPY . .

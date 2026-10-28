@@ -15,9 +15,9 @@ MAX_CHART_SERIES = 3
 KPI_METRICS = ('sum', 'avg', 'min', 'max', 'count')
 KPI_METHODS = {'sum': 'sum', 'avg': 'mean', 'min': 'min', 'max': 'max'}
 WIDGET_DATA_KEYS = (
-    'columns', 'rows_data', 'rows', 'cols', 'vals', 'values', 'filters', 'filter_values',
-    'showRowSubtotals', 'showColSubtotals', 'showGrandTotals', 'emptyValuePlaceholder',
-    'row_count', 'truncated', 'data_error', 'chart', 'kpi', 'data', 'server_pivot_data'
+    'columns', 'rows_data', 'showRowSubtotals', 'showColSubtotals', 'showGrandTotals',
+    'emptyValuePlaceholder', 'row_count', 'truncated', 'data_error', 'chart', 'kpi', 'data',
+    'server_pivot_data'
 )
 
 SAMPLE_LAYOUT = [
@@ -72,6 +72,57 @@ def available_sources() -> List[str]:
     except Exception:
         names = []
     return names or ['regional_sales']
+
+
+def _dedupe(values: List[str]) -> List[str]:
+    """Remove duplicates while preserving order."""
+    seen = set()
+    result = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def source_fields(source: str) -> Dict[str, List[str]]:
+    """Return the available dimensions and measures for a data source.
+
+    Semantic models expose their declared columns and measures (qualified with
+    the table name when the model contains several tables). Plain data sources
+    expose every column as a dimension and numeric columns as measures.
+    """
+    dimensions: List[str] = []
+    measures: List[str] = []
+    if not source:
+        return {'dimensions': [], 'measures': []}
+
+    model = None
+    try:
+        model = default_binder.semantic_resolver.get_model(source)
+    except Exception:
+        model = None
+
+    if model is not None and getattr(model, 'tables', None):
+        multi_table = len(model.tables) > 1
+        for table in model.tables:
+            for column in table.columns:
+                name = f'{table.name}.{column.name}' if multi_table else column.name
+                dimensions.append(name)
+            for measure in table.measures:
+                name = f'{table.name}.{measure.name}' if multi_table else measure.name
+                measures.append(name)
+        if dimensions or measures:
+            return {'dimensions': _dedupe(dimensions), 'measures': _dedupe(measures)}
+
+    try:
+        df = default_binder.get_source_data(source)
+    except Exception:
+        return {'dimensions': [], 'measures': []}
+
+    dimensions = [str(col) for col in df.columns]
+    measures = [str(col) for col in df.columns if df[col].dtype.is_numeric()]
+    return {'dimensions': _dedupe(dimensions), 'measures': _dedupe(measures)}
 
 
 def _cell(value):
@@ -138,6 +189,9 @@ def _bind_table_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
         item['columns'] = []
         item['data_error'] = error
         return item
+    selected = [c for c in (item.get('selectedColumns') or []) if isinstance(c, str) and c in df.columns]
+    if selected:
+        df = df.select(selected)
     view = df.head(MAX_TABLE_ROWS)
     item['columns'] = [str(c) for c in view.columns]
     item['rows_data'] = [[_cell(v) for v in row] for row in view.rows()]
@@ -201,14 +255,41 @@ def _bind_chart_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str
     if not numeric:
         chart['error'] = f'Source has no numeric column to plot ({", ".join(view.columns)})'
         return item
-    label_col = next((c for c in view.columns if c not in numeric), None)
-    if label_col is not None:
-        chart['labels'] = [str(v) for v in view[label_col].to_list()]
+
+    requested_dims = [d for d in (item.get('dimensions') or []) if isinstance(d, str) and d in view.columns]
+    requested_measures = [m for m in (item.get('measures') or []) if isinstance(m, str) and m in view.columns]
+
+    # Two dimensions + a measure: first dimension on the X axis, second one as
+    # the series/legend and the measure as the aggregated value.
+    if len(requested_dims) >= 2 and requested_measures:
+        x_col, series_col = requested_dims[0], requested_dims[1]
+        value_col = requested_measures[0]
+        chart['labels'] = _dedupe([str(v) for v in view[x_col].to_list()])
+        series_names = _dedupe([str(v) for v in view[series_col].to_list()])
+        lookup: Dict[Tuple[str, str], float] = {}
+        for row in view.iter_rows(named=True):
+            key = (str(row[x_col]), str(row[series_col]))
+            value = _number(row[value_col])
+            if value is not None:
+                lookup[key] = lookup.get(key, 0) + value
+        for name in series_names[:MAX_CHART_SERIES]:
+            chart['series'].append({
+                'name': name,
+                'values': [lookup.get((label, name)) for label in chart['labels']],
+            })
     else:
-        chart['labels'] = [str(i) for i in range(view.height)]
-    for name in numeric[:MAX_CHART_SERIES]:
-        values = [_number(v) for v in view[name].to_list()]
-        chart['series'].append({'name': name, 'values': values})
+        series_cols = requested_measures or numeric
+        label_col = requested_dims[0] if requested_dims else next(
+            (c for c in view.columns if c not in numeric), None
+        )
+        if label_col is not None:
+            chart['labels'] = [str(v) for v in view[label_col].to_list()]
+        else:
+            chart['labels'] = [str(i) for i in range(view.height)]
+        for name in series_cols[:MAX_CHART_SERIES]:
+            values = [_number(v) for v in view[name].to_list()]
+            chart['series'].append({'name': name, 'values': values})
+
     plottable = [v for s in chart['series'] for v in s['values'] if v is not None]
     chart['max'] = max(plottable) if plottable else 0
     if chart['max'] <= 0:
@@ -233,7 +314,8 @@ def _bind_kpi_data(item: Dict[str, Any], df: pl.DataFrame, error: Optional[str])
     if not numeric:
         item['kpi'] = {'value': None, 'subtitle': f'No numeric column in {source} for {metric}', 'error': True}
         return item
-    column = numeric[0]
+    value_field = item.get('valueField') or item.get('value_field')
+    column = value_field if value_field in numeric else numeric[0]
     raw = getattr(df[column], KPI_METHODS[metric])()
     value = _format_number(raw)
     item['kpi'] = {'value': value, 'subtitle': f'{metric} of {column} from {source}'}

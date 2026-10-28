@@ -15,6 +15,7 @@ from pybi.core.semantic_model import (
     JoinType,
     autodetect_relationships,
 )
+from pybi.core.model_sync import sync_etl_outputs_into_model
 from pybi.core.storage import default_storage
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.navbar import render_navbar
@@ -32,52 +33,57 @@ def get_semantic_model_path(project_id: str) -> str:
 def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
     """Load semantic model for project, or create a default model if not existing."""
     filepath = get_semantic_model_path(project_id)
+    model: Optional[CoreSemanticModel] = None
     if os.path.exists(filepath):
         try:
-            return CoreSemanticModel.load_yaml_file(filepath)
+            model = CoreSemanticModel.load_yaml_file(filepath)
         except Exception:
-            pass
+            model = None
 
-    # Return default populated sample model if model file does not exist yet
-    t1 = SemanticTable(
-        name='sales',
-        source_table='sales_data',
-        columns=[
-            SemanticColumn(name='sale_id', column_name='sale_id', data_type='integer', is_key=True),
-            SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=False),
-            SemanticColumn(name='region', column_name='region', data_type='string'),
-            SemanticColumn(name='amount', column_name='amount', data_type='float'),
-            SemanticColumn(name='cost', column_name='cost', data_type='float'),
-        ],
-        measures=[
-            SemanticMeasure(name='Total_Sales', expression='SUM(amount)', agg_func='SUM', label='Total Sales'),
-            SemanticMeasure(name='Margine_Lordo', expression='SUM(amount) - SUM(cost)', agg_func='CUSTOM', label='Margine Lordo')
-        ]
-    )
-    t2 = SemanticTable(
-        name='stores',
-        source_table='store_dim',
-        columns=[
-            SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=True),
-            SemanticColumn(name='store_name', column_name='store_name', data_type='string'),
-            SemanticColumn(name='country', column_name='country', data_type='string'),
-        ]
-    )
-    r1 = SemanticRelationship(
-        from_table='sales',
-        from_column='store_id',
-        to_table='stores',
-        to_column='store_id',
-        cardinality=Cardinality.MANY_TO_ONE,
-        join_type=JoinType.LEFT,
-        is_active=True,
-    )
-    return CoreSemanticModel(
-        name=f"{project_id}_semantic_model",
-        tables=[t1, t2],
-        relationships=[r1],
-        rls_rules=[]
-    )
+    if model is None:
+        # Return default populated sample model if model file does not exist yet
+        t1 = SemanticTable(
+            name='sales',
+            source_table='sales_data',
+            columns=[
+                SemanticColumn(name='sale_id', column_name='sale_id', data_type='integer', is_key=True),
+                SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=False),
+                SemanticColumn(name='region', column_name='region', data_type='string'),
+                SemanticColumn(name='amount', column_name='amount', data_type='float'),
+                SemanticColumn(name='cost', column_name='cost', data_type='float'),
+            ],
+            measures=[
+                SemanticMeasure(name='Total_Sales', expression='SUM(amount)', agg_func='SUM', label='Total Sales'),
+                SemanticMeasure(name='Margine_Lordo', expression='SUM(amount) - SUM(cost)', agg_func='CUSTOM', label='Margine Lordo')
+            ]
+        )
+        t2 = SemanticTable(
+            name='stores',
+            source_table='store_dim',
+            columns=[
+                SemanticColumn(name='store_id', column_name='store_id', data_type='integer', is_key=True),
+                SemanticColumn(name='store_name', column_name='store_name', data_type='string'),
+                SemanticColumn(name='country', column_name='country', data_type='string'),
+            ]
+        )
+        r1 = SemanticRelationship(
+            from_table='sales',
+            from_column='store_id',
+            to_table='stores',
+            to_column='store_id',
+            cardinality=Cardinality.MANY_TO_ONE,
+            join_type=JoinType.LEFT,
+            is_active=True,
+        )
+        model = CoreSemanticModel(
+            name=f"{project_id}_semantic_model",
+            tables=[t1, t2],
+            relationships=[r1],
+            rls_rules=[]
+        )
+
+    # Ensure ETL query outputs (e.g. "tab_dati") are part of the model view.
+    return sync_etl_outputs_into_model(project_id, model)
 
 
 def save_project_semantic_model(project_id: str, model: CoreSemanticModel) -> str:
@@ -258,8 +264,10 @@ def create_model_editor_page():
             tables = [t1, t2]
 
         current_model.tables = tables
+        # Include ETL query outputs (e.g. "tab_dati") alongside raw data files.
+        sync_etl_outputs_into_model(pid, current_model)
         # Autodetect relationships between newly generated tables
-        new_rels = autodetect_relationships(tables, current_model.relationships)
+        new_rels = autodetect_relationships(current_model.tables, current_model.relationships)
         if new_rels:
             current_model.relationships.extend(new_rels)
 

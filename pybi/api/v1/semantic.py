@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from pybi.core.model_sync import sync_etl_outputs_into_model
 from pybi.core.semantic_model import (
     SemanticModel,
     SemanticTable,
@@ -25,12 +26,13 @@ def get_semantic_model_path(project_id: str) -> str:
 def load_project_semantic_model(project_id: str) -> SemanticModel:
     """Load semantic model for project or return default empty model."""
     filepath = get_semantic_model_path(project_id)
+    model = SemanticModel(name=f"{project_id}_semantic_model", tables=[], relationships=[], rls_rules=[])
     if os.path.exists(filepath):
         try:
-            return SemanticModel.load_yaml_file(filepath)
+            model = SemanticModel.load_yaml_file(filepath)
         except Exception:
             pass
-    return SemanticModel(name=f"{project_id}_semantic_model", tables=[], relationships=[], rls_rules=[])
+    return sync_etl_outputs_into_model(project_id, model)
 
 
 def save_project_semantic_model(project_id: str, model: SemanticModel) -> str:

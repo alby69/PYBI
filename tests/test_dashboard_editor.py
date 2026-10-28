@@ -60,6 +60,15 @@ def test_dashboard_editor_page():
             assert 'Regional Sales Bar Chart' in content
             assert 'Top Performing Regions' in content
 
+            # Test direct widget deletion from grid trash button
+            delete_btns = page.query_selector_all('.delete-widget-btn')
+            assert len(delete_btns) >= 3, f"Expected delete buttons for grid items, found {len(delete_btns)}"
+            delete_btns[0].click()
+            page.wait_for_timeout(1000)
+
+            remaining_items = page.query_selector_all('.vgl-item:not(.vgl-item--placeholder)')
+            assert len(remaining_items) == len(items) - 1, f"Expected {len(items) - 1} items after deletion, got {len(remaining_items)}"
+
             browser.close()
             print("Dashboard Editor test passed successfully!")
 

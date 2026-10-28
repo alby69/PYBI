@@ -107,22 +107,28 @@ class WidgetConfigurator:
                 # --- Data source ------------------------------------------------------
                 with ui.card().classes('w-full p-3 gap-2 shadow-none border rounded-lg bg-white'):
                     ui.label('Data').classes('text-xs font-bold uppercase text-slate-500 tracking-wide')
-                    source_select = ui.select(
-                        options=sources,
-                        label='Data Source / Semantic Model',
-                        value=current_source,
-                    ).classes('w-full')
-                    source_select.on_value_change(
-                        lambda args, t=title_inp: self._on_source_change(args.value, t.value)
-                    )
+                    with ui.row().classes('w-full items-center gap-2'):
+                        source_select = ui.select(
+                            options=sources,
+                            label='Data Source / Semantic Model',
+                            value=current_source,
+                        ).classes('flex-1')
+                        source_select.on_value_change(
+                            lambda args, t=title_inp: self._on_source_change(args.value, t.value)
+                        )
+                        ui.button(
+                            icon='refresh',
+                            on_click=lambda t=title_inp: self._on_source_change(source_select.value, t.value)
+                        ).props('flat round dense color=primary').tooltip('Ricarica campi fonte dati')
+
                     if all_fields:
                         ui.label(
                             f'{len(dimensions)} dimension(s) · {len(measures)} measure(s) available'
                         ).classes('text-xs text-slate-500')
                     else:
-                        ui.label(
-                            'No fields detected for this source. Run the ETL pipeline first.'
-                        ).classes('text-xs text-amber-600')
+                        with ui.row().classes('w-full bg-amber-50 text-amber-800 p-3 rounded-lg text-xs items-start gap-2 border border-amber-200 mt-1'):
+                            ui.icon('warning', size='sm').classes('text-amber-600 mt-0.5')
+                            ui.label(f"Nessun campo rilevato per la fonte '{current_source}'. Verifica che la pipeline ETL sia stata eseguita o seleziona un'altra fonte dati.").classes('flex-1')
 
                 # --- Widget specific fields ------------------------------------------
                 dims_select = None
@@ -170,6 +176,9 @@ class WidgetConfigurator:
                     meas_select.on_value_change(
                         lambda e: self.current_widget.update({'measures': _as_list(e.value)})
                     )
+                    ui.label(
+                        '💡 Suggerimento: Se l\'elenco è vuoto, puoi digitare manualmente il nome esatto della colonna e premere Invio.'
+                    ).classes('text-xs text-slate-500 -mt-1')
                     ui.label(
                         'Tip: select two dimensions to use the second one as series/legend, then pick a measure.'
                     ).classes('text-xs text-slate-500 -mt-1')
@@ -282,7 +291,7 @@ class WidgetConfigurator:
                 # --- Actions ----------------------------------------------------------
                 with ui.row().classes('w-full justify-between items-center mt-2 pt-3 border-t'):
                     if not self._is_new and self.on_delete is not None:
-                        ui.button('Delete', on_click=self._delete).props('flat dense color=negative icon=delete')
+                        ui.button('Delete', on_click=self._confirm_delete).props('flat dense color=negative icon=delete')
                     else:
                         ui.space()
                     with ui.row().classes('gap-2'):
@@ -401,9 +410,20 @@ class WidgetConfigurator:
         self.on_save(self.current_widget)
         self.close()
 
+    def _confirm_delete(self):
+        with ui.dialog() as dialog, ui.card().classes('p-4 gap-3'):
+            ui.label('Conferma eliminazione').classes('text-lg font-bold text-slate-800')
+            title = self.current_widget.get('title', 'senza titolo')
+            ui.label(f'Sei sicuro di voler eliminare il widget "{title}"?').classes('text-sm text-slate-600')
+            with ui.row().classes('w-full justify-end gap-2 mt-2'):
+                ui.button('Annulla', on_click=dialog.close).props('flat dense')
+                ui.button('Elimina', on_click=lambda: (dialog.close(), self._delete())).props('color=negative dense icon=delete')
+        dialog.open()
+
     def _delete(self):
         widget_id = self.current_widget.get('i')
-        if self.on_delete is not None and widget_id is not None:
+        widget_title = self.current_widget.get('title')
+        if self.on_delete is not None and (widget_id is not None or widget_title is not None):
             self.on_delete(dict(self.current_widget))
         self.close()
 

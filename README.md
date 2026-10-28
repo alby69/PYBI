@@ -15,7 +15,11 @@
   - **Finestra Modale "Gestisci relazioni" & Autodetect:** Dialogo centralizzato con pulsante **"Rileva automaticamente"** (Autodetect) che analizza la struttura del modello per proporre relazioni valide in base a nomi di colonna e tipi di dato corrispondenti.
   ![Vista Modello Relazioni](screenshots/model_view_relationships.png)
 
-- **Miglioramenti UI/UX Editor ETL:**
+- **Miglioramenti UI/UX Editor ETL & Dashboard (Report):**
+  - **Gestione dei Widget nella Dashboard:**
+    - **Eliminazione Robusta dei Widget:** Eliminazione sicura sia tramite icona 🗑️ sulla griglia sia dal pulsante "Delete" nel drawer `WidgetConfigurator`, con finestra di dialogo di conferma per prevenire cancellazioni accidentali.
+    - **Aggiornamento e Matching Resiliente:** Assegnazione automatica di un ID univoco (`w1`, `w2`, ...) ai nuovi widget e ricerca con fallback su titolo e tipo di widget in caso di ID mancante per evitare duplicazioni.
+    - **Rilevamento e Selezione Campi:** Feedback visivo con banner di avviso ambrato se la fonte dati è vuota o non elaborata, pulsante di aggiornamento rapido 🔄 per ricaricare le colonne della fonte e supporto alla digitazione manuale dei campi (`with_input=True`).
   - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.
   - **State Management dei Passaggi Applicati per Tabella:** Gestione indipendente dello stato `appliedStepsByTable` nello store Vue (`uiStore.js`) e nel Power Query Editor, per conservare ed aggiornare i passaggi specifici di ciascuna tabella sorgente selezionata.
   - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).

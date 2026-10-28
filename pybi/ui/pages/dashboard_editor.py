@@ -154,21 +154,39 @@ def create_dashboard_editor_page():
     def on_widget_configured(updated_widget):
         record_history()
         layout = list(grid.layout)
-        if updated_widget.get('i'):
+        w_id = updated_widget.get('i')
+        w_title = updated_widget.get('title')
+        w_type = updated_widget.get('type')
+
+        match_idx = None
+        if w_id:
             for idx, item in enumerate(layout):
-                if item.get('i') == updated_widget.get('i'):
-                    layout[idx] = updated_widget
+                if item.get('i') == w_id:
+                    match_idx = idx
                     break
-            log_container.push(f"[Config] Updated widget {updated_widget.get('i')} ({updated_widget.get('title')})")
+        elif w_title:
+            for idx, item in enumerate(layout):
+                if item.get('title') == w_title and item.get('type') == w_type:
+                    match_idx = idx
+                    break
+
+        if match_idx is not None:
+            existing = layout[match_idx]
+            widget = dict(updated_widget)
+            if not widget.get('i'):
+                widget['i'] = existing.get('i') or next_widget_id(layout)
+            layout[match_idx] = widget
+            log_container.push(f"[Config] Updated widget {widget.get('i')} ({widget.get('title')})")
         else:
             widget = dict(updated_widget)
-            widget['i'] = next_widget_id(layout)
+            widget['i'] = widget.get('i') or next_widget_id(layout)
             widget['x'] = 0
             widget['y'] = max((int(item.get('y', 0)) + int(item.get('h', 1))) for item in layout) if layout else 0
             widget['w'] = int(widget.get('w', 4))
             widget['h'] = int(widget.get('h', 3))
             layout.append(widget)
             log_container.push(f"[Config] Added widget {widget['i']} ({widget['title']}, {widget['type']})")
+
         grid.layout = bind_widget_data(layout)
         if persist_if_dashboard_exists():
             log_container.push('[Storage] Layout auto-saved.')
@@ -176,13 +194,22 @@ def create_dashboard_editor_page():
 
     def on_widget_deleted(widget):
         record_history()
-        layout = [item for item in grid.layout if item.get('i') != widget.get('i')]
+        w_id = widget.get('i')
+        w_title = widget.get('title')
+
+        layout = [
+            item for item in grid.layout
+            if not (
+                (w_id and item.get('i') == w_id) or
+                (not w_id and w_title and item.get('title') == w_title)
+            )
+        ]
         grid.layout = bind_widget_data(layout)
-        log_container.push(f"[Config] Deleted widget {widget.get('i')} ({widget.get('title')})")
+        log_container.push(f"[Config] Deleted widget {w_id or w_title} ({widget.get('title')})")
         if persist_if_dashboard_exists():
             log_container.push('[Storage] Layout auto-saved.')
         status_label.set_text(f'State: {len(layout)} widget(s) on canvas')
-        ui.notify(f'Widget "{widget.get("title", widget.get("i"))}" eliminato', type='info')
+        ui.notify(f'Widget "{widget.get("title", w_id or "senza titolo")}" eliminato', type='info')
 
     configurator = WidgetConfigurator(on_save=on_widget_configured, on_delete=on_widget_deleted)
 

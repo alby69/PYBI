@@ -7,7 +7,9 @@ export const state = reactive({
     error: null,
     pageState: {},
     currentSourceTable: null,
-    appliedStepsByTable: {}
+    appliedStepsByTable: {},
+    drillContext: null,
+    drillHistory: []
 });
 
 export const useUIStore = () => {
@@ -81,6 +83,44 @@ export const useUIStore = () => {
         state.appliedStepsByTable[target].push(step);
     }
 
+    function setDrillContext(targetReport, filters) {
+        if (state.drillContext || state.activePage) {
+            state.drillHistory.push({
+                activePage: state.activePage,
+                drillContext: state.drillContext ? JSON.parse(JSON.stringify(state.drillContext)) : null,
+                timestamp: new Date().toISOString()
+            });
+        }
+        state.drillContext = {
+            targetReport,
+            filters: JSON.parse(JSON.stringify(filters || {})),
+            timestamp: new Date().toISOString()
+        };
+        if (targetReport && typeof targetReport === 'string') {
+            state.activePage = targetReport;
+        }
+        return state.drillContext;
+    }
+
+    function popDrillContext() {
+        if (state.drillHistory.length > 0) {
+            const prev = state.drillHistory.pop();
+            state.drillContext = prev.drillContext;
+            if (prev.activePage) {
+                state.activePage = prev.activePage;
+            }
+            return prev;
+        } else {
+            state.drillContext = null;
+            return null;
+        }
+    }
+
+    function clearDrillContext() {
+        state.drillContext = null;
+        state.drillHistory = [];
+    }
+
     return {
         state,
         loadSchema,
@@ -88,6 +128,9 @@ export const useUIStore = () => {
         setCurrentSourceTable,
         getStepsForTable,
         setStepsForTable,
-        addStepForTable
+        addStepForTable,
+        setDrillContext,
+        popDrillContext,
+        clearDrillContext
     };
 };

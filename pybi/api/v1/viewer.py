@@ -1,7 +1,9 @@
 """FastAPI router for Public Read-Only Viewer endpoints in PyBI v1 REST API."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+import duckdb
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 
 from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
@@ -10,6 +12,14 @@ from pybi.semantic.engine import SemanticQueryResolver
 from pybi.semantic.models import SemanticQueryRequest, SemanticQueryResponse
 
 router = APIRouter(prefix="/api/v1/viewer", tags=["Viewer"])
+
+
+class TablixPreviewRequest(BaseModel):
+    project_id: str = "default"
+    table_name: str
+    row_groups: List[str] = Field(default_factory=list)
+    measures: List[Dict[str, Any]] = Field(default_factory=list)
+    filter_context: Optional[Dict[str, Any]] = None
 
 
 @router.get("/health")
@@ -104,3 +114,58 @@ def execute_semantic_query(project_id: str, request: SemanticQueryRequest) -> Se
         return response
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Semantic query execution failed: {e}")
+
+
+@router.post("/reports/{report_id}/preview")
+def get_report_tablix_preview(report_id: str, request: TablixPreviewRequest) -> Dict[str, Any]:
+    """Execute dynamic GROUP BY ROLLUP aggregation in DuckDB for Tablix report previews."""
+    tbl_name = request.table_name
+    if tbl_name not in default_binder.list_sources():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Table source '{tbl_name}' not found")
+
+    df = default_binder.get_source_data(tbl_name)
+    con = duckdb.connect(":memory:")
+    raw_df = df.to_pandas() if hasattr(df, "to_pandas") else df
+    con.register("tbl_data", raw_df)
+
+    groups_str = ", ".join(request.row_groups) if request.row_groups else ""
+
+    measure_exprs = []
+    for m in request.measures:
+        col = m.get("col") or m.get("column")
+        agg = (m.get("agg") or m.get("aggregator") or "SUM").upper()
+        title = m.get("title") or f"{col}_{agg.lower()}"
+        if col:
+            measure_exprs.append(f"{agg}({col}) AS \"{title}\"")
+
+    if not measure_exprs:
+        measure_exprs.append("COUNT(*) AS row_count")
+
+    where_clauses = []
+    if request.filter_context:
+        for f_col, f_val in request.filter_context.items():
+            if isinstance(f_val, list) and f_val:
+                vals_str = ", ".join(f"'{v}'" for v in f_val)
+                where_clauses.append(f"{f_col} IN ({vals_str})")
+            elif f_val is not None and str(f_val).strip() != "":
+                where_clauses.append(f"{f_col} = '{f_val}'")
+
+    where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    if groups_str:
+        sql = f"SELECT {groups_str}, {', '.join(measure_exprs)} FROM tbl_data {where_str} GROUP BY ROLLUP({groups_str})"
+    else:
+        sql = f"SELECT {', '.join(measure_exprs)} FROM tbl_data {where_str}"
+
+    try:
+        res_df = con.execute(sql).df()
+        return {
+            "report_id": report_id,
+            "table_name": tbl_name,
+            "sql": sql,
+            "row_count": len(res_df),
+            "columns": list(res_df.columns),
+            "data": res_df.to_dict(orient="records"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Rollup preview failed: {e}")

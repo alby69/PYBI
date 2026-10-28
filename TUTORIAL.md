@@ -62,6 +62,26 @@ python3 -m pybi.main
 
 ---
 
+## 3.2 Gestione dei Widget nella Dashboard (Report)
+
+L'editor della Dashboard (Report) consente di creare, configurare ed eliminare elementi visuali in modo fluido ed intuitivo:
+
+1. **Aggiunta e Configurazione di un Widget**:
+   - Clicca su **"Add Widget"** nella barra superiore per aprire il pannello laterale `WidgetConfigurator`.
+   - Seleziona la **Fonte Dati** desiderata dal menu a discesa. Se la fonte non presenta campi, apparirà un avviso ambrato che suggerisce di eseguire la pipeline ETL o ricaricare i dati tramite il pulsante 🔄.
+   - Scegli il tipo di widget (es. **Chart**, **KPI Card**, **Data Table**, **Pivot Table**).
+   - Seleziona le **Dimensioni** e le **Misure**. Se un campo non appare nell'elenco predefinito, puoi **digitare direttamente il nome della colonna e premere Invio** grazie al supporto `with_input`.
+
+2. **Miglioramenti nei Grafici a Due Dimensioni**:
+   - Quando configuri un grafico con due dimensioni, la prima dimensione viene utilizzata per l'asse X e la seconda come serie/legenda, con l'aggregazione basata sulla misura selezionata.
+
+3. **Eliminazione di un Widget**:
+   - **Dalla Griglia**: Clicca sull'icona del cestino 🗑️ presente nell'intestazione di ciascun widget sulla tela.
+   - **Dal Configuratore**: Clicca sul pulsante rosso **"Delete"** in basso nel drawer. Una finestra modale di conferma preverrà eliminazioni accidentali.
+   - **Matching Resiliente**: Se un widget non possiede un ID univoco esplicito, il sistema utilizzerà un algoritmo di fallback basato sul titolo e sul tipo di widget per garantirne l'eliminazione sicura senza duplicazioni sul canvas.
+
+---
+
 ## 3.1 ETL Editor in stile Power Query (Applied Steps)
 
 L'editor ETL di PyBI adotta un'interfaccia a 3 pannelli ispirata a **Power Query Editor**:

@@ -41,7 +41,7 @@ export default {
                             <button
                                 type="button"
                                 class="delete-widget-btn text-xs px-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                                title="Delete widget"
+                                title="Elimina questo widget"
                                 @mousedown.stop
                                 @click.stop="$emit('delete_widget', { widget: item })">🗑️</button>
                         </span>

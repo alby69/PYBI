@@ -59,12 +59,13 @@ class WidgetConfigurator:
     def open_new_widget(self, available_sources: Optional[List[str]] = None):
         """Open configurator drawer to create a brand new widget item."""
         sources = available_sources or ['regional_sales']
+        default_source = 'regional_sales' if 'regional_sales' in sources else sources[0]
         gallery = {g['type']: g for g in WIDGET_GALLERY}
         default_type = 'kpi'
         self.current_widget = {
             'title': gallery[default_type]['label'],
             'type': default_type,
-            'source': sources[0],
+            'source': default_source,
             'value': '0',
             'subtitle': 'New metric',
         }

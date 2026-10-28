@@ -6,7 +6,12 @@ import duckdb
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from pybi.core.model_sync import sync_etl_outputs_into_model
+from pybi.core.model_sync import (
+    get_semantic_model_path,
+    load_project_semantic_model,
+    save_project_semantic_model,
+    sync_etl_outputs_into_model,
+)
 from pybi.core.semantic_model import (
     SemanticModel,
     SemanticTable,
@@ -17,31 +22,6 @@ from pybi.core.storage import default_storage
 from pybi.dashboard.binding import default_binder
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/semantic", tags=["Semantic Model"])
-
-
-def get_semantic_model_path(project_id: str) -> str:
-    """Get file path to semantic_model.yaml for given project."""
-    data_dir = default_storage.get_project_data_dir(project_id)
-    return os.path.join(data_dir, "semantic_model.yaml")
-
-
-def load_project_semantic_model(project_id: str) -> SemanticModel:
-    """Load semantic model for project or return default empty model."""
-    filepath = get_semantic_model_path(project_id)
-    model = SemanticModel(name=f"{project_id}_semantic_model", tables=[], relationships=[], rls_rules=[])
-    if os.path.exists(filepath):
-        try:
-            model = SemanticModel.load_yaml_file(filepath)
-        except Exception:
-            pass
-    return sync_etl_outputs_into_model(project_id, model)
-
-
-def save_project_semantic_model(project_id: str, model: SemanticModel) -> str:
-    """Save semantic model to project storage directory."""
-    filepath = get_semantic_model_path(project_id)
-    model.save_yaml_file(filepath)
-    return filepath
 
 
 class UpdateRelationshipsRequest(BaseModel):

@@ -107,9 +107,11 @@ class DataBinder:
         return self.get_source_data(binding.source_name, binding.query)
 
     def list_sources(self) -> list:
-        """List the names of all registered data sources and semantic models."""
+        """List the names of all registered data sources and non-empty semantic models."""
         sources = set(self._sources.keys())
-        sources.update(self.semantic_resolver.registry.keys())
+        for model_name, model in self.semantic_resolver.registry.items():
+            if getattr(model, "tables", None):
+                sources.add(model_name)
         return sorted(list(sources))
 
     def update_source(self, source_name: str, new_data: Union[pl.DataFrame, duckdb.DuckDBPyRelation]) -> None:

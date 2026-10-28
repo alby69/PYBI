@@ -15,7 +15,12 @@ from pybi.core.semantic_model import (
     JoinType,
     autodetect_relationships,
 )
-from pybi.core.model_sync import sync_etl_outputs_into_model
+from pybi.core.model_sync import (
+    get_semantic_model_path,
+    load_project_semantic_model as _core_load_project_semantic_model,
+    save_project_semantic_model,
+    sync_etl_outputs_into_model,
+)
 from pybi.core.storage import default_storage
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.navbar import render_navbar
@@ -24,24 +29,10 @@ from pybi.ui.theme import default_theme
 from pybi.ui.components.model_flow_editor import ModelFlowEditor
 
 
-def get_semantic_model_path(project_id: str) -> str:
-    """Get path to semantic_model.yaml for a given project."""
-    data_dir = default_storage.get_project_data_dir(project_id)
-    return os.path.join(data_dir, "semantic_model.yaml")
-
-
 def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
-    """Load semantic model for project, or create a default model if not existing."""
-    filepath = get_semantic_model_path(project_id)
-    model: Optional[CoreSemanticModel] = None
-    if os.path.exists(filepath):
-        try:
-            model = CoreSemanticModel.load_yaml_file(filepath)
-        except Exception:
-            model = None
-
-    if model is None:
-        # Return default populated sample model if model file does not exist yet
+    """Load semantic model for project, initializing default tables if none exist."""
+    model = _core_load_project_semantic_model(project_id)
+    if not model.tables:
         t1 = SemanticTable(
             name='sales',
             source_table='sales_data',
@@ -75,22 +66,10 @@ def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
             join_type=JoinType.LEFT,
             is_active=True,
         )
-        model = CoreSemanticModel(
-            name=f"{project_id}_semantic_model",
-            tables=[t1, t2],
-            relationships=[r1],
-            rls_rules=[]
-        )
-
-    # Ensure ETL query outputs (e.g. "tab_dati") are part of the model view.
-    return sync_etl_outputs_into_model(project_id, model)
-
-
-def save_project_semantic_model(project_id: str, model: CoreSemanticModel) -> str:
-    """Save semantic model to project storage directory."""
-    filepath = get_semantic_model_path(project_id)
-    model.save_yaml_file(filepath)
-    return filepath
+        model.tables.extend([t1, t2])
+        model.relationships.append(r1)
+        sync_etl_outputs_into_model(project_id, model)
+    return model
 
 
 def create_model_editor_page():

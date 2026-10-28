@@ -101,6 +101,53 @@ def _merge_table(model: SemanticModel, table_name: str, df: pl.DataFrame) -> boo
     return changed
 
 
+import os
+
+
+def get_semantic_model_path(project_id: str) -> str:
+    """Get file path to semantic_model.yaml for given project."""
+    data_dir = default_storage.get_project_data_dir(project_id)
+    return os.path.join(data_dir, "semantic_model.yaml")
+
+
+def load_project_semantic_model(project_id: str) -> SemanticModel:
+    """Load semantic model for project, sync ETL outputs, and register in default_binder."""
+    filepath = get_semantic_model_path(project_id)
+    model: Optional[SemanticModel] = None
+    if os.path.exists(filepath):
+        try:
+            model = SemanticModel.load_yaml_file(filepath)
+        except Exception:
+            model = None
+
+    if model is None:
+        model = SemanticModel(
+            name=f"{project_id}_semantic_model", tables=[], relationships=[], rls_rules=[]
+        )
+
+    model = sync_etl_outputs_into_model(project_id, model)
+
+    try:
+        from pybi.dashboard import default_binder
+        default_binder.register_semantic_model(model)
+    except Exception as err:  # pragma: no cover - defensive
+        log.warning("Failed to auto-register semantic model for project %s: %s", project_id, err)
+
+    return model
+
+
+def save_project_semantic_model(project_id: str, model: SemanticModel) -> str:
+    """Save semantic model to project storage directory and register in default_binder."""
+    filepath = get_semantic_model_path(project_id)
+    model.save_yaml_file(filepath)
+    try:
+        from pybi.dashboard import default_binder
+        default_binder.register_semantic_model(model)
+    except Exception as err:  # pragma: no cover - defensive
+        log.warning("Failed to register saved semantic model for project %s: %s", project_id, err)
+    return filepath
+
+
 def sync_etl_outputs_into_model(
     project_id: str,
     model: Optional[SemanticModel] = None,

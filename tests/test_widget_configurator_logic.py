@@ -25,6 +25,46 @@ def test_source_fields_fallback():
     assert unknown_fields == {"dimensions": [], "measures": []}
 
 
+def test_table_calculated_measures_discovery():
+    import polars as pl
+    from pybi.core.semantic_model import SemanticModel, SemanticTable, SemanticColumn, SemanticMeasure
+    from pybi.dashboard import default_binder
+
+    df = pl.DataFrame({
+        "CittaClienteSped": ["CAMPI SALENTINA", "LECCE"],
+        "Qta": [22.3, 15.0],
+        "Prezzo": [10.5, 12.0]
+    })
+    default_binder.register_source("tab_dati", df)
+
+    model = SemanticModel(
+        name="test_project_semantic_model",
+        tables=[
+            SemanticTable(
+                name="tab_dati",
+                source_table="tab_dati",
+                columns=[
+                    SemanticColumn(name="CittaClienteSped", column_name="CittaClienteSped", data_type="string"),
+                    SemanticColumn(name="Qta", column_name="Qta", data_type="number"),
+                    SemanticColumn(name="Prezzo", column_name="Prezzo", data_type="number"),
+                ],
+                measures=[
+                    SemanticMeasure(name="sum_Qta", expression="SUM(Qta)", agg_func="SUM", label="Sum of Qta"),
+                    SemanticMeasure(name="sum_Prezzo", expression="SUM(Prezzo)", agg_func="SUM", label="Sum of Prezzo"),
+                    SemanticMeasure(name="Prezzo_Medio", expression="Prezzo", agg_func="AVG", label="Prezzo_Medio"),
+                ]
+            )
+        ]
+    )
+    default_binder.register_semantic_model(model)
+
+    fields = source_fields("tab_dati")
+    assert "CittaClienteSped" in fields["dimensions"]
+    assert "sum_Qta" in fields["measures"]
+    assert "sum_Prezzo" in fields["measures"]
+    assert "Prezzo_Medio" in fields["measures"]
+
+
 def test_widget_deletion_fallback_logic():
     layout = [
         {"i": "w1", "title": "Dati ETS", "type": "chart"},

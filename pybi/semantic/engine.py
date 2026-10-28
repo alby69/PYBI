@@ -51,6 +51,12 @@ class SemanticQueryResolver:
         model = self.get_model(request.model_name) if request.model_name else None
 
         if not model and request.source_table:
+            for reg_m in self.registry.values():
+                if reg_m.get_table(request.source_table) is not None:
+                    model = reg_m
+                    break
+
+        if not model and request.source_table:
             # Fallback single-table model
             tbl_name = request.source_table
             model = CoreModelType(
@@ -93,11 +99,16 @@ class SemanticQueryResolver:
                 tbl, m = found
                 referenced_tables.add(tbl.name)
                 expr = m.expression
+                agg = (m.agg_func or "SUM").upper()
                 if not expr and m.column_name:
-                    func = (m.agg_func or "SUM").upper()
-                    expr = f'{func}("{tbl.name}"."{m.column_name}")'
+                    expr = f'{agg}("{tbl.name}"."{m.column_name}")'
                 elif not expr:
-                    expr = f'SUM("{tbl.name}"."{m.name}")'
+                    expr = f'{agg}("{tbl.name}"."{m.name}")'
+                elif "(" not in expr and ")" not in expr:
+                    if agg in ("SUM", "AVG", "MIN", "MAX", "COUNT"):
+                        expr = f'{agg}("{tbl.name}"."{expr.strip()}")'
+                    else:
+                        expr = f'AVG("{tbl.name}"."{expr.strip()}")'
                 meas_targets.append((meas_name, tbl.name, expr, m.agg_func))
             else:
                 # Default to primary table or heuristic aggregation
@@ -116,7 +127,10 @@ class SemanticQueryResolver:
             referenced_tables.add(p_tbl)
 
         # Primary table selection
-        primary_table_name = model.default_table if model.default_table in referenced_tables else next(iter(referenced_tables))
+        if request.source_table and model.get_table(request.source_table):
+            primary_table_name = request.source_table
+        else:
+            primary_table_name = model.default_table if model.default_table in referenced_tables else next(iter(referenced_tables))
         primary_table = model.get_table(primary_table_name) or model.tables[0]
 
         # Build FROM clause

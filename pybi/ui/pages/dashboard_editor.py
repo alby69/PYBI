@@ -16,6 +16,7 @@ from pybi.ui.components.navbar import render_navbar
 from pybi.export.dashboard_exporter import render_export_dialog
 from pybi.ui.components.search_bar import SearchBar
 from pybi.ui.components.widget_configurator import WidgetConfigurator, render_data_status_badge
+from pybi.core.model_sync import load_project_semantic_model
 from pybi.ui.components.widget_data import (
     available_sources,
     bind_widget_data,
@@ -50,6 +51,10 @@ def create_dashboard_editor_page():
     def load_current_dashboard(notify: bool = True):
         """Load the selected dashboard's saved layout, or demo widgets when none saved."""
         pid = project_manager.project_id
+        try:
+            load_project_semantic_model(pid)
+        except Exception:
+            pass
         dash_id = dashboard_manager.dashboard_id
         if not dash_id:
             grid.layout = bind_widget_data(sample_layout())

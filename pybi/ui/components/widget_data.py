@@ -90,13 +90,15 @@ def source_fields(source: str) -> Dict[str, List[str]]:
 
     Semantic models expose their declared columns and measures (qualified with
     the table name when the model contains several tables). Plain data sources
-    expose every column as a dimension and numeric columns as measures.
+    expose every column as a dimension and numeric columns as measures, plus any
+    measures declared on matching tables across registered semantic models.
     """
     dimensions: List[str] = []
     measures: List[str] = []
     if not source:
         return {'dimensions': [], 'measures': []}
 
+    # 1. Direct semantic model match
     model = None
     try:
         model = default_binder.semantic_resolver.get_model(source)
@@ -115,13 +117,28 @@ def source_fields(source: str) -> Dict[str, List[str]]:
         if dimensions or measures:
             return {'dimensions': _dedupe(dimensions), 'measures': _dedupe(measures)}
 
+    # 2. Plain data source frame lookup
     try:
         df = default_binder.get_source_data(source)
     except Exception:
-        return {'dimensions': [], 'measures': []}
+        df = None
 
-    dimensions = [str(col) for col in df.columns]
-    measures = [str(col) for col in df.columns if df[col].dtype.is_numeric()]
+    if df is not None:
+        dimensions = [str(col) for col in df.columns]
+        measures = [str(col) for col in df.columns if df[col].dtype.is_numeric()]
+
+    # 3. Search all registered semantic models for matching table name (e.g. "tab_dati")
+    try:
+        for m_name, reg_model in default_binder.semantic_resolver.registry.items():
+            tbl = reg_model.get_table(source)
+            if tbl is not None:
+                if not dimensions:
+                    dimensions = [col.name for col in tbl.columns]
+                for m in tbl.measures:
+                    measures.append(m.name)
+    except Exception:
+        pass
+
     return {'dimensions': _dedupe(dimensions), 'measures': _dedupe(measures)}
 
 

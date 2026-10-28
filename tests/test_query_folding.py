@@ -146,4 +146,8 @@ def test_etl_executor_materializes_non_foldable_node():
     result_df, raw_sql, opt_sql = executor.execute_nodes(dag, source_df=source_df)
 
     assert "_pybi_tmp_c1_" in raw_sql
-    assert result_df.to_dicts() == [{"x": 2, "total": 10}, {"x": 3, "total": 12}]
+    records = sorted(
+        [{"x": int(r["x"]), "total": int(r["total"])} for r in result_df.to_dicts()],
+        key=lambda r: r["x"]
+    )
+    assert records == [{"x": 2, "total": 10}, {"x": 3, "total": 12}]

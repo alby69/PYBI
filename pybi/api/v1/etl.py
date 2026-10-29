@@ -137,6 +137,9 @@ def get_job_status(project_id: str, job_id: str) -> JobStatusResponse:
 @router.post("/preview", response_model=ETLPreviewResponse)
 def preview_node_output(project_id: str, req: ETLPreviewRequest) -> ETLPreviewResponse:
     """Execute ETL pipeline up to specified node or step_index and preview dataframe results."""
+    import time
+    start_time = time.time()
+
     if not default_storage.project_exists(project_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project '{project_id}' not found")
 
@@ -150,17 +153,18 @@ def preview_node_output(project_id: str, req: ETLPreviewRequest) -> ETLPreviewRe
 
     df = None
     if req.step_index is not None:
-        result = executor.execute_linear_etl(dag_dict, stop_at_step_index=req.step_index)
-        step_key = f"step_{req.step_index}"
-        if step_key in result.dataframes:
-            df = result.dataframes[step_key]
-        elif "source" in result.dataframes and req.step_index == 0:
+        stop_at = max(0, req.step_index)
+        result = executor.execute_linear_etl(dag_dict, stop_at_step_index=stop_at)
+        target_key = f"step_{stop_at}" if stop_at > 0 else "source"
+        if target_key in result.dataframes:
+            df = result.dataframes[target_key]
+        elif "source" in result.dataframes and stop_at == 0:
             df = result.dataframes["source"]
         elif result.output_tables:
             df = list(result.output_tables.values())[0]
     else:
         result = executor.execute(dag_dict)
-        node_key = req.node_id or ""
+        node_key = getattr(req, "node_id", None) or ""
         if node_key in result.dataframes:
             df = result.dataframes[node_key]
         elif result.dataframes:
@@ -172,14 +176,18 @@ def preview_node_output(project_id: str, req: ETLPreviewRequest) -> ETLPreviewRe
             detail="Specified node or step_index produced no dataframe output during execution",
         )
 
-    preview_df = df.head(req.limit)
+    limit_val = getattr(req, "limit", 100) or 100
+    preview_df = df.head(limit_val)
     rows = preview_df.to_dicts()
-    cols = preview_df.columns
+    cols = list(preview_df.columns)
+    exec_time = round(time.time() - start_time, 4)
 
     return ETLPreviewResponse(
-        node_id=req.node_id,
+        node_id=getattr(req, "node_id", None),
         step_index=req.step_index,
         columns=cols,
         rows=rows,
         total_rows=len(df),
+        total_columns=len(cols),
+        execution_time=exec_time,
     )

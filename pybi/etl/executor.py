@@ -1018,14 +1018,14 @@ class ETLExecutor:
 
         for idx, step in enumerate(target_steps, start=1):
             if isinstance(step, dict):
-                step_id = step.get("id") or f"step_{idx}"
+                step_id = step.get("step_id") or step.get("id") or f"step_{idx}"
                 step_name = step.get("name") or step.get("label") or f"Passaggio {idx}"
-                op = step.get("operation") or step.get("type") or "filter"
+                op = step.get("operation") or step.get("step_type") or step.get("type") or "filter"
                 params = step.get("params") or step.get("config") or {}
             else:
-                step_id = getattr(step, "id", f"step_{idx}")
+                step_id = getattr(step, "step_id", None) or getattr(step, "id", f"step_{idx}")
                 step_name = getattr(step, "name", f"Passaggio {idx}")
-                op = getattr(step, "operation", "filter")
+                op = getattr(step, "step_type", None) or getattr(step, "operation", "filter")
                 params = getattr(step, "params", {})
 
             try:

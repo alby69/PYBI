@@ -4,7 +4,7 @@ services:
     container_name: pybi_backend
     command: python3 -m backend.main
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8001}:8000"
     volumes:
       - ./pybi_data:/app/data
     env_file:

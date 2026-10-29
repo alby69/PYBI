@@ -66,25 +66,27 @@ def test_rbac_user_role_assignment():
     assert rbac.enforce("bob", "project", "write") is False
 
 
-@pytest.mark.asyncio
-async def test_etl_scheduler():
-    scheduler = ETLScheduler()
-    executed_tasks = []
+def test_etl_scheduler():
+    async def _test():
+        scheduler = ETLScheduler()
+        executed_tasks = []
 
-    def on_complete(task_id, result):
-        executed_tasks.append((task_id, result.status))
+        def on_complete(task_id, result):
+            executed_tasks.append((task_id, result.status))
 
-    dag = {"nodes": [], "edges": []}
-    scheduler.schedule_pipeline("test_task", dag, interval_seconds=1, on_complete=on_complete)
+        dag = {"nodes": [], "edges": []}
+        scheduler.schedule_pipeline("test_task", dag, interval_seconds=1, on_complete=on_complete)
 
-    await asyncio.sleep(0.2)
+        await asyncio.sleep(0.2)
 
-    status = scheduler.get_task_status("test_task")
-    assert status is not None
-    assert status["is_running"] is True
-    assert status["run_count"] >= 1
-    assert len(executed_tasks) >= 1
-    assert executed_tasks[0][0] == "test_task"
+        status = scheduler.get_task_status("test_task")
+        assert status is not None
+        assert status["is_running"] is True
+        assert status["run_count"] >= 1
+        assert len(executed_tasks) >= 1
+        assert executed_tasks[0][0] == "test_task"
 
-    assert scheduler.cancel_pipeline("test_task") is True
-    assert scheduler.get_task_status("test_task") is None
+        assert scheduler.cancel_pipeline("test_task") is True
+        assert scheduler.get_task_status("test_task") is None
+
+    asyncio.run(_test())

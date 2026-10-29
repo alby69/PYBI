@@ -240,20 +240,10 @@ class ETLEngine:
             if base_dir and os.path.exists(os.path.join(base_dir, source_table)):
                 resolved_path = resolve_data_path(source_table, base_dir)
                 source_sql = f"SELECT * FROM read_csv_auto('{resolved_path}')"
+            elif os.path.exists(source_table):
+                source_sql = f"SELECT * FROM read_csv_auto('{source_table}')"
             else:
-                possible_file = None
-                if base_dir and os.path.exists(base_dir):
-                    files = [f for f in os.listdir(base_dir) if os.path.isfile(os.path.join(base_dir, f)) and not f.startswith(".")]
-                    if files:
-                        possible_file = os.path.join(base_dir, files[0])
-                if not possible_file:
-                    sample_path = resolve_data_path("sales_data.csv", base_dir)
-                    if sample_path and os.path.exists(sample_path):
-                        possible_file = sample_path
-                if possible_file:
-                    source_sql = f"SELECT * FROM read_csv_auto('{possible_file}')"
-                else:
-                    source_sql = f'SELECT * FROM "{source_table}"'
+                source_sql = f'SELECT * FROM "{source_table}"'
         else:
             default_path = resolve_data_path("sales_data.csv", base_dir)
             if os.path.exists(default_path):

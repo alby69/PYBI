@@ -66,6 +66,15 @@ class ETLEngine:
             logger.error("Failed to save ETL query for project %s: %s", project_id, err)
             return False
 
+    @staticmethod
+    def build_sql_query(
+        query: Union[Dict[str, Any], Any],
+        step_index: int = -1,
+        base_dir: Optional[str] = None,
+    ) -> str:
+        """Build a DuckDB SQL CTE query string for step sequence up to step_index."""
+        return ETLEngine.to_duckdb_sql(query, step_index=step_index, base_dir=base_dir)
+
     @classmethod
     def to_duckdb_sql(
         cls,
@@ -116,7 +125,8 @@ class ETLEngine:
             if os.path.exists(default_path):
                 source_sql = f"SELECT * FROM read_csv_auto('{default_path}')"
             else:
-                source_sql = "SELECT 1 AS placeholder WHERE 1=0"
+                fallback_table = query_dict.get("query_name", "source_data")
+                source_sql = f'SELECT * FROM "{fallback_table}"'
 
         ctes: List[str] = [f"step_0 AS (\n  {source_sql}\n)"]
 
@@ -131,7 +141,7 @@ class ETLEngine:
                 op = (getattr(step, "step_type", None) or getattr(step, "operation", "")).lower().strip()
                 params = getattr(step, "params", {})
 
-            cte_body = cls._step_to_cte_body(prev_cte, op, params)
+            cte_body = cls._step_to_cte_body(prev_cte, op, params, base_dir=base_dir)
             ctes.append(f"{curr_cte} AS (\n  {cte_body}\n)")
 
         last_cte_name = f"step_{len(target_steps)}"
@@ -139,7 +149,9 @@ class ETLEngine:
         return sql
 
     @classmethod
-    def _step_to_cte_body(cls, prev_cte: str, op: str, params: Dict[str, Any]) -> str:
+    def _step_to_cte_body(
+        cls, prev_cte: str, op: str, params: Dict[str, Any], base_dir: Optional[str] = None
+    ) -> str:
         """Helper to translate a single step into SQL for CTE body."""
         if op == "filter":
             cond = params.get("condition") or params.get("predicate")
@@ -171,8 +183,10 @@ class ETLEngine:
 
         elif op in ("rename_column", "rename"):
             mapping = params.get("mapping") or {}
-            if not mapping and params.get("old_column") and params.get("new_column"):
-                mapping = {params["old_column"]: params["new_column"]}
+            old_col = params.get("old_name") or params.get("old_column")
+            new_col = params.get("new_name") or params.get("new_column")
+            if not mapping and old_col and new_col:
+                mapping = {old_col: new_col}
             if mapping:
                 renames = ", ".join([f'"{k}" AS "{v}"' for k, v in mapping.items()])
                 return f'SELECT * RENAME ({renames}) FROM {prev_cte}'
@@ -198,7 +212,7 @@ class ETLEngine:
             return f'SELECT * FROM {prev_cte}'
 
         elif op in ("add_column", "calculated_column", "custom_column"):
-            new_col = params.get("new_column") or params.get("column") or "custom_col"
+            new_col = params.get("column_name") or params.get("new_column") or params.get("column") or "custom_col"
             expr = params.get("expression")
             cols = _as_list(params.get("columns"))
             sep = params.get("separator", " ")
@@ -209,8 +223,21 @@ class ETLEngine:
                 return f'SELECT *, CONCAT_WS(\'{sep}\', {cols_str}) AS "{new_col}" FROM {prev_cte}'
             return f'SELECT *, NULL AS "{new_col}" FROM {prev_cte}'
 
+        elif op in ("split_column", "split"):
+            col = params.get("column") or params.get("column_name")
+            delimiter = params.get("delimiter", " ")
+            parts = int(params.get("parts", 2))
+            new_cols = _as_list(params.get("new_columns"))
+            if col:
+                exprs = []
+                for idx in range(1, parts + 1):
+                    target_name = new_cols[idx - 1] if idx - 1 < len(new_cols) else f"{col}_{idx}"
+                    exprs.append(f'string_split("{col}", \'{delimiter}\')[{idx}] AS "{target_name}"')
+                return f'SELECT *, {", ".join(exprs)} FROM {prev_cte}'
+            return f'SELECT * FROM {prev_cte}'
+
         elif op in ("conditional_column", "conditional"):
-            new_col = params.get("new_column") or "conditional_col"
+            new_col = params.get("new_column") or params.get("column_name") or "conditional_col"
             if_cond = params.get("if_condition") or params.get("condition")
             then_val = params.get("then_value") or params.get("then")
             else_val = params.get("else_value") if params.get("else_value") is not None else params.get("else")
@@ -233,6 +260,46 @@ class ETLEngine:
                 return f'SELECT *, ({case_sql}) AS "{new_col}" FROM {prev_cte}'
             return f'SELECT * FROM {prev_cte}'
 
+        elif op in ("group_by", "groupby"):
+            group_cols = _as_list(
+                params.get("group_by_columns") or params.get("group_by") or params.get("by") or params.get("columns")
+            )
+            aggs = params.get("aggregations", {})
+            if group_cols:
+                g_str = ", ".join([f'"{c}"' for c in group_cols])
+                agg_parts = []
+                if isinstance(aggs, dict):
+                    for c_name, fn in aggs.items():
+                        fn_str = str(fn).upper()
+                        agg_parts.append(f'{fn_str}("{c_name}") AS "{c_name}_{fn_str.lower()}"')
+                elif isinstance(aggs, str) and aggs.strip():
+                    agg_parts.append(aggs.strip())
+
+                agg_str = (", " + ", ".join(agg_parts)) if agg_parts else ""
+                return f'SELECT {g_str}{agg_str} FROM {prev_cte} GROUP BY {g_str}'
+            return f'SELECT * FROM {prev_cte}'
+
+        elif op in ("merge", "join"):
+            right_table = params.get("target_table") or params.get("right_table") or "right_table"
+            right_path = params.get("target_path") or params.get("right_path")
+            how = (params.get("how") or params.get("join_type") or "left").upper()
+            left_on = params.get("left_on") or params.get("source_column") or params.get("on")
+            right_on = params.get("right_on") or params.get("target_column") or params.get("on")
+
+            if right_path:
+                resolved_right = resolve_data_path(right_path, base_dir)
+                right_source = f"read_csv_auto('{resolved_right}')"
+            else:
+                right_source = f'"{right_table}"'
+
+            if left_on and right_on:
+                return (
+                    f'SELECT {prev_cte}.*, right_tbl.* EXCLUDE ("{right_on}") '
+                    f'FROM {prev_cte} {how} JOIN {right_source} AS right_tbl '
+                    f'ON {prev_cte}."{left_on}" = right_tbl."{right_on}"'
+                )
+            return f'SELECT * FROM {prev_cte}'
+
         elif op in ("deduplicate", "distinct", "remove_duplicates"):
             cols = _as_list(params.get("columns"))
             if cols:
@@ -247,19 +314,6 @@ class ETLEngine:
                 cols_str = ", ".join([f'"{c}"' for c in cols])
                 order_dir = "DESC" if desc else "ASC"
                 return f'SELECT * FROM {prev_cte} ORDER BY {cols_str} {order_dir}'
-            return f'SELECT * FROM {prev_cte}'
-
-        elif op in ("group_by", "groupby"):
-            group_cols = _as_list(params.get("group_by") or params.get("by") or params.get("columns"))
-            aggs = params.get("aggregations", {})
-            if group_cols:
-                g_str = ", ".join([f'"{c}"' for c in group_cols])
-                agg_parts = []
-                for c_name, fn in aggs.items():
-                    fn_str = str(fn).upper()
-                    agg_parts.append(f'{fn_str}("{c_name}") AS "{c_name}_{fn_str.lower()}"')
-                agg_str = (", " + ", ".join(agg_parts)) if agg_parts else ""
-                return f'SELECT {g_str}{agg_str} FROM {prev_cte} GROUP BY {g_str}'
             return f'SELECT * FROM {prev_cte}'
 
         elif op in ("replace_values", "replace"):
@@ -305,8 +359,11 @@ class ETLEngine:
         query: Union[Dict[str, Any], Any],
         step_index: Optional[int] = None,
         limit: int = 1000,
-    ) -> pd.DataFrame:
-        """Execute linear transformation query up to step_index applying limit (default 1000 rows)."""
+    ) -> pl.DataFrame:
+        """Execute linear transformation query up to step_index applying limit (default 1000 rows).
+
+        Returns a fast Polars DataFrame via PyArrow execution.
+        """
         data_dir = default_storage.get_project_data_dir(project_id) if default_storage.project_exists(project_id) else None
 
         if hasattr(query, "model_dump"):
@@ -324,15 +381,16 @@ class ETLEngine:
                 pl_df = list(res.dataframes.values())[-1]
             else:
                 pl_df = pl.DataFrame()
-            return pl_df.head(limit).to_pandas()
+            return pl_df.head(limit)
 
-        # Attempt DuckDB CTE SQL generation and execution first
+        # Attempt DuckDB CTE SQL generation and Arrow -> Polars conversion
         try:
-            sql = cls.to_duckdb_sql(query_dict, step_index=step_index, base_dir=data_dir)
+            s_idx = -1 if step_index is None else step_index
+            sql = cls.build_sql_query(query_dict, step_index=s_idx, base_dir=data_dir)
             query_sql = f"{sql} LIMIT {limit}"
-            conn = default_binder.duckdb_conn or duckdb.connect(database=":memory:")
-            df_res = conn.query(query_sql).df()
-            return df_res
+            conn = duckdb.connect(database=":memory:")
+            arrow_table = conn.sql(query_sql).to_arrow_table()
+            return pl.from_arrow(arrow_table)
         except Exception as err:
             logger.warning("DuckDB CTE execution failed (%s), falling back to ETLExecutor: %s", err, err)
 
@@ -349,7 +407,7 @@ class ETLEngine:
         else:
             pl_df = pl.DataFrame()
 
-        return pl_df.head(limit).to_pandas()
+        return pl_df.head(limit)
 
     @classmethod
     def execute_full_pipeline(

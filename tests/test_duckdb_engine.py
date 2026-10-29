@@ -95,9 +95,10 @@ def test_generate_preview_and_execute_full_pipeline():
         ],
     }
 
-    # Generate preview with limit = 100
+    # Generate preview with limit = 100 returning Polars DataFrame up to step_index 1
     df_prev = ETLEngine.generate_preview(pid, query, step_index=1, limit=100)
-    assert isinstance(df_prev, pd.DataFrame)
+    import polars as pl
+    assert isinstance(df_prev, pl.DataFrame)
     assert len(df_prev) == 100
     assert (df_prev["category"] == "A").all()
 
@@ -106,6 +107,65 @@ def test_generate_preview_and_execute_full_pipeline():
     assert result["status"] == "completed"
     assert result["target_table"] == "a_categories"
     assert result["rows"] == 600
+
+
+def test_build_sql_query_advanced_steps():
+    """Test build_sql_query with split_column, merge, custom_column, group_by, rename, and remove_columns."""
+    query = {
+        "query_name": "Advanced_Query",
+        "source": {"type": "csv", "path": "users.csv"},
+        "steps": [
+            {
+                "id": "s1",
+                "name": "Split Name",
+                "operation": "split_column",
+                "params": {
+                    "column": "full_name",
+                    "delimiter": " ",
+                    "parts": 2,
+                    "new_columns": ["first_name", "last_name"],
+                },
+            },
+            {
+                "id": "s2",
+                "name": "Custom Full Name",
+                "operation": "custom_column",
+                "params": {
+                    "column_name": "Full_Display",
+                    "expression": "CONCAT(first_name, ' ', last_name)",
+                },
+            },
+            {
+                "id": "s3",
+                "name": "Remove Unneeded",
+                "operation": "remove_columns",
+                "params": {"columns": ["full_name"]},
+            },
+            {
+                "id": "s4",
+                "name": "Rename ID",
+                "operation": "rename",
+                "params": {"old_name": "user_id", "new_name": "id"},
+            },
+            {
+                "id": "s5",
+                "name": "Group By Category",
+                "operation": "group_by",
+                "params": {
+                    "group_by_columns": ["category"],
+                    "aggregations": "SUM(sales) AS TotalSales",
+                },
+            },
+        ],
+    }
+
+    sql = ETLEngine.build_sql_query(query, step_index=5)
+    assert "string_split(\"full_name\", ' ')[1] AS \"first_name\"" in sql
+    assert "(CONCAT(first_name, ' ', last_name)) AS \"Full_Display\"" in sql
+    assert "EXCLUDE (\"full_name\")" in sql
+    assert "RENAME (\"user_id\" AS \"id\")" in sql
+    assert "GROUP BY \"category\"" in sql
+    assert "SUM(sales) AS TotalSales" in sql
 
 
 def test_save_and_load_query():

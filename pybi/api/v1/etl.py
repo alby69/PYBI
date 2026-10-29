@@ -123,7 +123,12 @@ async def preview_etl_step(project_id: str, payload: Union[ETLPreviewRequest, Di
 
         cols = list(df_preview.columns)
         dtypes = {col: str(dtype) for col, dtype in zip(df_preview.columns, df_preview.dtypes)}
-        rows = df_preview.to_dict(orient="records")
+        if hasattr(df_preview, "to_dicts"):
+            rows = df_preview.to_dicts()
+        elif hasattr(df_preview, "to_dict"):
+            rows = df_preview.to_dict(orient="records")
+        else:
+            rows = []
 
         return {
             "node_id": node_id,

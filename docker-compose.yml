@@ -1,4 +1,16 @@
 services:
+  backend:
+    build: .
+    container_name: pybi_backend
+    command: python3 -m backend.main
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./pybi_data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
   pybi:
     build: .
     container_name: pybi

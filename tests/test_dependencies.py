@@ -20,7 +20,7 @@ STDLIB_AND_LOCAL = {
     'datetime', 'enum', 'functools', 'graphlib', 'hashlib', 'io', 'itertools', 'json', 'logging',
     '__future__', 'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
-    'pybi',
+    'pybi', 'backend',
 }
 
 

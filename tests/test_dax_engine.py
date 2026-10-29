@@ -15,19 +15,33 @@ def test_dax_engine_divide():
 
 def test_dax_engine_sumx():
     assert DaxEngine.translate("SUMX(Sales, Sales[Price] * Sales[Qty])") == (
-        "SUM(Sales[Price] * Sales[Qty])"
+        'SUM("Sales"."Price" * "Sales"."Qty")'
     )
 
 
 def test_dax_engine_filter():
     assert DaxEngine.translate("FILTER(Sales, Sales[Amount] > 100)") == (
-        "(Sales[Amount] > 100)"
+        '("Sales"."Amount" > 100)'
     )
 
 
 def test_dax_engine_totalytd():
     assert DaxEngine.translate("TOTALYTD(SUM(Sales[Amount]), Calendar[Date])") == (
-        "SUM(Sales[Amount]) OVER (PARTITION BY YEAR(Calendar[Date]) ORDER BY Calendar[Date])"
+        'SUM("Sales"."Amount") OVER (PARTITION BY YEAR("Calendar"."Date") ORDER BY "Calendar"."Date")'
+    )
+
+
+def test_dax_engine_switch():
+    sw = DaxEngine.translate("SWITCH(Sales[Status], \"Active\", 1, \"Pending\", 2, 0)")
+    assert sw == 'CASE WHEN "Sales"."Status" = \'Active\' THEN 1 WHEN "Sales"."Status" = \'Pending\' THEN 2 ELSE 0 END'
+
+
+def test_dax_engine_time_intelligence():
+    assert DaxEngine.translate("SAMEPERIODLASTYEAR(Calendar[Date])") == (
+        '("Calendar"."Date" - INTERVAL \'1 year\')'
+    )
+    assert DaxEngine.translate("DATEADD(Calendar[Date], -1, year)") == (
+        '("Calendar"."Date" + INTERVAL -1 year)'
     )
 
 

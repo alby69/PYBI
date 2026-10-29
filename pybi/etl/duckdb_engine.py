@@ -3,7 +3,7 @@
 import os
 import time
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 import duckdb
 import pandas as pd
@@ -27,6 +27,14 @@ def _as_list(val: Any) -> List[str]:
     if isinstance(val, (list, tuple)):
         return [str(s).strip() for s in val if str(s).strip()]
     return [str(val).strip()]
+
+
+def _format_column(col: str) -> str:
+    """Escape column name with double quotes for SQL CTEs."""
+    col = str(col).strip()
+    if col.startswith('"') and col.endswith('"'):
+        return col
+    return f'"{col}"'
 
 
 class ETLEngine:
@@ -66,6 +74,107 @@ class ETLEngine:
             logger.error("Failed to save ETL query for project %s: %s", project_id, err)
             return False
 
+    @classmethod
+    def build_step_clause(
+        cls,
+        source_table: str,
+        step: Union[Dict[str, Any], Any],
+        base_dir: Optional[str] = None,
+        known_cols: Optional[Set[str]] = None,
+    ) -> str:
+        """Generate SQL clause for a single step operating on source_table."""
+        if hasattr(step, "model_dump"):
+            step_dict = step.model_dump()
+        elif isinstance(step, dict):
+            step_dict = step
+        else:
+            step_dict = {}
+
+        op = (
+            getattr(step, "step_type", None)
+            or getattr(step, "operation", None)
+            or step_dict.get("step_type")
+            or step_dict.get("operation")
+            or step_dict.get("type")
+            or ""
+        ).lower().strip()
+
+        params = (
+            getattr(step, "params", None)
+            or getattr(step, "parameters", None)
+            or step_dict.get("params")
+            or step_dict.get("parameters")
+            or step_dict.get("config")
+            or {}
+        )
+
+        return cls._step_to_cte_body(source_table, op, params, base_dir=base_dir, known_cols=known_cols)
+
+    @classmethod
+    def execute_steps_duckdb(
+        cls,
+        conn: duckdb.DuckDBPyConnection,
+        source_table: str,
+        steps: List[Union[Dict[str, Any], Any]],
+        step_index: Optional[int] = None,
+        limit: int = 1000,
+    ) -> pl.DataFrame:
+        """Execute sequence of linear ETL steps on DuckDB connection and return Polars DataFrame."""
+        if step_index is not None and step_index >= 0:
+            target_steps = steps[: step_index]
+        else:
+            target_steps = steps
+
+        # Inspect initial column names from source table if present
+        known_cols: Set[str] = set()
+        try:
+            tbl_info = conn.table(source_table)
+            known_cols = set(tbl_info.columns)
+        except Exception:
+            pass
+
+        ctes: List[str] = [f'step_0 AS (\n  SELECT * FROM "{source_table}"\n)']
+
+        for idx, step in enumerate(target_steps, start=1):
+            prev_cte = f"step_{idx - 1}"
+            curr_cte = f"step_{idx}"
+
+            if hasattr(step, "model_dump"):
+                step_dict = step.model_dump()
+            elif isinstance(step, dict):
+                step_dict = step
+            else:
+                step_dict = {}
+
+            op = (
+                getattr(step, "step_type", None)
+                or getattr(step, "operation", None)
+                or step_dict.get("step_type")
+                or step_dict.get("operation")
+                or step_dict.get("type")
+                or ""
+            ).lower().strip()
+
+            params = (
+                getattr(step, "params", None)
+                or getattr(step, "parameters", None)
+                or step_dict.get("params")
+                or step_dict.get("parameters")
+                or step_dict.get("config")
+                or {}
+            )
+
+            cte_body = cls._step_to_cte_body(prev_cte, op, params, known_cols=known_cols)
+            ctes.append(f"{curr_cte} AS (\n  {cte_body}\n)")
+
+        last_cte_name = f"step_{len(target_steps)}"
+        sql = "WITH " + ",\n".join(ctes) + f"\nSELECT * FROM {last_cte_name}"
+        if limit and limit > 0:
+            sql += f" LIMIT {limit}"
+
+        arrow_table = conn.sql(sql).to_arrow_table()
+        return pl.from_arrow(arrow_table)
+
     @staticmethod
     def build_sql_query(
         query: Union[Dict[str, Any], Any],
@@ -95,22 +204,31 @@ class ETLEngine:
 
         # Determine cutoff
         if step_index is not None and step_index >= 0:
-            target_steps = raw_steps[:step_index]
+            target_steps = raw_steps[: step_index]
         else:
             target_steps = raw_steps
 
-        # Build Source CTE (step_0)
-        source_type = (source_info.get("type") or source_info.get("source_type") or "").lower()
-        filepath = source_info.get("path") or source_info.get("file_path") or source_info.get("filepath")
-        table_name = source_info.get("table") or source_info.get("table_name")
+        source_table = (
+            query_dict.get("source_table")
+            or source_info.get("table")
+            or source_info.get("table_name")
+        )
+        source_type = (
+            source_info.get("type") or source_info.get("source_type") or ""
+        ).lower()
+        filepath = (
+            source_info.get("path")
+            or source_info.get("file_path")
+            or source_info.get("filepath")
+        )
 
         if source_type in ("postgres", "postgresql"):
             uri = source_info.get("uri") or filepath or ""
-            q = source_info.get("query") or table_name or "SELECT *"
+            q = source_info.get("query") or source_table or "SELECT *"
             source_sql = f"SELECT * FROM postgres_scan('{uri}', '{q}')"
         elif source_type == "sqlite" and filepath:
             resolved_path = resolve_data_path(filepath, base_dir)
-            t_name = table_name or "data"
+            t_name = source_table or "data"
             source_sql = f"SELECT * FROM sqlite_scan('{resolved_path}', '{t_name}')"
         elif source_type == "parquet" and filepath:
             resolved_path = resolve_data_path(filepath, base_dir)
@@ -118,30 +236,49 @@ class ETLEngine:
         elif filepath:
             resolved_path = resolve_data_path(filepath, base_dir)
             source_sql = f"SELECT * FROM read_csv_auto('{resolved_path}')"
-        elif table_name:
-            source_sql = f'SELECT * FROM "{table_name}"'
+        elif source_table:
+            source_sql = f'SELECT * FROM "{source_table}"'
         else:
             default_path = resolve_data_path("sales_data.csv", base_dir)
             if os.path.exists(default_path):
                 source_sql = f"SELECT * FROM read_csv_auto('{default_path}')"
             else:
-                fallback_table = query_dict.get("query_name", "source_data")
+                fallback_table = query_dict.get("query_name", "sales")
                 source_sql = f'SELECT * FROM "{fallback_table}"'
 
         ctes: List[str] = [f"step_0 AS (\n  {source_sql}\n)"]
+        known_cols: Set[str] = set()
 
         for idx, step in enumerate(target_steps, start=1):
             prev_cte = f"step_{idx - 1}"
             curr_cte = f"step_{idx}"
 
-            if isinstance(step, dict):
-                op = (step.get("operation") or step.get("step_type") or step.get("type") or "").lower().strip()
-                params = step.get("params") or step.get("config") or {}
+            if hasattr(step, "model_dump"):
+                step_dict = step.model_dump()
+            elif isinstance(step, dict):
+                step_dict = step
             else:
-                op = (getattr(step, "step_type", None) or getattr(step, "operation", "")).lower().strip()
-                params = getattr(step, "params", {})
+                step_dict = {}
 
-            cte_body = cls._step_to_cte_body(prev_cte, op, params, base_dir=base_dir)
+            op = (
+                getattr(step, "step_type", None)
+                or getattr(step, "operation", None)
+                or step_dict.get("step_type")
+                or step_dict.get("operation")
+                or step_dict.get("type")
+                or ""
+            ).lower().strip()
+
+            params = (
+                getattr(step, "params", None)
+                or getattr(step, "parameters", None)
+                or step_dict.get("params")
+                or step_dict.get("parameters")
+                or step_dict.get("config")
+                or {}
+            )
+
+            cte_body = cls._step_to_cte_body(prev_cte, op, params, base_dir=base_dir, known_cols=known_cols)
             ctes.append(f"{curr_cte} AS (\n  {cte_body}\n)")
 
         last_cte_name = f"step_{len(target_steps)}"
@@ -150,36 +287,63 @@ class ETLEngine:
 
     @classmethod
     def _step_to_cte_body(
-        cls, prev_cte: str, op: str, params: Dict[str, Any], base_dir: Optional[str] = None
+        cls,
+        prev_cte: str,
+        op: str,
+        params: Dict[str, Any],
+        base_dir: Optional[str] = None,
+        known_cols: Optional[Set[str]] = None,
     ) -> str:
         """Helper to translate a single step into SQL for CTE body."""
-        if op == "filter":
+        if op in ("filter", "filter_rows"):
             cond = params.get("condition") or params.get("predicate")
             if not cond:
                 col = params.get("column")
-                operator = params.get("operator", "=")
+                operator = str(params.get("operator", "=")).lower().strip()
                 val = params.get("value")
                 if col and val is not None:
-                    v_str = f"'{val}'" if isinstance(val, str) else str(val)
-                    op_sql = "=" if operator in ("==", "=") else operator
-                    cond = f'"{col}" {op_sql} {v_str}'
+                    col_fmt = _format_column(col)
+                    if operator in ("equals", "==", "="):
+                        op_sql = "="
+                    elif operator in ("not_equals", "!=", "<>"):
+                        op_sql = "!="
+                    else:
+                        op_sql = operator
+
+                    if isinstance(val, str):
+                        s_val = val.strip()
+                        if (s_val.startswith("'") and s_val.endswith("'")) or (s_val.startswith('"') and s_val.endswith('"')):
+                            v_str = s_val
+                        elif s_val.replace(".", "", 1).isdigit() or (s_val.startswith("-") and s_val[1:].replace(".", "", 1).isdigit()):
+                            v_str = s_val
+                        else:
+                            v_str = f"'{s_val}'"
+                    else:
+                        v_str = str(val)
+                    cond = f"{col_fmt} {op_sql} {v_str}"
             if cond:
-                return f'SELECT * FROM {prev_cte} WHERE {cond}'
-            return f'SELECT * FROM {prev_cte}'
+                return f"SELECT * FROM {prev_cte} WHERE {cond}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("select", "select_columns", "keep_columns", "remove_other_columns"):
             cols = _as_list(params.get("columns") or params.get("cols") or params.get("keep_columns"))
             if cols:
-                cols_str = ", ".join([f'"{c}"' for c in cols])
-                return f'SELECT {cols_str} FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                if known_cols is not None:
+                    known_cols.clear()
+                    known_cols.update(cols)
+                cols_str = ", ".join([_format_column(c) for c in cols])
+                return f"SELECT {cols_str} FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("remove_column", "remove_columns", "drop_column"):
             cols = _as_list(params.get("column") or params.get("columns"))
             if cols:
-                cols_str = ", ".join([f'"{c}"' for c in cols])
-                return f'SELECT * EXCLUDE ({cols_str}) FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                if known_cols is not None:
+                    for c in cols:
+                        known_cols.discard(c)
+                cols_str = ", ".join([_format_column(c) for c in cols])
+                return f"SELECT * EXCLUDE ({cols_str}) FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("rename_column", "rename"):
             mapping = params.get("mapping") or {}
@@ -188,14 +352,21 @@ class ETLEngine:
             if not mapping and old_col and new_col:
                 mapping = {old_col: new_col}
             if mapping:
-                renames = ", ".join([f'"{k}" AS "{v}"' for k, v in mapping.items()])
-                return f'SELECT * RENAME ({renames}) FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                if known_cols is not None:
+                    for k, v in mapping.items():
+                        if k in known_cols:
+                            known_cols.remove(k)
+                            known_cols.add(v)
+                renames = ", ".join([f"{_format_column(k)} AS {_format_column(v)}" for k, v in mapping.items()])
+                return f"SELECT * RENAME ({renames}) FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("cast_column", "cast", "change_type"):
             casts = params.get("casts") or {}
-            if not casts and params.get("column") and params.get("target_type"):
-                casts = {params["column"]: params["target_type"]}
+            col = params.get("column")
+            new_t = params.get("new_type") or params.get("target_type")
+            if not casts and col and new_t:
+                casts = {col: new_t}
             if casts:
                 type_map = {
                     "text": "VARCHAR", "string": "VARCHAR", "varchar": "VARCHAR",
@@ -205,23 +376,31 @@ class ETLEngine:
                     "date": "DATE", "timestamp": "TIMESTAMP", "datetime": "TIMESTAMP",
                 }
                 replaces = ", ".join([
-                    f'CAST("{c}" AS {type_map.get(str(t).lower(), str(t).upper())}) AS "{c}"'
+                    f'CAST({_format_column(c)} AS {type_map.get(str(t).lower(), str(t).upper())}) AS {_format_column(c)}'
                     for c, t in casts.items()
                 ])
-                return f'SELECT * REPLACE ({replaces}) FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                return f"SELECT * REPLACE ({replaces}) FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
-        elif op in ("add_column", "calculated_column", "custom_column"):
-            new_col = params.get("column_name") or params.get("new_column") or params.get("column") or "custom_col"
+        elif op in ("add_column", "calculated_column", "custom_column", "add_custom_column"):
+            new_col = params.get("new_column") or params.get("column_name") or params.get("column") or "custom_col"
             expr = params.get("expression")
             cols = _as_list(params.get("columns"))
             sep = params.get("separator", " ")
+            formatted_new = _format_column(new_col)
+
+            is_existing = known_cols is not None and new_col in known_cols
+            if known_cols is not None:
+                known_cols.add(new_col)
+
+            prefix = f"SELECT * EXCLUDE ({formatted_new}), " if is_existing else "SELECT *, "
+
             if expr:
-                return f'SELECT *, ({expr}) AS "{new_col}" FROM {prev_cte}'
+                return f"{prefix}({expr}) AS {formatted_new} FROM {prev_cte}"
             elif cols:
-                cols_str = ", ".join([f'"{c}"' for c in cols])
-                return f'SELECT *, CONCAT_WS(\'{sep}\', {cols_str}) AS "{new_col}" FROM {prev_cte}'
-            return f'SELECT *, NULL AS "{new_col}" FROM {prev_cte}'
+                cols_str = ", ".join([_format_column(c) for c in cols])
+                return f"{prefix}CONCAT_WS('{sep}', {cols_str}) AS {formatted_new} FROM {prev_cte}"
+            return f"{prefix}NULL AS {formatted_new} FROM {prev_cte}"
 
         elif op in ("split_column", "split"):
             col = params.get("column") or params.get("column_name")
@@ -232,9 +411,11 @@ class ETLEngine:
                 exprs = []
                 for idx in range(1, parts + 1):
                     target_name = new_cols[idx - 1] if idx - 1 < len(new_cols) else f"{col}_{idx}"
-                    exprs.append(f'string_split("{col}", \'{delimiter}\')[{idx}] AS "{target_name}"')
-                return f'SELECT *, {", ".join(exprs)} FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                    if known_cols is not None:
+                        known_cols.add(target_name)
+                    exprs.append(f'string_split({_format_column(col)}, \'{delimiter}\')[{idx}] AS {_format_column(target_name)}')
+                return f"SELECT *, {', '.join(exprs)} FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("conditional_column", "conditional"):
             new_col = params.get("new_column") or params.get("column_name") or "conditional_col"
@@ -242,6 +423,12 @@ class ETLEngine:
             then_val = params.get("then_value") or params.get("then")
             else_val = params.get("else_value") if params.get("else_value") is not None else params.get("else")
             cases = params.get("cases") or []
+            formatted_new = _format_column(new_col)
+
+            is_existing = known_cols is not None and new_col in known_cols
+            if known_cols is not None:
+                known_cols.add(new_col)
+            prefix = f"SELECT * EXCLUDE ({formatted_new}), " if is_existing else "SELECT *, "
 
             if cases:
                 parts = []
@@ -252,13 +439,13 @@ class ETLEngine:
                     parts.append(f"WHEN {c} THEN {v_str}")
                 e_str = f"'{else_val}'" if isinstance(else_val, str) else str(else_val)
                 case_sql = f"CASE {' '.join(parts)} ELSE {e_str} END"
-                return f'SELECT *, ({case_sql}) AS "{new_col}" FROM {prev_cte}'
+                return f"{prefix}({case_sql}) AS {formatted_new} FROM {prev_cte}"
             elif if_cond:
                 t_str = f"'{then_val}'" if isinstance(then_val, str) else str(then_val)
                 e_str = f"'{else_val}'" if isinstance(else_val, str) else (str(else_val) if else_val is not None else "NULL")
                 case_sql = f"CASE WHEN {if_cond} THEN {t_str} ELSE {e_str} END"
-                return f'SELECT *, ({case_sql}) AS "{new_col}" FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                return f"{prefix}({case_sql}) AS {formatted_new} FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("group_by", "groupby"):
             group_cols = _as_list(
@@ -266,18 +453,18 @@ class ETLEngine:
             )
             aggs = params.get("aggregations", {})
             if group_cols:
-                g_str = ", ".join([f'"{c}"' for c in group_cols])
+                g_str = ", ".join([_format_column(c) for c in group_cols])
                 agg_parts = []
                 if isinstance(aggs, dict):
                     for c_name, fn in aggs.items():
                         fn_str = str(fn).upper()
-                        agg_parts.append(f'{fn_str}("{c_name}") AS "{c_name}_{fn_str.lower()}"')
+                        agg_parts.append(f'{fn_str}({_format_column(c_name)}) AS "{c_name}_{fn_str.lower()}"')
                 elif isinstance(aggs, str) and aggs.strip():
                     agg_parts.append(aggs.strip())
 
                 agg_str = (", " + ", ".join(agg_parts)) if agg_parts else ""
-                return f'SELECT {g_str}{agg_str} FROM {prev_cte} GROUP BY {g_str}'
-            return f'SELECT * FROM {prev_cte}'
+                return f"SELECT {g_str}{agg_str} FROM {prev_cte} GROUP BY {g_str}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("merge", "join"):
             right_table = params.get("target_table") or params.get("right_table") or "right_table"
@@ -294,27 +481,27 @@ class ETLEngine:
 
             if left_on and right_on:
                 return (
-                    f'SELECT {prev_cte}.*, right_tbl.* EXCLUDE ("{right_on}") '
-                    f'FROM {prev_cte} {how} JOIN {right_source} AS right_tbl '
-                    f'ON {prev_cte}."{left_on}" = right_tbl."{right_on}"'
+                    f"SELECT {prev_cte}.*, right_tbl.* EXCLUDE ({_format_column(right_on)}) "
+                    f"FROM {prev_cte} {how} JOIN {right_source} AS right_tbl "
+                    f"ON {prev_cte}.{_format_column(left_on)} = right_tbl.{_format_column(right_on)}"
                 )
-            return f'SELECT * FROM {prev_cte}'
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("deduplicate", "distinct", "remove_duplicates"):
             cols = _as_list(params.get("columns"))
             if cols:
-                cols_str = ", ".join([f'"{c}"' for c in cols])
-                return f'SELECT DISTINCT ON ({cols_str}) * FROM {prev_cte}'
-            return f'SELECT DISTINCT * FROM {prev_cte}'
+                cols_str = ", ".join([_format_column(c) for c in cols])
+                return f"SELECT DISTINCT ON ({cols_str}) * FROM {prev_cte}"
+            return f"SELECT DISTINCT * FROM {prev_cte}"
 
         elif op in ("sort", "sort_rows", "order_by"):
             cols = _as_list(params.get("by") or params.get("column") or params.get("columns"))
             desc = bool(params.get("descending", False))
             if cols:
-                cols_str = ", ".join([f'"{c}"' for c in cols])
+                cols_str = ", ".join([_format_column(c) for c in cols])
                 order_dir = "DESC" if desc else "ASC"
-                return f'SELECT * FROM {prev_cte} ORDER BY {cols_str} {order_dir}'
-            return f'SELECT * FROM {prev_cte}'
+                return f"SELECT * FROM {prev_cte} ORDER BY {cols_str} {order_dir}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("replace_values", "replace"):
             col = params.get("column")
@@ -323,9 +510,10 @@ class ETLEngine:
             if col and old_val is not None and new_val is not None:
                 o_str = f"'{old_val}'" if isinstance(old_val, str) else str(old_val)
                 n_str = f"'{new_val}'" if isinstance(new_val, str) else str(new_val)
-                rep = f'CASE WHEN "{col}" = {o_str} THEN {n_str} ELSE "{col}" END AS "{col}"'
-                return f'SELECT * REPLACE ({rep}) FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                col_fmt = _format_column(col)
+                rep = f"CASE WHEN {col_fmt} = {o_str} THEN {n_str} ELSE {col_fmt} END AS {col_fmt}"
+                return f"SELECT * REPLACE ({rep}) FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("text_transform", "format", "text"):
             cols = _as_list(params.get("columns") or params.get("column"))
@@ -333,24 +521,28 @@ class ETLEngine:
             if cols:
                 replaces = []
                 for c in cols:
+                    c_fmt = _format_column(c)
                     if act == "trim":
-                        replaces.append(f'TRIM("{c}") AS "{c}"')
+                        replaces.append(f"TRIM({c_fmt}) AS {c_fmt}")
                     elif act in ("upper", "uppercase"):
-                        replaces.append(f'UPPER("{c}") AS "{c}"')
+                        replaces.append(f"UPPER({c_fmt}) AS {c_fmt}")
                     elif act in ("lower", "lowercase"):
-                        replaces.append(f'LOWER("{c}") AS "{c}"')
+                        replaces.append(f"LOWER({c_fmt}) AS {c_fmt}")
                 if replaces:
-                    return f'SELECT * REPLACE ({", ".join(replaces)}) FROM {prev_cte}'
-            return f'SELECT * FROM {prev_cte}'
+                    return f"SELECT * REPLACE ({', '.join(replaces)}) FROM {prev_cte}"
+            return f"SELECT * FROM {prev_cte}"
 
         elif op in ("index_column", "index"):
             col_name = params.get("column_name") or "index"
             start_val = int(params.get("start_value", 1))
             inc_val = int(params.get("increment", 1))
-            return f'SELECT (row_number() OVER () * {inc_val} + ({start_val} - {inc_val})) AS "{col_name}", * FROM {prev_cte}'
+            col_fmt = _format_column(col_name)
+            if known_cols is not None:
+                known_cols.add(col_name)
+            return f"SELECT (row_number() OVER () * {inc_val} + ({start_val} - {inc_val})) AS {col_fmt}, * FROM {prev_cte}"
 
         else:
-            return f'SELECT * FROM {prev_cte}'
+            return f"SELECT * FROM {prev_cte}"
 
     @classmethod
     def generate_preview(
@@ -384,30 +576,12 @@ class ETLEngine:
             return pl_df.head(limit)
 
         # Attempt DuckDB CTE SQL generation and Arrow -> Polars conversion
-        try:
-            s_idx = -1 if step_index is None else step_index
-            sql = cls.build_sql_query(query_dict, step_index=s_idx, base_dir=data_dir)
-            query_sql = f"{sql} LIMIT {limit}"
-            conn = duckdb.connect(database=":memory:")
-            arrow_table = conn.sql(query_sql).to_arrow_table()
-            return pl.from_arrow(arrow_table)
-        except Exception as err:
-            logger.warning("DuckDB CTE execution failed (%s), falling back to ETLExecutor: %s", err, err)
-
-        # Fallback execution via ETLExecutor
-        executor = ETLExecutor(duckdb_conn=default_binder.duckdb_conn, base_dir=data_dir)
-        stop_at = max(0, step_index) if step_index is not None else None
-        res = executor.execute_linear_etl(query_dict, stop_at_step_index=stop_at)
-
-        target_key = f"step_{stop_at}" if stop_at is not None and stop_at > 0 else "source"
-        if target_key in res.dataframes:
-            pl_df = res.dataframes[target_key]
-        elif res.dataframes:
-            pl_df = list(res.dataframes.values())[-1]
-        else:
-            pl_df = pl.DataFrame()
-
-        return pl_df.head(limit)
+        s_idx = -1 if step_index is None else step_index
+        sql = cls.build_sql_query(query_dict, step_index=s_idx, base_dir=data_dir)
+        query_sql = f"{sql} LIMIT {limit}"
+        conn = default_binder.duckdb_conn
+        arrow_table = conn.sql(query_sql).to_arrow_table()
+        return pl.from_arrow(arrow_table)
 
     @classmethod
     def execute_full_pipeline(

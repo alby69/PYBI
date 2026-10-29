@@ -29,6 +29,11 @@ def setup_routes():
         from pybi.ui.pages.etl_editor import create_etl_editor_page
         create_etl_editor_page()
 
+    @ui.page('/power-query')
+    def power_query_page():
+        from pybi.ui.pages.power_query import create_power_query_page
+        create_power_query_page()
+
     @ui.page('/model-editor')
     def model_editor_page():
         from pybi.ui.pages.model_editor import create_model_editor_page

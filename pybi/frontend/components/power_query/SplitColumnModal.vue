@@ -1,0 +1,76 @@
+<template>
+  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 select-none">
+    <div class="bg-white border border-slate-300 rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+      <div class="flex items-center justify-between px-4 py-3 bg-slate-100 border-b border-slate-200">
+        <div class="flex items-center gap-2 font-bold text-sm text-slate-800"><span>✂️</span><span>Split Column</span></div>
+        <button @click="close" class="text-slate-400 hover:text-slate-600 font-bold text-lg">×</button>
+      </div>
+      <div class="p-4 flex flex-col gap-3 text-xs">
+        <label class="flex flex-col gap-1">
+          <span class="font-semibold text-slate-700">Column</span>
+          <select v-model="column" class="px-2 py-1.5 border border-slate-300 rounded bg-white">
+            <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
+          </select>
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex flex-col gap-1">
+            <span class="font-semibold text-slate-700">Delimiter</span>
+            <input v-model="delimiter" type="text" class="px-2 py-1.5 border border-slate-300 rounded bg-white font-mono" placeholder="_" />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-semibold text-slate-700">Parts</span>
+            <input v-model.number="parts" type="number" min="2" max="10" class="px-2 py-1.5 border border-slate-300 rounded bg-white" />
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2 px-4 py-2.5 bg-slate-100 border-t border-slate-200">
+        <button @click="close" class="px-3 py-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs font-semibold">Cancel</button>
+        <button @click="submit" :disabled="!column" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded text-xs">Split</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'SplitColumnModal',
+  props: {
+    modelValue: { type: Boolean, default: false },
+    columns: { type: Array, default: () => [] }
+  },
+  emits: ['update:modelValue', 'apply'],
+  data() {
+    return { column: '', delimiter: '_', parts: 2 };
+  },
+  computed: {
+    isOpen: {
+      get() { return this.modelValue; },
+      set(value) { this.$emit('update:modelValue', value); }
+    }
+  },
+  watch: {
+    columns: {
+      handler(columns) {
+        if (!this.column && columns.length) this.column = columns[0];
+      },
+      immediate: true
+    }
+  },
+  methods: {
+    close() { this.isOpen = false; },
+    submit() {
+      if (!this.column) return;
+      this.$emit('apply', {
+        operation: 'split_column',
+        name: `Split Column (${this.column})`,
+        params: {
+          column: this.column,
+          delimiter: this.delimiter || ' ',
+          parts: Math.max(2, Number(this.parts) || 2)
+        }
+      });
+      this.close();
+    }
+  }
+};
+</script>

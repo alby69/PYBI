@@ -20,8 +20,15 @@ from pybi.ui.theme import default_theme
 
 def create_etl_editor_page():
     render_navbar(active='/etl-editor')
-    ui.label('Power Query Editor - Visual Data Transformation').classes('text-2xl font-bold q-mb-xs')
-    ui.label('Transforms single-table data sources sequentially using Applied Steps, column actions, and interactive preview.').classes('text-gray-600 q-mb-md')
+    with ui.row().classes('w-full items-center justify-between q-mt-sm'):
+        with ui.column().classes('gap-0'):
+            ui.label('Power Query Editor - Visual Data Transformation').classes('text-2xl font-bold q-mb-xs')
+            ui.label('Transforms single-table data sources sequentially using Applied Steps, column actions, and interactive preview.').classes('text-gray-600 q-mb-md')
+        ui.button(
+            'Apri nuovo Power Query Editor',
+            icon='auto_awesome',
+            on_click=lambda: ui.navigate.to('/power-query')
+        ).props('color=primary')
 
     # Per-table applied steps dictionary & current source table state
     applied_steps_by_table: Dict[str, List[Dict[str, Any]]] = {

@@ -112,7 +112,7 @@
 </template>
 
 <script>
-import { useUiStore } from '../../stores/uiStore.js';
+import { useUiStore } from 'pybi-store';
 
 export default {
   name: 'CustomColumnModal',

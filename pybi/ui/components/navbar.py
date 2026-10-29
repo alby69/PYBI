@@ -5,6 +5,7 @@ from nicegui import ui
 WORKSPACE_NAV_ITEMS = [
     ('Home', '/', 'home'),
     ('Data (ETL)', '/etl-editor', 'storage'),
+    ('Power Query', '/power-query', 'transform'),
     ('Model View', '/model-editor', 'account_tree'),
     ('Report (Dashboard)', '/dashboard-editor', 'dashboard'),
     ('Public Viewer', '/viewer', 'visibility'),

@@ -147,7 +147,7 @@ class ETLDAGSchema(BaseModel):
     nodes: List[ETLNodeSchema] = Field(default_factory=list, description="List of DAG nodes")
     edges: List[ETLEdgeSchema] = Field(default_factory=list, description="List of DAG edges")
     query_name: Optional[str] = Field(default=None, description="Linear query name")
-    source: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Linear source definition")
+    source: Optional[Dict[str, Any]] = Field(default=None, description="Linear source definition")
     steps: Optional[List[ETLStep]] = Field(default_factory=list, description="Linear applied steps")
 
 
@@ -181,7 +181,9 @@ class ETLPreviewRequest(BaseModel):
     project_id: Optional[str] = Field(default=None, description="Associated project ID")
     node_id: Optional[str] = Field(default=None, description="Optional Node ID to preview output for")
     step_index: Optional[int] = Field(default=None, description="Optional step index (0..k) to preview linear query output for")
-    limit: int = Field(default=100, description="Maximum number of rows to return")
+    limit: int = Field(default=1000, description="Maximum number of rows to return")
+    source_table: Optional[str] = Field(default=None, description="Source table name")
+    steps: List[Any] = Field(default_factory=list, description="List of linear ETL steps")
     query: Optional[ETLQuery] = Field(default=None, description="Optional explicit query override to preview")
 
 

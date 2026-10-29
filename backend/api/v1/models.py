@@ -121,9 +121,9 @@ class FileListResponse(BaseModel):
 class ETLStep(BaseModel):
     """Linear ETL step representation for Applied Steps pipeline."""
 
-    id: str = Field(description="Unique step identifier")
-    name: str = Field(description="Display step name (e.g., 'Righe filtrate')")
-    operation: str = Field(description="Operation type (e.g. filter, cast_column, add_column)")
+    id: Optional[str] = Field(default="", description="Unique step identifier")
+    name: Optional[str] = Field(default=None, description="Display step name (e.g., 'Righe filtrate')")
+    operation: Optional[str] = Field(default="", description="Operation type (e.g. filter, cast_column, add_column)")
     params: Dict[str, Any] = Field(default_factory=dict, description="Operation configuration parameters")
 
 
@@ -195,7 +195,9 @@ class ETLPreviewRequest(BaseModel):
     project_id: Optional[str] = Field(default=None, description="Associated project ID")
     node_id: Optional[str] = Field(default=None, description="Optional Node ID to preview output for")
     step_index: Optional[int] = Field(default=None, description="Optional step index (0..k) to preview linear query output for")
-    limit: int = Field(default=100, description="Maximum number of rows to return")
+    limit: int = Field(default=1000, description="Maximum number of rows to return")
+    source_table: Optional[str] = Field(default=None, description="Optional source table name")
+    steps: List[Any] = Field(default_factory=list, description="Optional linear applied steps")
     query: Optional[ETLQuery] = Field(default=None, description="Optional explicit query override to preview")
 
 

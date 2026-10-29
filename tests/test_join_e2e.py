@@ -34,7 +34,7 @@ def server():
     )
     try:
         url = f'http://127.0.0.1:{port}'
-        req = urllib.request.Request(f'{url}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(f'{url}/power-query', headers={'User-Agent': 'Mozilla/5.0'})
         for _ in range(40):
             try:
                 if urllib.request.urlopen(req).status == 200:
@@ -56,14 +56,14 @@ def page(server):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         browser_page = browser.new_page()
-        browser_page.goto(f'{server}/etl-editor')
+        browser_page.goto(f'{server}/power-query')
         browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         yield browser_page
         browser.close()
 
 
 def test_power_query_editor_loads(page):
-    """Power Query Editor renders successfully with quick action buttons and applied steps."""
+    """Power Query Editor renders successfully with ribbon buttons and applied steps."""
     expect(page.get_by_text('Power Query Editor').first).to_be_visible()
-    expect(page.get_by_text('Passaggi Applicati')).to_be_visible()
-    expect(page.get_by_role('button', name='Esegui Query')).to_be_visible()
+    expect(page.get_by_text('Query Settings').first).to_be_visible()
+    expect(page.get_by_role('button', name='Execute')).to_be_visible()

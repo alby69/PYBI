@@ -13,6 +13,7 @@ export const state = reactive({
   activeProject: 'default',
   selectedTable: null,
   tables: [],
+  sourcesByTable: {},
   activeStepIndex: 0,
   appliedStepsByTable: {},
   previewData: emptyPreview(),
@@ -24,7 +25,11 @@ export const state = reactive({
   currentView: 'grid',
   showProfilingBar: true,
   profilingColumn: null,
-  selectedStepIndex: -1
+  selectedStepIndex: -1,
+  history: [],
+  future: [],
+  logs: [],
+  showLog: false
 });
 
 let previewToken = 0;
@@ -40,10 +45,24 @@ function fileTable(name) {
 
 function sourceFor(tableName) {
   if (!tableName) return {};
-  if (!fileTable(tableName)) return { table_name: tableName };
+  if (state.sourcesByTable && state.sourcesByTable[tableName]) {
+    return state.sourcesByTable[tableName];
+  }
+  if (!fileTable(tableName)) {
+    const fileSource = (state.tables || []).find(t => fileTable(t));
+    if (fileSource) {
+      return sourceFor(fileSource);
+    }
+    return { table_name: tableName };
+  }
   const ext = tableName.split('.').pop().toLowerCase();
   const type = ext === 'parquet' ? 'parquet' : (ext === 'sqlite' || ext === 'db') ? 'sqlite' : 'csv';
   return { type, path: tableName, table_name: tableName };
+}
+
+function setSourceForTable(tableName, source) {
+  if (!tableName || !source) return;
+  state.sourcesByTable[tableName] = source;
 }
 
 function stepKey() {
@@ -67,6 +86,68 @@ function normalizePreview(data) {
     total_columns: data.total_columns ?? columns.length,
     execution_time: data.execution_time || 0
   };
+}
+
+function log(message, level = 'info') {
+  if (!message) return;
+  const time = new Date().toLocaleTimeString();
+  state.logs.push({ time, message, level });
+  if (state.logs.length > 200) state.logs.shift();
+}
+
+function clearLogs() {
+  state.logs = [];
+}
+
+function toggleLog() {
+  state.showLog = !state.showLog;
+}
+
+function snapshotState() {
+  return {
+    selectedTable: state.selectedTable,
+    tables: [...state.tables],
+    sourcesByTable: JSON.parse(JSON.stringify(state.sourcesByTable)),
+    appliedStepsByTable: JSON.parse(JSON.stringify(state.appliedStepsByTable)),
+    activeStepIndex: state.activeStepIndex
+  };
+}
+
+function pushHistory() {
+  state.history.push(snapshotState());
+  if (state.history.length > 50) state.history.shift();
+  state.future = [];
+}
+
+function restoreSnapshot(snapshot) {
+  state.tables = [...snapshot.tables];
+  state.sourcesByTable = JSON.parse(JSON.stringify(snapshot.sourcesByTable || {}));
+  state.appliedStepsByTable = JSON.parse(JSON.stringify(snapshot.appliedStepsByTable));
+  state.selectedTable = snapshot.selectedTable;
+  const steps = snapshot.selectedTable ? (state.appliedStepsByTable[snapshot.selectedTable] || []) : [];
+  state.activeStepIndex = clampStepIndex(snapshot.activeStepIndex, steps.length);
+  state.selectedStepIndex = state.activeStepIndex - 1;
+  fetchPreview();
+}
+
+function undo() {
+  if (!state.history.length) return false;
+  const current = snapshotState();
+  const prev = state.history.pop();
+  state.future.unshift(current);
+  restoreSnapshot(prev);
+  log('Operazione annullata (Undo)', 'info');
+  return true;
+}
+
+function redo() {
+  if (!state.future.length) return false;
+  const current = snapshotState();
+  const next = state.future.shift();
+  state.history.push(current);
+  restoreSnapshot(next);
+  log('Operazione ripristinata (Redo)', 'info');
+  return true;
 }
 
 async function fetchPreview() {
@@ -107,6 +188,7 @@ async function fetchPreview() {
     if (token !== previewToken) return null;
     state.error = err.message || String(err);
     state.previewData = emptyPreview();
+    log(`Errore Anteprima: ${state.error}`, 'error');
     return null;
   } finally {
     if (token === previewToken) state.isLoadingPreview = false;
@@ -172,11 +254,13 @@ function setActiveStepIndex(index) {
 function addStep(step, tableName) {
   const target = tableName || state.selectedTable;
   if (!target || !step) return null;
+  pushHistory();
   ensureTable(target);
   const nextStep = { ...step, id: step.id || step.step_id || stepKey() };
   state.appliedStepsByTable[target].push(nextStep);
   state.activeStepIndex = state.appliedStepsByTable[target].length;
   state.selectedStepIndex = state.activeStepIndex - 1;
+  log(`Aggiunto passaggio: ${nextStep.name || nextStep.operation}`, 'info');
   fetchPreview();
   return nextStep;
 }
@@ -189,9 +273,11 @@ function removeStep(index, tableName) {
   const target = tableName || state.selectedTable;
   const steps = target ? getStepsForTable(target) : [];
   if (index < 0 || index >= steps.length) return;
-  steps.splice(index, 1);
+  pushHistory();
+  const [removed] = steps.splice(index, 1);
   state.activeStepIndex = clampStepIndex(state.activeStepIndex, steps.length);
   state.selectedStepIndex = state.activeStepIndex - 1;
+  log(`Rimosso passaggio: ${removed ? removed.name : index}`, 'info');
   fetchPreview();
 }
 
@@ -203,16 +289,20 @@ function updateStep(index, step, tableName) {
   const target = tableName || state.selectedTable;
   const steps = target ? getStepsForTable(target) : [];
   if (index < 0 || index >= steps.length) return;
+  pushHistory();
   steps.splice(index, 1, { ...step, id: step.id || steps[index].id || stepKey() });
+  log(`Aggiornato passaggio ${index + 1}`, 'info');
   fetchPreview();
 }
 
 function clearSteps(tableName) {
   const target = tableName || state.selectedTable;
   if (!target) return;
+  pushHistory();
   state.appliedStepsByTable[target] = [];
   state.activeStepIndex = 0;
   state.selectedStepIndex = -1;
+  log(`Cancellati tutti i passaggi per "${target}"`, 'info');
   fetchPreview();
 }
 
@@ -226,6 +316,7 @@ function setView(view) {
 
 function setStatus(message) {
   state.statusMessage = message || '';
+  if (message) log(message, 'info');
 }
 
 function currentQuery() {
@@ -250,9 +341,11 @@ async function saveQuery() {
     });
     if (!response.ok) throw new Error(await response.text());
     state.statusMessage = `Query "${target}" salvata.`;
+    log(state.statusMessage, 'success');
     return await response.json();
   } catch (err) {
     state.error = err.message || String(err);
+    log(`Errore salvataggio query: ${state.error}`, 'error');
     return null;
   } finally {
     state.isSaving = false;
@@ -267,16 +360,21 @@ async function loadQuery(tableName) {
     if (!response.ok) throw new Error(await response.text());
     const query = await response.json();
     const source = query.source || {};
-    const loadedTable = source.table_name || source.path || target || 'sales_data.csv';
+    const loadedTable = query.query_name || source.table_name || source.path || target || 'sales_data.csv';
+    if (source && (source.path || source.table_name)) {
+      state.sourcesByTable[loadedTable] = source;
+    }
     setStepsForTable(loadedTable, query.steps || []);
     setSelectedTable(loadedTable, { fetch: false });
     state.activeStepIndex = getStepsForTable(loadedTable).length;
     state.selectedStepIndex = state.activeStepIndex - 1;
     state.statusMessage = `Query "${query.query_name || loadedTable}" caricata.`;
+    log(state.statusMessage, 'info');
     await fetchPreview();
     return query;
   } catch (err) {
     state.error = err.message || String(err);
+    log(`Errore caricamento query: ${state.error}`, 'error');
     return null;
   }
 }
@@ -298,9 +396,11 @@ async function executeQuery(targetTable) {
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
     state.statusMessage = `Query eseguita: ${data.rows_processed || 0} righe.`;
+    log(state.statusMessage, 'success');
     return data;
   } catch (err) {
     state.error = err.message || String(err);
+    log(`Errore esecuzione query: ${state.error}`, 'error');
     return null;
   } finally {
     state.isExecuting = false;
@@ -332,49 +432,65 @@ async function exportPythonScript(tableName) {
     anchor.remove();
     window.URL.revokeObjectURL(url);
     state.statusMessage = `Script Python esportato per "${target}".`;
+    log(state.statusMessage, 'info');
   } catch (err) {
     state.error = err.message || String(err);
+    log(`Errore esportazione script Python: ${state.error}`, 'error');
   }
 }
 
 function renameTable(oldName, newName) {
   if (!oldName || !newName || oldName === newName) return;
+  pushHistory();
+  const currentSource = sourceFor(oldName);
+  state.sourcesByTable[newName] = currentSource;
+  delete state.sourcesByTable[oldName];
   state.appliedStepsByTable[newName] = state.appliedStepsByTable[oldName] || [];
   delete state.appliedStepsByTable[oldName];
   state.tables = state.tables.map(table => (table === oldName ? newName : table));
   if (state.selectedTable === oldName) state.selectedTable = newName;
+  log(`Rinomina tabella da "${oldName}" a "${newName}"`, 'info');
 }
 
 function duplicateTable(tableName) {
   if (!tableName) return null;
+  pushHistory();
   let candidate = `${tableName}_copy`;
   let suffix = 2;
   while (state.appliedStepsByTable[candidate] || state.tables.includes(candidate)) {
     candidate = `${tableName}_copy${suffix}`;
     suffix += 1;
   }
+  state.sourcesByTable[candidate] = sourceFor(tableName);
   state.appliedStepsByTable[candidate] = getStepsForTable(tableName).map(step => ({ ...step, id: stepKey() }));
   state.tables.push(candidate);
+  log(`Duplicata tabella "${tableName}" -> "${candidate}"`, 'info');
   return candidate;
 }
 
 function referenceTable(tableName) {
   if (!tableName) return null;
+  pushHistory();
   let candidate = `${tableName}_ref`;
   let suffix = 2;
   while (state.appliedStepsByTable[candidate] || state.tables.includes(candidate)) {
     candidate = `${tableName}_ref${suffix}`;
     suffix += 1;
   }
+  state.sourcesByTable[candidate] = sourceFor(tableName);
   state.appliedStepsByTable[candidate] = [];
   state.tables.push(candidate);
+  log(`Riferimento tabella "${tableName}" -> "${candidate}"`, 'info');
   return candidate;
 }
 
 function removeTable(tableName) {
   if (!tableName) return;
+  pushHistory();
+  delete state.sourcesByTable[tableName];
   delete state.appliedStepsByTable[tableName];
   state.tables = state.tables.filter(table => table !== tableName);
+  log(`Rimossa tabella "${tableName}"`, 'info');
   if (state.selectedTable === tableName) {
     const next = state.tables[0] || null;
     state.selectedTable = next;
@@ -390,6 +506,7 @@ export const actions = {
   setCurrentSourceTable: setSelectedTable,
   getStepsForTable,
   setStepsForTable,
+  setSourceForTable,
   setActiveStepIndex,
   addStep,
   addStepForTable,
@@ -410,7 +527,13 @@ export const actions = {
   referenceTable,
   removeTable,
   sourceFor,
-  currentQuery
+  currentQuery,
+  pushHistory,
+  undo,
+  redo,
+  log,
+  clearLogs,
+  toggleLog
 };
 
 export const store = Object.assign(state, actions);

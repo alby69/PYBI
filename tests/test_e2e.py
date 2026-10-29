@@ -61,18 +61,18 @@ def test_e2e_full_flow():
             page.wait_for_selector('text=Welcome to OpenBI / PyBI', timeout=5000)
             page.screenshot(path='screenshots/home_page.png')
 
-            # 2. Test ETL Editor Page & Applied Steps Flow
-            print("2. Testing ETL Editor Page (/etl-editor)...")
-            page.goto(f'http://127.0.0.1:{port}/etl-editor')
+            # 2. Test Power Query Editor Page & Applied Steps Flow
+            print("2. Testing Power Query Editor Page (/power-query)...")
+            page.goto(f'http://127.0.0.1:{port}/power-query')
             page.wait_for_selector('text=Power Query Editor', timeout=15000)
 
             # Verify presence of source and applied steps
             content = page.content()
             assert 'sales_data.csv' in content or 'Sales_Data' in content
-            assert 'Passaggi Applicati' in content
+            assert 'Query Settings' in content or 'Data Preview' in content
 
             # Execute the query
-            execute_btn = page.get_by_role('button', name='Esegui Query')
+            execute_btn = page.get_by_role('button', name='Execute')
             execute_btn.click()
 
             # Verify execution output

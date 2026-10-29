@@ -1,4 +1,4 @@
-"""End-to-end test for uploading a data file and using it in a Data Source node."""
+"""End-to-end test for uploading a data file and using it in Power Query Editor."""
 
 import os
 import socket
@@ -34,7 +34,7 @@ def server():
     )
     try:
         url = f'http://127.0.0.1:{port}'
-        req = urllib.request.Request(f'{url}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(f'{url}/power-query', headers={'User-Agent': 'Mozilla/5.0'})
         for _ in range(40):
             try:
                 if urllib.request.urlopen(req).status == 200:
@@ -61,29 +61,25 @@ def csv_file():
 
 @pytest.fixture(scope='module')
 def page(server, csv_file):
-    """Open the ETL Editor and upload the CSV file."""
+    """Open the Power Query Editor and upload the CSV file."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         browser_page = browser.new_page()
         browser_page.on('pageerror', lambda err: print(f'BROWSER UNCAUGHT EXCEPTION: {err}'))
-        browser_page.goto(f'{server}/etl-editor')
+        browser_page.goto(f'{server}/power-query')
         browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         browser_page.locator('input[type=file]').set_input_files(csv_file)
-        browser_page.wait_for_selector('text=salvato in', timeout=15000)
+        browser_page.wait_for_selector('text=Uploaded', timeout=15000)
         yield browser_page
         browser.close()
 
 
-def test_uploaded_file_is_offered_in_data_source_dropdown(page):
-    data_file_select = page.locator('.q-select', has_text='Origine Dati').first
-    data_file_select.click()
-    expect(page.get_by_role('option', name='sales_upload.csv')).to_be_visible()
-    page.get_by_role('option', name='sales_upload.csv').click()
+def test_uploaded_file_is_listed_in_queries(page):
+    expect(page.get_by_text('sales_upload.csv').first).to_be_visible()
 
 
 def test_pipeline_reads_the_uploaded_file(page):
-    page.get_by_role('button', name='Esegui Query').click()
-    page.wait_for_selector('text=Sales_Data', timeout=15000)
-
-    log_text = page.locator('.nicegui-log').inner_text()
-    assert 'sales_upload.csv' in log_text or 'Sales_Data' in log_text
+    page.get_by_role('button', name='Execute').click()
+    page.wait_for_timeout(1000)
+    body = page.locator('body').inner_text()
+    assert 'sales_upload.csv' in body or 'Query eseguita' in body

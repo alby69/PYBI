@@ -26,8 +26,7 @@ def setup_routes():
 
     @ui.page('/etl-editor')
     def etl_editor_page():
-        from pybi.ui.pages.etl_editor import create_etl_editor_page
-        create_etl_editor_page()
+        ui.navigate.to('/power-query')
 
     @ui.page('/power-query')
     def power_query_page():

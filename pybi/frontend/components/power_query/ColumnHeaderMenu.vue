@@ -13,6 +13,9 @@
     <button @click="emitAction('filter')" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-slate-700 flex items-center gap-2">
       <span>🔍</span> Filter Column...
     </button>
+    <button @click="emitAction('replace')" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-slate-700 flex items-center gap-2">
+      <span>🔀</span> Replace Values...
+    </button>
     <button @click="emitAction('rename')" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-slate-700 flex items-center gap-2">
       <span>✏️</span> Rename Column...
     </button>
@@ -26,6 +29,9 @@
       <span>📈</span> Column Profile
     </button>
     <div class="border-t border-slate-200 my-1"></div>
+    <button @click="emitAction('keep-only')" class="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-slate-700 flex items-center gap-2">
+      <span>🎯</span> Keep Only This Column
+    </button>
     <button @click="emitAction('remove')" class="w-full text-left px-3 py-1.5 hover:bg-red-50 text-red-600 flex items-center gap-2">
       <span>🗑️</span> Remove Column
     </button>

@@ -1,42 +1,39 @@
-# 🏗️ PyBI Architecture & Technical Specifications
+# 🏛️ PyBI Architecture Overview
 
-## 1. High-Level System Architecture
+## 1. System Vision & Principles
+PyBI (Python Business Intelligence) is an open-source, 100% Python-based enterprise BI platform designed with a decoupled API-first architecture, Power BI-style semantic layer, and native AI integration via the Model Context Protocol (MCP).
 
-PyBI is designed as a decoupled, API-First Business Intelligence platform.
+### Guiding Architectural Principles
+- **KISS (Keep It Simple, Stupid):** Streamlined DuckDB and Polars execution without unnecessary operational overhead.
+- **DRY (Don't Repeat Yourself):** Centralized semantic model definitions and single-source documentation.
+- **API-First:** Pure REST API backend (`backend/api/v1`) with independent web frontend.
+- **Separation of Concerns:** Distinct separation between business logic (`backend/core`), query engines (`backend/etl`, `backend/core/dax_engine`), and presentation.
 
+---
+
+## 2. Directory Layout & Module Responsibilities
+
+```text
+pybi-repo/
+├── README.md                 # Minimal root README with quickstart and docs links
+├── pyproject.toml            # Unified dependency definition
+├── docker-compose.yml        # Multi-container orchestration
+│
+├── backend/                  # Pure Business Logic, Semantic Model & REST API
+│   ├── main.py               # FastAPI application entry point
+│   ├── api/v1/               # Versioned REST routers (semantic, etl, mcp, viewer)
+│   ├── core/                 # Core domain layer (interfaces, DAX engine, RLS, resolver)
+│   ├── etl/                  # Connectors, compilers, and query folding
+│   └── mcp/                  # MCP Server and tools implementation
+│
+├── frontend/                 # Decoupled Web Frontend Client
+│   ├── package.json
+│   └── src/                  # Vue components, stores, composables, and API services
+│
+└── docs/                     # Consolidated Documentation
+    ├── 01_architecture.md
+    ├── 02_semantic_layer_dax.md
+    ├── 03_mcp_ai_integration.md
+    ├── 04_api_reference.md
+    └── 05_developer_guide.md
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          Frontend Layer (NiceGUI / Vue 3)             │
-│  ┌───────────────────────┐  ┌────────────────────┐  ┌───────────────┐ │
-│  │ Vue Flow ETL Canvas   │  │ Dashboard Grid UI  │  │ Viewer Engine │ │
-│  └───────────┬───────────┘  └─────────┬──────────┘  └───────┬───────┘ │
-└──────────────┼────────────────────────┼─────────────────────┼─────────┘
-               │                        │                     │
-               ▼                        ▼                     ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        FastAPI REST API Layer (/api/v1/)               │
-│  ┌────────────┐  ┌──────────────┐  ┌───────────────┐  ┌─────────────┐  │
-│  │ ETL Router │  │ Dashboards   │  │ Semantic Query│  │ Export API  │  │
-│  └─────┬──────┘  └──────┬───────┘  └───────┬───────┘  └──────┬──────┘  │
-└────────┼────────────────┼──────────────────┼─────────────────┼─────────┘
-         │                │                  │                 │
-         ▼                ▼                  ▼                 ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      Core Analytical & Storage Engine                  │
-│  ┌───────────────────────┐  ┌───────────────────────────────────────┐ │
-│  │ Polars Engine (ETL)   │  │ DuckDB Engine (SQL & Query Folding)   │ │
-│  └───────────────────────┘  └───────────────────────────────────────┘ │
-│  ┌───────────────────────┐  ┌───────────────────────────────────────┐ │
-│  │ Semantic Model Engine │  │ Redis Cache & File Project Storage    │ │
-│  └───────────────────────┘  └───────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-## 2. Technology Stack
-
-- **Backend:** Python 3.12, FastAPI, Pydantic v2, PyJWT, Casbin (RBAC)
-- **Analytical Engine:** DuckDB (In-process OLAP, SQLGlot query transpilation), Polars (In-memory DataFrames & ETL transformations)
-- **Caching & Connectors:** Redis (Query result caching), SQLAlchemy (Multi-database connectivity: Snowflake, BigQuery, PostgreSQL, SQLite)
-- **Frontend Core:** NiceGUI, Vue 3, Quasar Framework, Pinia UI Store, Vega-Lite (Declarative visualizations)
-- **Canvas Components:** `@vue-flow/core` (ETL DAG Editor), `grid-layout-plus` (Dashboard Grid Editor)
-- **Export & Publishing:** Jinja2, WeasyPrint (PDF compilation), Async Background Task Worker Queue

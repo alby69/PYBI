@@ -96,6 +96,35 @@ export const useUiStore = defineStore('ui', {
       }
       this.appliedStepsByTable[target].push(step);
       this.activeStepIndex = this.appliedStepsByTable[target].length - 1;
+    },
+    async exportPythonScript(tableName) {
+      const target = tableName || this.selectedTable || this.currentSourceTable || 'Sales_Data';
+      const projId = this.activeProject || 'default';
+      const payload = {
+        query_id: target,
+        query_name: target,
+        source: { table_name: target },
+        steps: this.appliedStepsByTable[target] || []
+      };
+      try {
+        const response = await fetch(`/api/v1/projects/${projId}/etl/export/python`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pipeline_${target}.py`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Errore durante l\'esportazione dello script Python Polars:', err);
+      }
     }
   }
 });
@@ -197,6 +226,36 @@ export const useUIStore = () => {
         state.activeStepIndex = state.appliedStepsByTable[target].length - 1;
     }
 
+    async function exportPythonScript(tableName) {
+        const target = tableName || state.selectedTable || state.currentSourceTable || 'Sales_Data';
+        const projId = state.activeProject || 'default';
+        const payload = {
+            query_id: target,
+            query_name: target,
+            source: { table_name: target },
+            steps: state.appliedStepsByTable[target] || []
+        };
+        try {
+            const response = await fetch(`/api/v1/projects/${projId}/etl/export/python`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pipeline_${target}.py`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Errore durante l\'esportazione dello script Python Polars:', err);
+        }
+    }
+
     function setDrillContext(targetReport, filters) {
         if (state.drillContext || state.activePage) {
             state.drillHistory.push({
@@ -243,6 +302,7 @@ export const useUIStore = () => {
         getStepsForTable,
         setStepsForTable,
         addStepForTable,
+        exportPythonScript,
         setDrillContext,
         popDrillContext,
         clearDrillContext

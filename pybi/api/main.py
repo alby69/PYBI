@@ -14,6 +14,7 @@ from pybi.api.v1.ui_schema import router as v1_ui_schema_router
 from pybi.api.v1.viewer import router as v1_viewer_router
 from pybi.api.v1.semantic import router as v1_semantic_router
 from backend.api.v1.mcp import router as v1_mcp_router
+from pybi.api.routers.etl_export import router as etl_export_router
 
 # Legacy routes for backward compatibility
 from pybi.publish.viewer_api import router as viewer_router
@@ -39,6 +40,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(v1_viewer_router)
     app.include_router(v1_semantic_router)
     app.include_router(v1_mcp_router)
+    app.include_router(etl_export_router)
 
     # Include legacy /api routes for backward compatibility with existing tests
     app.include_router(viewer_router)

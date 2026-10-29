@@ -116,6 +116,10 @@ export default {
         this.addStep({ operation: 'split_column', name: 'Split Column by Delimiter', params: { delimiter: '_' } });
       } else if (action === 'replace-values') {
         this.addStep({ operation: 'replace_values', name: 'Replaced Values', params: { old_value: '', new_value: 'N/A' } });
+      } else if (action === 'export-python-script') {
+        if (this.store && typeof this.store.exportPythonScript === 'function') {
+          this.store.exportPythonScript(this.selectedTable);
+        }
       }
     },
     handleFormulaApply(formulaStr) {

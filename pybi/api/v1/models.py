@@ -118,21 +118,7 @@ class FileListResponse(BaseModel):
 # ETL Models
 # ==========================================
 
-class ETLStep(BaseModel):
-    """Linear ETL step representation for Applied Steps pipeline."""
-
-    id: str = Field(description="Unique step identifier")
-    name: str = Field(description="Display step name (e.g., 'Righe filtrate')")
-    operation: str = Field(description="Operation type (e.g. filter, cast_column, add_column)")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Operation configuration parameters")
-
-
-class ETLQuery(BaseModel):
-    """Linear ETL Query representation containing source definition and sequential steps."""
-
-    query_name: str = Field(default="Sales_Data", description="Human readable query name")
-    source: Dict[str, Any] = Field(default_factory=dict, description="Source definition dictionary")
-    steps: List[ETLStep] = Field(default_factory=list, description="Sequential list of applied ETL steps")
+from pybi.schemas.etl import ETLStep, ETLQuery
 
 
 class ETLNodeSchema(BaseModel):
@@ -206,7 +192,9 @@ class ETLPreviewResponse(BaseModel):
     step_index: Optional[int] = Field(default=None, description="Step index previewed")
     columns: List[str] = Field(default_factory=list, description="List of column names")
     rows: List[Dict[str, Any]] = Field(default_factory=list, description="Preview row records")
-    total_rows: int = Field(description="Total rows in preview result")
+    total_rows: int = Field(default=0, description="Total rows in preview result")
+    total_columns: int = Field(default=0, description="Total columns in preview result")
+    execution_time: float = Field(default=0.0, description="Execution time in seconds")
 
 
 # ==========================================

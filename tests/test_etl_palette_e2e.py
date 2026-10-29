@@ -1,4 +1,4 @@
-"""End-to-end test for the Power Query ETL Editor actions, steps, and project manager."""
+"""End-to-end test for the Power Query Editor actions, steps, and project manager."""
 
 import os
 import socket
@@ -19,9 +19,14 @@ def get_free_port():
 
 @pytest.fixture(scope='module')
 def server():
-    """Start the PyBI server in a subprocess with isolated storage and yield its base URL."""
+    """Start the PyBI server in a subprocess with isolated storage and sample data."""
     port = get_free_port()
     data_dir = tempfile.mkdtemp()
+    project_dir = os.path.join(data_dir, 'projects', 'default')
+    os.makedirs(os.path.join(project_dir, 'data'), exist_ok=True)
+    with open(os.path.join(project_dir, 'data', 'sales_data.csv'), 'w') as f:
+        f.write('region,revenue\nEU,100\nUS,200\n')
+
     env = os.environ.copy()
     env['NICEGUI_SCREEN_TEST_PORT'] = str(port)
     env['DATA_DIR'] = data_dir
@@ -34,7 +39,7 @@ def server():
     )
     try:
         url = f'http://127.0.0.1:{port}'
-        req = urllib.request.Request(f'{url}/etl-editor', headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(f'{url}/power-query', headers={'User-Agent': 'Mozilla/5.0'})
         for _ in range(40):
             try:
                 if urllib.request.urlopen(req).status == 200:
@@ -52,11 +57,11 @@ def server():
 
 @pytest.fixture(scope='module')
 def page(server):
-    """Open the ETL editor in a headless browser."""
+    """Open the Power Query editor in a headless browser."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         browser_page = browser.new_page()
-        browser_page.goto(f'{server}/etl-editor')
+        browser_page.goto(f'{server}/power-query')
         browser_page.wait_for_selector('text=Power Query Editor', timeout=20000)
         yield browser_page
         browser.close()
@@ -70,39 +75,47 @@ def selected_project(page):
 def choose_project(page, project_id):
     """Switch to another project through the project selector."""
     page.locator('.q-select').first.click()
-    page.get_by_role('option', name=project_id).click()
+    page.wait_for_timeout(300)
+    page.locator('.q-item').filter(has_text=project_id).first.click()
     page.wait_for_timeout(700)
 
 
+def save_query(page):
+    """Click the Save button in the ribbon."""
+    page.locator('button[title="Save query"]').click()
+
+
 def test_quick_actions_bar_shows_buttons(page):
-    for label in ('Filtra Righe', 'Rinomina Colonna', 'Modifica Tipo', 'Rimuovi Colonna', 'Aggiungi Colonna'):
+    for label in ('Filter Rows', 'Choose Columns', 'Remove Columns', 'Group By', 'Merge Queries'):
         expect(page.get_by_role('button', name=label)).to_be_visible()
 
 
 def test_applied_steps_panel_renders(page):
-    expect(page.get_by_text('Passaggi Applicati')).to_be_visible()
-    expect(page.get_by_text('Origine Dati').first).to_be_visible()
+    expect(page.get_by_text('Query Settings').first).to_be_visible()
+    expect(page.get_by_text('PROPERTIES').first).to_be_visible()
 
 
 def test_add_filter_step(page):
-    page.get_by_role('button', name='Filtra Righe').click()
-    dialog = page.locator('.q-dialog').filter(has_text='Filtra Righe')
-    expect(dialog).to_be_visible()
+    page.get_by_role('button', name='Filter Rows').click()
+    page.wait_for_timeout(300)
 
-    dialog.get_by_label('Valore').fill('EU')
-    dialog.get_by_role('button', name='Applica').click()
-    expect(dialog).not_to_be_visible()
+    modal = page.locator('div', has_text='Filter Rows').filter(has_text='Column').first
+    expect(modal).to_be_visible()
 
-    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
+    page.locator('input[placeholder="e.g. EU"]').fill('EU')
+    page.get_by_role('button', name='Apply').last.click()
+    page.wait_for_timeout(500)
+
+    expect(page.get_by_text('Filtered Rows', exact=False).first).to_be_visible()
 
 
 def test_saved_pipeline_is_restored_after_reload(page):
-    page.get_by_role('button', name='Salva Query').click()
+    save_query(page)
     page.wait_for_timeout(600)
 
     page.reload()
     page.wait_for_selector('text=Power Query Editor', timeout=20000)
-    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
+    expect(page.get_by_text('Filtered Rows', exact=False).first).to_be_visible()
 
 
 def test_switching_projects_loads_their_own_pipeline(page):
@@ -112,11 +125,11 @@ def test_switching_projects_loads_their_own_pipeline(page):
     create_dialog.get_by_role('button', name='Create').click()
     expect(create_dialog).not_to_be_visible()
 
-    page.get_by_role('button', name='Salva Query').click()
+    save_query(page)
     page.wait_for_timeout(600)
 
     choose_project(page, 'default')
-    expect(page.get_by_text('Filtra', exact=False).first).to_be_visible()
+    expect(page.get_by_text('Filtered Rows', exact=False).first).to_be_visible()
 
     choose_project(page, 'e2e_copy')
 

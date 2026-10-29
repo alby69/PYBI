@@ -33,9 +33,35 @@
         </div>
 
         <div class="flex items-center gap-1 border-r border-slate-200 pr-3">
+          <button
+            @click="triggerAction('undo')"
+            :disabled="!canUndo"
+            :class="['flex flex-col items-center p-1.5 rounded text-xs', canUndo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 cursor-not-allowed']"
+            title="Undo (Ctrl+Z)"
+          >
+            <span class="text-base mb-0.5">↩️</span>
+            <span class="font-medium text-[11px]">Undo</span>
+          </button>
+          <button
+            @click="triggerAction('redo')"
+            :disabled="!canRedo"
+            :class="['flex flex-col items-center p-1.5 rounded text-xs', canRedo ? 'hover:bg-slate-100 text-slate-700' : 'text-slate-300 cursor-not-allowed']"
+            title="Redo (Ctrl+Y)"
+          >
+            <span class="text-base mb-0.5">↪️</span>
+            <span class="font-medium text-[11px]">Redo</span>
+          </button>
+          <span class="text-[9px] text-slate-400 self-end uppercase font-semibold">History</span>
+        </div>
+
+        <div class="flex items-center gap-1 border-r border-slate-200 pr-3">
           <button @click="triggerAction('refresh-preview')" class="flex flex-col items-center p-1.5 rounded hover:bg-slate-100 text-slate-700 text-xs" title="Refresh preview">
             <span class="text-base mb-0.5">🔄</span>
             <span class="font-medium text-[11px]">Refresh</span>
+          </button>
+          <button @click="triggerAction('load-query')" class="flex flex-col items-center p-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs" title="Load query">
+            <span class="text-base mb-0.5">📂</span>
+            <span class="font-bold text-[11px]">Load</span>
           </button>
           <button @click="triggerAction('save-query')" class="flex flex-col items-center p-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs" title="Save query">
             <span class="text-base mb-0.5">💾</span>
@@ -177,6 +203,10 @@
             <span class="text-base mb-0.5">📈</span>
             <span class="font-medium text-[11px]">Profiling</span>
           </button>
+          <button @click="triggerAction('toggle-log')" :class="['flex flex-col items-center p-1.5 rounded text-xs', store.showLog ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'hover:bg-slate-100 text-slate-700']">
+            <span class="text-base mb-0.5">📜</span>
+            <span class="font-medium text-[11px]">Console Log</span>
+          </button>
         </div>
         <div class="flex items-center gap-2">
           <button @click="triggerAction('open-advanced-editor')" class="flex flex-col items-center p-1.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs">
@@ -213,6 +243,12 @@ export default {
   computed: {
     store() {
       return useUiStore();
+    },
+    canUndo() {
+      return Array.isArray(this.store.history) && this.store.history.length > 0;
+    },
+    canRedo() {
+      return Array.isArray(this.store.future) && this.store.future.length > 0;
     }
   },
   methods: {

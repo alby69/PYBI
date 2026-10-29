@@ -4,8 +4,7 @@ from nicegui import ui
 
 WORKSPACE_NAV_ITEMS = [
     ('Home', '/', 'home'),
-    ('Data (ETL)', '/etl-editor', 'storage'),
-    ('Power Query', '/power-query', 'transform'),
+    ('Data (ETL)', '/power-query', 'transform'),
     ('Model View', '/model-editor', 'account_tree'),
     ('Report (Dashboard)', '/dashboard-editor', 'dashboard'),
     ('Public Viewer', '/viewer', 'visibility'),
@@ -16,7 +15,7 @@ def render_navbar(active: str = '') -> None:
     """Render consistent workspace navigation bar with Power BI style icons and tabs.
 
     Args:
-        active: Route of the currently active page (e.g. '/etl-editor') to highlight.
+        active: Route of the currently active page (e.g. '/power-query') to highlight.
     """
     with ui.header().classes('bg-slate-900 text-white shadow-lg border-b border-slate-700'):
         with ui.row().classes('w-full items-center gap-2 px-4 py-2'):

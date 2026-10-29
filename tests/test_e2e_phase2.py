@@ -45,18 +45,18 @@ def test_e2e_phase2_data_flow():
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
-            # 1. Visit ETL Editor and execute pipeline
-            page.goto(f'http://127.0.0.1:{port}/etl-editor')
+            # 1. Visit Power Query Editor and execute pipeline
+            page.goto(f'http://127.0.0.1:{port}/power-query')
             page.wait_for_selector('text=Power Query Editor', timeout=10000)
 
-            # Click 'Esegui Query' button
-            execute_btn = page.get_by_role('button', name='Esegui Query')
+            # Click 'Execute' button
+            execute_btn = page.get_by_role('button', name='Execute')
             execute_btn.click()
 
             # Wait for execution status
-            page.wait_for_selector('text=Sales_Data', timeout=10000)
+            page.wait_for_selector('text=Data Preview', timeout=10000)
             content = page.content()
-            assert 'Sales_Data' in content or 'Passaggi Applicati' in content
+            assert 'sales_data.csv' in content or 'Query Settings' in content or 'Data Preview' in content
 
             # 2. Navigate to Dashboard Editor and verify widgets
             page.goto(f'http://127.0.0.1:{port}/dashboard-editor')

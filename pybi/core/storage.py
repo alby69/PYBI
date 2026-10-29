@@ -170,6 +170,10 @@ class FileProjectStorage(ProjectStorage):
         os.makedirs(data_dir, exist_ok=True)
         return data_dir
 
+    def get_project_dir(self, project_id: str) -> str:
+        """Alias for get_project_data_dir."""
+        return self.get_project_data_dir(project_id)
+
     def get_project_cache_dir(self, project_id: str) -> str:
         """Returns and creates (if it does not exist) the 'cache' directory for the project."""
         safe_id = sanitize_project_id(project_id)

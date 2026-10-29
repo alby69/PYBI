@@ -19,6 +19,25 @@
           v-else
           @select-step="handleStepSelected"
         />
+
+        <div v-if="store.showLog" class="h-40 bg-slate-900 text-slate-100 font-mono text-[11px] flex flex-col border-t border-slate-700 flex-shrink-0">
+          <div class="flex items-center justify-between px-3 py-1 bg-slate-800 border-b border-slate-700">
+            <div class="flex items-center gap-2 font-bold text-slate-200">
+              <span>📜</span><span>Console Log</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button @click="store.clearLogs()" class="hover:text-amber-300">Clear</button>
+              <button @click="store.toggleLog()" class="hover:text-slate-300 font-bold text-sm">×</button>
+            </div>
+          </div>
+          <div class="flex-grow p-2 overflow-y-auto flex flex-col gap-1">
+            <div v-if="!store.logs || !store.logs.length" class="text-slate-500 italic">No log entries.</div>
+            <div v-for="(log, idx) in store.logs" :key="idx" :class="['flex items-start gap-2', log.level === 'error' ? 'text-red-400' : log.level === 'success' ? 'text-emerald-400' : 'text-slate-300']">
+              <span class="text-slate-500 text-[10px]">{{ log.time }}</span>
+              <span>{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <nicegui-AppliedStepsPanel
@@ -39,6 +58,10 @@
         <span v-if="store.isSaving" class="text-amber-300">Saving...</span>
         <span v-if="store.isExecuting" class="text-amber-300">Executing...</span>
         <span v-if="store.previewData.execution_time" class="text-emerald-400">Preview: {{ (store.previewData.execution_time * 1000).toFixed(1) }} ms</span>
+        <button @click="store.toggleLog()" class="text-slate-400 hover:text-white flex items-center gap-1">
+          <span>📜 Log</span>
+          <span v-if="store.logs && store.logs.length" class="bg-slate-700 px-1 rounded text-[10px] text-white">{{ store.logs.length }}</span>
+        </button>
         <span class="text-slate-400">Power Query Engine (DuckDB / SQL)</span>
       </div>
     </div>
@@ -52,7 +75,7 @@
     <nicegui-GroupByModal v-model="modals.group" :columns="columns" @apply="applyStep" />
     <nicegui-MergeJoinModal v-model="modals.merge" :columns="columns" :tables="mergeTables" @apply="applyStep" />
     <nicegui-ChooseColumnsModal v-model="modals.choose" :columns="columns" :default-mode="chooseMode" @apply="applyStep" />
-    <nicegui-ReplaceValuesModal v-model="modals.replace" :columns="columns" @apply="applyStep" />
+    <nicegui-ReplaceValuesModal v-model="modals.replace" :columns="columns" :default-column="modalColumn" @apply="applyStep" />
     <nicegui-SplitColumnModal v-model="modals.split" :columns="columns" @apply="applyStep" />
     <nicegui-ConditionalColumnModal v-model="modals.conditional" :columns="columns" @apply="applyStep" />
     <nicegui-CustomColumnModal v-model="modals.custom" @add-column="handleAddCustomColumn" />
@@ -153,14 +176,41 @@ export default {
     });
     const initialTable = this.selectedTable || this.tables[0];
     if (initialTable) this.store.setSelectedTable(initialTable, { force: true });
+    window.addEventListener('keydown', this.handleKeydown);
+  },
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.handleKeydown);
   },
   methods: {
+    handleKeydown(event) {
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName);
+      if (event.ctrlKey || event.metaKey) {
+        const key = event.key.toLowerCase();
+        if (key === 'z' && !isInput) {
+          event.preventDefault();
+          if (event.shiftKey) this.store.redo();
+          else this.store.undo();
+        } else if (key === 'y' && !isInput) {
+          event.preventDefault();
+          this.store.redo();
+        } else if (key === 's') {
+          event.preventDefault();
+          this.store.saveQuery();
+        }
+      }
+    },
     handleRibbonAction({ action, payload }) {
       const firstColumn = this.store.profilingColumn || this.columns[0];
       if (action === 'get-data') {
         this.$emit('request-get-data');
+      } else if (action === 'undo') {
+        this.store.undo();
+      } else if (action === 'redo') {
+        this.store.redo();
       } else if (action === 'refresh-preview') {
         this.store.fetchPreview();
+      } else if (action === 'load-query') {
+        this.store.loadQuery();
       } else if (action === 'save-query') {
         this.store.saveQuery();
       } else if (action === 'execute-query') {
@@ -192,6 +242,7 @@ export default {
       } else if (action === 'split-column') {
         this.modals.split = true;
       } else if (action === 'replace-values') {
+        this.modalColumn = firstColumn || '';
         this.modals.replace = true;
       } else if (action === 'rename-column') {
         this.renameColumnPrompt(firstColumn);
@@ -221,6 +272,8 @@ export default {
         this.store.setView('diagram');
       } else if (action === 'toggle-profiling') {
         this.store.showProfilingBar = !this.store.showProfilingBar;
+      } else if (action === 'toggle-log') {
+        this.store.toggleLog();
       } else if (action === 'open-advanced-editor') {
         this.modals.advanced = true;
       }
@@ -235,12 +288,21 @@ export default {
       } else if (action === 'filter') {
         this.modalColumn = column;
         this.modals.filter = true;
+      } else if (action === 'replace') {
+        this.modalColumn = column;
+        this.modals.replace = true;
       } else if (action === 'rename') {
         this.renameColumnPrompt(column);
       } else if (action === 'cast') {
         this.castColumnPrompt(column);
       } else if (action === 'duplicate') {
         this.duplicateColumnPrompt(column);
+      } else if (action === 'keep-only') {
+        this.applyStep({
+          operation: 'select_columns',
+          name: `Kept Only Column (${column})`,
+          params: { columns: [column], mode: 'keep' }
+        });
       } else if (action === 'remove') {
         this.applyStep({ operation: 'remove_column', name: `Removed Column (${column})`, params: { column } });
       }

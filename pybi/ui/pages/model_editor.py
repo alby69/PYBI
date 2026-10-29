@@ -15,6 +15,7 @@ from pybi.core.semantic_model import (
     JoinType,
     autodetect_relationships,
 )
+from pybi.core.autodetect_relationships import autodetect_model_relationships
 from pybi.core.model_sync import (
     get_semantic_model_path,
     load_project_semantic_model as _core_load_project_semantic_model,

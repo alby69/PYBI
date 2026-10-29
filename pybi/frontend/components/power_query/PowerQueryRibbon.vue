@@ -73,7 +73,7 @@
         </div>
 
         <!-- Combine Group -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 border-r border-slate-200 pr-3">
           <button
             @click="triggerAction('merge-queries')"
             class="flex flex-col items-center p-1.5 rounded hover:bg-slate-100 text-slate-700 text-xs"
@@ -87,6 +87,18 @@
           >
             <span class="text-base mb-0.5">➕</span>
             <span class="font-medium text-[11px]">Append Queries</span>
+          </button>
+        </div>
+
+        <!-- Code Export Group -->
+        <div class="flex items-center gap-1">
+          <button
+            @click="triggerAction('export-python-script')"
+            class="flex flex-col items-center p-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs"
+            title="Esporta Pipeline come Script Python Polars"
+          >
+            <span class="text-base mb-0.5">🐍</span>
+            <span class="font-bold text-[11px]">Esporta Script Python</span>
           </button>
         </div>
       </template>
@@ -198,6 +210,14 @@
           >
             <span class="text-base mb-0.5">📜</span>
             <span class="font-bold text-[11px]">Advanced Editor</span>
+          </button>
+          <button
+            @click="triggerAction('export-python-script')"
+            class="flex flex-col items-center p-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs"
+            title="Esporta Pipeline come Script Python Polars"
+          >
+            <span class="text-base mb-0.5">🐍</span>
+            <span class="font-bold text-[11px]">Esporta Script Python</span>
           </button>
         </div>
       </template>

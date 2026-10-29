@@ -420,9 +420,19 @@ class ETLEngine:
         elif op in ("conditional_column", "conditional"):
             new_col = params.get("new_column") or params.get("column_name") or "conditional_col"
             if_cond = params.get("if_condition") or params.get("condition")
-            then_val = params.get("then_value") or params.get("then")
-            else_val = params.get("else_value") if params.get("else_value") is not None else params.get("else")
+            then_val = params.get("then_value") if params.get("then_value") is not None else (params.get("then") if params.get("then") is not None else params.get("val_true"))
+            else_val = params.get("else_value") if params.get("else_value") is not None else (params.get("else") if params.get("else") is not None else params.get("val_false"))
             cases = params.get("cases") or []
+
+            if not if_cond and params.get("cond_col"):
+                c_col = params.get("cond_col")
+                c_op = params.get("cond_op", "=")
+                if c_op in ("==", "equals"):
+                    c_op = "="
+                c_val = params.get("cond_val") if params.get("cond_val") is not None else params.get("value")
+                v_str = f"'{c_val}'" if isinstance(c_val, str) else str(c_val)
+                if_cond = f"{_format_column(c_col)} {c_op} {v_str}"
+
             formatted_new = _format_column(new_col)
 
             is_existing = known_cols is not None and new_col in known_cols
@@ -449,16 +459,32 @@ class ETLEngine:
 
         elif op in ("group_by", "groupby"):
             group_cols = _as_list(
-                params.get("group_by_columns") or params.get("group_by") or params.get("by") or params.get("columns")
+                params.get("group_columns") or params.get("group_by_columns") or params.get("group_by") or params.get("by") or params.get("columns")
             )
             aggs = params.get("aggregations", {})
             if group_cols:
+                if known_cols is not None:
+                    known_cols.clear()
+                    known_cols.update(group_cols)
                 g_str = ", ".join([_format_column(c) for c in group_cols])
                 agg_parts = []
                 if isinstance(aggs, dict):
                     for c_name, fn in aggs.items():
                         fn_str = str(fn).upper()
-                        agg_parts.append(f'{fn_str}({_format_column(c_name)}) AS "{c_name}_{fn_str.lower()}"')
+                        alias = f"{c_name}_{fn_str.lower()}"
+                        if known_cols is not None:
+                            known_cols.add(alias)
+                        agg_parts.append(f'{fn_str}({_format_column(c_name)}) AS {_format_column(alias)}')
+                elif isinstance(aggs, list):
+                    for item in aggs:
+                        if isinstance(item, dict):
+                            c = item.get("col") or item.get("column")
+                            fn_str = str(item.get("agg") or item.get("function") or "sum").upper()
+                            alias = item.get("alias") or f"{c}_{fn_str.lower()}"
+                            if alias and known_cols is not None:
+                                known_cols.add(alias)
+                            if c:
+                                agg_parts.append(f'{fn_str}({_format_column(c)}) AS {_format_column(alias)}')
                 elif isinstance(aggs, str) and aggs.strip():
                     agg_parts.append(aggs.strip())
 

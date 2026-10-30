@@ -1,7 +1,7 @@
 """Dynamic Row-Level Security (RLS) Engine for PyBI.
 
-Parses JWT claims and injects sanitized WHERE clause filters into DuckDB SQL queries
-or SemanticModel queries.
+Parses JWT claims or Security Role definitions and injects sanitized WHERE clause filters
+or CTEs into DuckDB SQL queries or SemanticModel queries.
 """
 
 import logging
@@ -11,20 +11,13 @@ from typing import Any, Dict, List, Optional, Union
 import sqlglot
 from sqlglot import parse_one, exp
 
+from pybi.models.security import RLSUserContext, SecurityRole, TableFilterRule
+
 log = logging.getLogger(__name__)
 
 
 def apply_rls_filters(query: str, jwt_claims: Dict[str, Any], target_table: Optional[str] = None) -> str:
-    """Inject dynamic WHERE clauses into standard SQL query based on JWT claims.
-
-    Example JWT claims:
-        {
-            "user_id": "user_123",
-            "role": "manager",
-            "allowed_regions": ["IT", "FR"],
-            "region": "EU"
-        }
-    """
+    """Inject dynamic WHERE clauses into standard SQL query based on JWT claims."""
     if not query or not jwt_claims:
         return query
 
@@ -89,7 +82,6 @@ def apply_rls_filters(query: str, jwt_claims: Dict[str, Any], target_table: Opti
             flags=re.IGNORECASE,
         )
     else:
-        # Insert before GROUP BY, ORDER BY, LIMIT, or at end
         match = re.search(r"\b(GROUP\s+BY|ORDER\s+BY|LIMIT)\b", query, re.IGNORECASE)
         if match:
             idx = match.start()
@@ -99,10 +91,90 @@ def apply_rls_filters(query: str, jwt_claims: Dict[str, Any], target_table: Opti
 
 
 class RLSEngine:
-    """Dynamic RLS Engine evaluating user claims against semantic RLS rules."""
+    """Dynamic RLS Engine evaluating user claims or Security Roles against semantic models."""
 
-    def __init__(self, default_rules: Optional[List[Dict[str, Any]]] = None):
+    def __init__(
+        self,
+        semantic_model: Optional[Any] = None,
+        roles: Optional[List[SecurityRole]] = None,
+        default_rules: Optional[List[Dict[str, Any]]] = None,
+    ):
+        self.semantic_model = semantic_model
+        self.roles_map: Dict[str, SecurityRole] = {r.role_id: r for r in (roles or [])}
         self.default_rules = default_rules or []
+
+    def resolve_user_predicates(self, context: RLSUserContext) -> Dict[str, str]:
+        table_predicates: Dict[str, List[str]] = {}
+
+        for role_id in context.effective_roles:
+            role = self.roles_map.get(role_id)
+            if not role:
+                continue
+            for rule in role.table_filters:
+                if not rule.is_active:
+                    continue
+                sql_predicate = self._translate_expression(rule.filter_expression, context)
+                if sql_predicate:
+                    table_predicates.setdefault(rule.table_name, []).append(sql_predicate)
+
+        final_predicates: Dict[str, str] = {}
+        for table_name, predicates in table_predicates.items():
+            if len(predicates) == 1:
+                final_predicates[table_name] = predicates[0]
+            else:
+                combined = " OR ".join([f"({p})" for p in predicates])
+                final_predicates[table_name] = f"({combined})"
+
+        return final_predicates
+
+    def _translate_expression(self, expr: str, context: RLSUserContext) -> str:
+        sql_expr = expr
+
+        sql_expr = re.sub(r"USERNAME\(\)", f"'{context.username}'", sql_expr, flags=re.IGNORECASE)
+        sql_expr = re.sub(r"USERPRINCIPALNAME\(\)", f"'{context.username}'", sql_expr, flags=re.IGNORECASE)
+
+        def attr_replacer(match):
+            attr_name = match.group(1)
+            val = context.custom_attributes.get(attr_name, "")
+            return f"'{val}'"
+
+        sql_expr = re.sub(r'USERATTRIBUTE\("([^"]+)"\)', attr_replacer, sql_expr, flags=re.IGNORECASE)
+        sql_expr = re.sub(r"\[([^\]]+)\]", r'"\1"', sql_expr)
+
+        return sql_expr
+
+    def apply_rls_to_duckdb_query(self, base_sql: str, context: RLSUserContext) -> str:
+        predicates = self.resolve_user_predicates(context)
+        if not predicates:
+            return base_sql
+
+        cte_definitions = []
+        for table_name, predicate in predicates.items():
+            cte_definitions.append(
+                f'"{table_name}_rls" AS (SELECT * FROM "{table_name}" WHERE {predicate})'
+            )
+
+        if not cte_definitions:
+            return base_sql
+
+        cte_prefix = "WITH " + ", ".join(cte_definitions) + "\n"
+
+        modified_sql = base_sql
+        for table_name in predicates.keys():
+            modified_sql = re.sub(
+                rf'\bFROM\s+"?{table_name}"?\b',
+                f'FROM "{table_name}_rls"',
+                modified_sql,
+                flags=re.IGNORECASE,
+            )
+            modified_sql = re.sub(
+                rf'\bJOIN\s+"?{table_name}"?\b',
+                f'JOIN "{table_name}_rls"',
+                modified_sql,
+                flags=re.IGNORECASE,
+            )
+
+        return cte_prefix + modified_sql
 
     def build_where_clause(self, jwt_claims: Dict[str, Any], target_table: Optional[str] = None) -> str:
         """Construct a sanitized SQL WHERE clause from user claims."""

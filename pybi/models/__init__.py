@@ -1,27 +1,33 @@
-"""PyBI Models package."""
+"""PyBI Data Models for DAX and Security RLS."""
 
-from pybi.models.semantic import (
-    CardinalityType,
-    CrossFilterDirection,
-    JoinType,
-    Relationship,
-    Measure,
-    HierarchyLevel,
-    Hierarchy,
-    ColumnMetadata,
-    TableMetadata,
-    SemanticModel,
+from pybi.models.dax import (
+    CompletionItem,
+    DAXAutoCompleteRequest,
+    DAXAutoCompleteResponse,
+    DAXFunctionCategory,
+    DAXValidationError,
+    DAXValidationRequest,
+    DAXValidationResponse,
+    MeasureDefinition,
+)
+from pybi.models.security import (
+    RLSUserContext,
+    SecurityRole,
+    TableFilterRule,
+    UserRoleMapping,
 )
 
 __all__ = [
-    "CardinalityType",
-    "CrossFilterDirection",
-    "JoinType",
-    "Relationship",
-    "Measure",
-    "HierarchyLevel",
-    "Hierarchy",
-    "ColumnMetadata",
-    "TableMetadata",
-    "SemanticModel",
+    "DAXFunctionCategory",
+    "MeasureDefinition",
+    "DAXValidationError",
+    "DAXValidationRequest",
+    "DAXValidationResponse",
+    "CompletionItem",
+    "DAXAutoCompleteRequest",
+    "DAXAutoCompleteResponse",
+    "TableFilterRule",
+    "SecurityRole",
+    "UserRoleMapping",
+    "RLSUserContext",
 ]

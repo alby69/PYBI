@@ -28,6 +28,7 @@ def _component_path(directory: Path, filename: str) -> str:
 
 _register_store(STORE_DIR / "reportStore.js", "pybi-report-store")
 _register_store(STORE_DIR / "themeStore.js", "pybi-theme-store")
+_register_store(STORE_DIR / "localeStore.js", "pybi-locale-store")
 
 
 class ReportMainShell(ui.element, component=_component_path(SHELL_DIR, "MainShell.vue")):
@@ -84,6 +85,10 @@ class DataTableView(ui.element, component=_component_path(DATA_DIR, "DataTableVi
     """Sortable, searchable data grid for the Data View."""
 
 
+class LanguageSelector(ui.element, component=_component_path(SHELL_DIR, "LanguageSelector.vue")):
+    """Runtime language selector for the report shell status bar."""
+
+
 ReportElement = Optional[ReportMainShell]
 
 __all__ = [
@@ -91,6 +96,7 @@ __all__ = [
     "DataTableView",
     "FiltersPane",
     "FormattingPane",
+    "LanguageSelector",
     "PageTabBar",
     "ReportCanvas",
     "ReportElement",

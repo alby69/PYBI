@@ -1,9 +1,16 @@
 """FastAPI Application Wiring for PyBI REST API."""
 
 from fastapi import FastAPI, Request, status
+from fastapi import HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pybi.api.middleware.i18n import (
+    install_i18n_middleware,
+    localized_validation_response,
+    localize_http_exception,
+)
 from pybi.api.v1.auth import router as v1_auth_router
 from pybi.api.v1.projects import router as v1_projects_router
 from pybi.api.v1.files import router as v1_files_router
@@ -13,6 +20,7 @@ from pybi.api.v1.exports import router as v1_exports_router
 from pybi.api.v1.ui_schema import router as v1_ui_schema_router
 from pybi.api.v1.viewer import router as v1_viewer_router
 from pybi.api.v1.reports import router as v1_reports_router
+from pybi.api.v1.locales import router as v1_locales_router
 from pybi.api.routers.semantic import router as semantic_router
 from backend.api.v1.mcp import router as v1_mcp_router
 from pybi.api.routers.etl_export import router as etl_export_router
@@ -32,6 +40,8 @@ def register_routers(app: FastAPI) -> None:
     so both serve the same ``/api/...`` endpoints without mounting a sub-application
     (mounting would shadow NiceGUI's dynamically registered routes such as uploads).
     """
+    install_i18n_middleware(app)
+
     # Include versioned v1 REST API routers
     app.include_router(v1_auth_router)
     app.include_router(v1_projects_router)
@@ -42,6 +52,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(v1_ui_schema_router)
     app.include_router(v1_viewer_router)
     app.include_router(v1_reports_router)
+    app.include_router(v1_locales_router)
     app.include_router(semantic_router)
     app.include_router(v1_mcp_router)
     app.include_router(etl_export_router)
@@ -80,6 +91,21 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(HTTPException)
+    async def localized_http_exception_handler(request: Request, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=localize_http_exception(request, exc),
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def localized_validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=422,
+            content=localized_validation_response(request, exc),
+        )
 
     # Global standardized JSON exception handler
     @app.exception_handler(Exception)

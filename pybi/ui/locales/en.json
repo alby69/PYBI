@@ -1,0 +1,84 @@
+{
+  "shell": {
+    "reportView": "Report View",
+    "dataView": "Data / Table View",
+    "modelView": "Model View",
+    "settings": "Settings",
+    "language": "Interface Language",
+    "report": "Report",
+    "tableView": "Table",
+    "nonePage": "No page",
+    "save": "Save",
+    "saving": "Saving...",
+    "refresh": "Refresh",
+    "addVisual": "Add visual",
+    "filters": "Filters",
+    "fields": "Fields",
+    "visualizations": "Visualizations",
+    "focus": "Focus",
+    "home": "Return Home",
+    "theme": "Report theme",
+    "loading": "Loading report...",
+    "saved": "Saved {time}",
+    "unsaved": "Unsaved changes",
+    "ready": "Ready",
+    "pages": "pages",
+    "visuals": "visuals",
+    "tables": "tables",
+    "zoom": "Zoom"
+  },
+  "etl": {
+    "appliedSteps": "Applied Steps",
+    "queriesPane": "Queries Pane",
+    "formulaBar": "Formula Bar",
+    "dataQualityValid": "Valid",
+    "dataQualityError": "Error",
+    "dataQualityEmpty": "Empty",
+    "exportPython": "Export Python Script",
+    "advancedEditor": "Advanced Editor",
+    "stepTypes": {
+      "source": "Source",
+      "filter": "Filtered Rows",
+      "cast": "Changed Type",
+      "rename": "Renamed Columns",
+      "customColumn": "Added Custom",
+      "groupBy": "Grouped Rows",
+      "mergeJoin": "Merged Queries"
+    }
+  },
+  "model": {
+    "relationships": "Relationships",
+    "manageRelationships": "Manage Relationships",
+    "autodetect": "Autodetect",
+    "cardinality": "Cardinality",
+    "crossFilterDirection": "Cross filter direction",
+    "activeRelationship": "Active relationship"
+  },
+  "dax": {
+    "newMeasure": "New Measure",
+    "newColumn": "New Calculated Column",
+    "formatString": "Format string",
+    "displayFolder": "Display folder",
+    "syntaxValid": "Valid DAX syntax",
+    "syntaxError": "DAX syntax error"
+  },
+  "visuals": {
+    "visualizations": "Visualizations",
+    "fields": "Fields",
+    "formatVisual": "Format visual",
+    "filtersPane": "Filters Pane",
+    "filterOnVisual": "Filters on this visual",
+    "filterOnPage": "Filters on this page",
+    "filterAllPages": "Filters on all pages"
+  },
+  "security": {
+    "manageRoles": "Manage Roles",
+    "viewAs": "View as",
+    "roleName": "Role Name",
+    "tableFilterRule": "Table Filter Rule"
+  },
+  "api": {
+    "invalidRequest": "Invalid request",
+    "internalError": "Internal server error"
+  }
+}

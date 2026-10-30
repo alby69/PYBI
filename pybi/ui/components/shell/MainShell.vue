@@ -5,8 +5,8 @@
       <div class="flex min-w-0 items-center gap-2">
         <span class="flex h-6 w-6 items-center justify-center rounded bg-pbi-accent text-[13px] font-black text-white">P</span>
         <div class="min-w-0">
-          <div class="truncate text-[11px] font-bold leading-tight">Report View</div>
-          <div class="truncate text-[9px] leading-tight text-pbi-text-muted">{{ store.projectId }} · {{ store.activePage?.name || 'Nessuna pagina' }}</div>
+          <div class="truncate text-[11px] font-bold leading-tight">{{ localeStore.t('shell.reportView') }}</div>
+          <div class="truncate text-[9px] leading-tight text-pbi-text-muted">{{ store.projectId }} · {{ store.activePage?.name || localeStore.t('shell.nonePage') }}</div>
         </div>
       </div>
 
@@ -18,41 +18,41 @@
           :class="store.activeView === 'report' ? 'bg-pbi-accent text-white shadow-sm' : 'text-pbi-text-muted hover:bg-slate-100'"
           @click="store.setActiveView('report')"
         >
-          <span>📊</span><span>Report</span>
+          <span>📊</span><span>{{ localeStore.t('shell.report') }}</span>
         </button>
         <button
           class="flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold"
           :class="store.activeView === 'data' ? 'bg-pbi-accent text-white shadow-sm' : 'text-pbi-text-muted hover:bg-slate-100'"
           @click="openDataView"
         >
-          <span>🧮</span><span>Dati</span>
+          <span>🧮</span><span>{{ localeStore.t('shell.dataView') }}</span>
         </button>
       </div>
 
       <span class="mx-1 h-6 w-px bg-pbi-pane-border"></span>
 
       <div class="flex items-center gap-0.5">
-        <button class="ribbon-btn" title="Salva report (Ctrl+S)" :disabled="store.isSaving" @click="save">
-          <span>💾</span><span class="hidden xl:inline">{{ store.isSaving ? 'Salvataggio…' : 'Salva' }}</span>
+        <button class="ribbon-btn" :title="localeStore.t('shell.save')" :disabled="store.isSaving" @click="save">
+          <span>💾</span><span class="hidden xl:inline">{{ localeStore.t(store.isSaving ? 'shell.saving' : 'shell.save') }}</span>
         </button>
-        <button class="ribbon-btn" title="Aggiorna tutti i visual" @click="refreshAll">
-          <span>⟳</span><span class="hidden xl:inline">Aggiorna</span>
+        <button class="ribbon-btn" :title="localeStore.t('shell.refresh')" @click="refreshAll">
+          <span>⟳</span><span class="hidden xl:inline">{{ localeStore.t('shell.refresh') }}</span>
         </button>
-        <button class="ribbon-btn" title="Aggiungi un visual" @click="addVisual">
-          <span>➕</span><span class="hidden xl:inline">Visual</span>
+        <button class="ribbon-btn" :title="localeStore.t('shell.addVisual')" @click="addVisual">
+          <span>➕</span><span class="hidden xl:inline">{{ localeStore.t('shell.visualizations') }}</span>
         </button>
         <span class="mx-0.5 h-5 w-px bg-pbi-pane-border"></span>
-        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.filters }" title="Mostra/nascondi filtri" @click="store.togglePanel('filters')">
-          <span>🔎</span><span class="hidden 2xl:inline">Filtri</span>
+        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.filters }" :title="localeStore.t('shell.filters')" @click="store.togglePanel('filters')">
+          <span>🔎</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.filters') }}</span>
         </button>
-        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.data }" title="Mostra/nascondi campi dati" @click="store.togglePanel('data')">
-          <span>🗂</span><span class="hidden 2xl:inline">Campi</span>
+        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.data }" :title="localeStore.t('shell.fields')" @click="store.togglePanel('data')">
+          <span>🗂</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.fields') }}</span>
         </button>
-        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.visuals }" title="Mostra/nascondi visualizzazioni" @click="store.togglePanel('visuals')">
-          <span>📊</span><span class="hidden 2xl:inline">Visual</span>
+        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.visuals }" :title="localeStore.t('shell.visualizations')" @click="store.togglePanel('visuals')">
+          <span>📊</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.visualizations') }}</span>
         </button>
-        <button class="ribbon-btn" title="Modalità focus" :disabled="!store.selectedVisual" @click="focusSelected">
-          <span>⛶</span><span class="hidden 2xl:inline">Focus</span>
+        <button class="ribbon-btn" :title="localeStore.t('shell.focus')" :disabled="!store.selectedVisual" @click="focusSelected">
+          <span>⛶</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.focus') }}</span>
         </button>
       </div>
 
@@ -68,13 +68,13 @@
         <select
           :value="themeStore.theme"
           class="rounded border border-pbi-pane-border bg-white px-1.5 py-1 text-[10px]"
-          title="Tema del report"
+          :title="localeStore.t('shell.theme')"
           @change="changeTheme"
         >
           <option v-for="theme in themeStore.availableThemes" :key="theme.key" :value="theme.key">{{ theme.name }}</option>
         </select>
 
-        <button class="ribbon-btn" title="Torna alla Home" @click="goHome">
+        <button class="ribbon-btn" :title="localeStore.t('shell.home')" @click="goHome">
           <span>🏠</span>
         </button>
       </div>
@@ -82,7 +82,7 @@
 
     <div v-if="store.layoutLoading" class="flex flex-1 items-center justify-center gap-2 text-pbi-md text-pbi-text-muted">
       <span class="h-4 w-4 animate-spin rounded-full border-2 border-pbi-accent border-t-transparent"></span>
-      Caricamento report…
+      {{ localeStore.t('shell.loading') }}
     </div>
 
     <template v-else>
@@ -112,11 +112,12 @@
     </template>
 
     <footer class="flex h-6 shrink-0 items-center gap-3 border-t border-pbi-pane-border bg-pbi-ribbon px-2 text-[9px] text-pbi-text-muted">
-      <span class="font-semibold text-pbi-text">{{ store.activeView === 'report' ? 'Report' : 'Dati' }}</span>
-      <span v-if="store.activeView === 'report'">{{ store.pageCount }} pagine · {{ visualCount }} visual</span>
-      <span v-else>{{ store.tables.length }} tabelle · {{ store.activeDataTable || '—' }}</span>
-      <span class="ml-auto">Zoom {{ Math.round(store.zoom * 100) }}%</span>
+      <span class="font-semibold text-pbi-text">{{ localeStore.t(store.activeView === 'report' ? 'shell.report' : 'shell.dataView') }}</span>
+      <span v-if="store.activeView === 'report'">{{ store.pageCount }} {{ localeStore.t('shell.pages') }} · {{ visualCount }} {{ localeStore.t('shell.visuals') }}</span>
+      <span v-else>{{ store.tables.length }} {{ localeStore.t('shell.tables') }} · {{ store.activeDataTable || '—' }}</span>
+      <span class="ml-auto">{{ localeStore.t('shell.zoom') }} {{ Math.round(store.zoom * 100) }}%</span>
       <span>{{ saveStatus }}</span>
+      <nicegui-LanguageSelector />
     </footer>
 
     <div v-if="store.messages.length" class="pointer-events-none fixed bottom-12 right-3 z-[180] flex w-72 flex-col gap-1">
@@ -136,6 +137,7 @@
 import { computed, onMounted } from 'vue';
 import { useReportStore } from 'pybi-report-store';
 import { useThemeStore } from 'pybi-theme-store';
+import { useLocaleStore } from 'pybi-locale-store';
 
 export default {
   name: 'MainShell',
@@ -145,14 +147,18 @@ export default {
   setup(props) {
 const store = useReportStore();
 const themeStore = useThemeStore();
+const localeStore = useLocaleStore();
 
 const visualCount = computed(() => store.activePage?.visuals?.length || 0);
 const recentMessages = computed(() => store.messages.slice(-4));
 const saveStatus = computed(() => {
-  if (store.isSaving) return 'Salvataggio…';
-  if (store.isDirty) return 'Modifiche non salvate';
-  if (store.lastSavedAt) return `Salvato ${new Date(store.lastSavedAt).toLocaleTimeString('it-IT')}`;
-  return 'Pronto';
+  if (store.isSaving) return localeStore.t('shell.saving');
+  if (store.isDirty) return localeStore.t('shell.unsaved');
+  if (store.lastSavedAt) {
+    const locale = localeStore.currentLocale === 'it' ? 'it-IT' : 'en-GB';
+    return localeStore.t('shell.saved', { time: new Date(store.lastSavedAt).toLocaleTimeString(locale) });
+  }
+  return localeStore.t('shell.ready');
 });
 
 function messageClass(level) {
@@ -173,7 +179,7 @@ async function save() {
   try {
     await store.saveLayout();
   } catch (error) {
-    store.notify(`Salvataggio non riuscito: ${error.message}`, 'error');
+    store.notify(`${localeStore.t('shell.save')}: ${error.message}`, 'error');
   }
 }
 
@@ -187,7 +193,7 @@ function addVisual() {
   store.setActiveView('report');
   const visual = store.addVisual('bar_chart');
   if (visual) {
-    store.notify('Nuovo visual aggiunto al canvas', 'info');
+    store.notify(localeStore.t('shell.addVisual'), 'info');
     store.setActivePanel('visuals');
   }
 }
@@ -214,17 +220,21 @@ function goHome() {
 
 onMounted(async () => {
   themeStore.initialize();
+  const localeLoad = localeStore.initialize();
+  let dataLoad;
   if (store.projectId !== props.projectId || !store.layout.pages?.length) {
-    await store.fetchLayout(props.projectId);
+    dataLoad = store.fetchLayout(props.projectId);
   } else {
-    await store.fetchTables();
+    dataLoad = store.fetchTables();
   }
+  await Promise.all([localeLoad, dataLoad]);
   themeStore.applyFromLayout(store.layout.theme);
 });
 
     return {
       store,
       themeStore,
+      localeStore,
       visualCount,
       recentMessages,
       saveStatus,

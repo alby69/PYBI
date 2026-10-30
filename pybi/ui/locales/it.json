@@ -1,0 +1,84 @@
+{
+  "shell": {
+    "reportView": "Vista Report",
+    "dataView": "Vista Dati",
+    "modelView": "Vista Modello",
+    "settings": "Impostazioni",
+    "language": "Lingua dell'interfaccia",
+    "report": "Report",
+    "tableView": "Tabella",
+    "nonePage": "Nessuna pagina",
+    "save": "Salva",
+    "saving": "Salvataggio...",
+    "refresh": "Aggiorna",
+    "addVisual": "Aggiungi visual",
+    "filters": "Filtri",
+    "fields": "Campi",
+    "visualizations": "Visualizzazioni",
+    "focus": "Focus",
+    "home": "Torna alla Home",
+    "theme": "Tema del report",
+    "loading": "Caricamento report...",
+    "saved": "Salvato {time}",
+    "unsaved": "Modifiche non salvate",
+    "ready": "Pronto",
+    "pages": "pagine",
+    "visuals": "visual",
+    "tables": "tabelle",
+    "zoom": "Zoom"
+  },
+  "etl": {
+    "appliedSteps": "Passaggi applicati",
+    "queriesPane": "Riquadro Query",
+    "formulaBar": "Barra delle formule",
+    "dataQualityValid": "Validi",
+    "dataQualityError": "Errori",
+    "dataQualityEmpty": "Vuoti",
+    "exportPython": "Esporta Script Python",
+    "advancedEditor": "Editor avanzato",
+    "stepTypes": {
+      "source": "Sorgente",
+      "filter": "Righe filtrate",
+      "cast": "Tipo modificato",
+      "rename": "Colonne rinominate",
+      "customColumn": "Personalizzata aggiunta",
+      "groupBy": "Raggruppato per",
+      "mergeJoin": "Query unite"
+    }
+  },
+  "model": {
+    "relationships": "Relazioni",
+    "manageRelationships": "Gestisci relazioni",
+    "autodetect": "Rilevamento automatico",
+    "cardinality": "Cardinalita",
+    "crossFilterDirection": "Direzione filtro incrociato",
+    "activeRelationship": "Relazione attiva"
+  },
+  "dax": {
+    "newMeasure": "Nuova misura",
+    "newColumn": "Nuova colonna calcolata",
+    "formatString": "Stringa di formattazione",
+    "displayFolder": "Cartella di visualizzazione",
+    "syntaxValid": "Sintassi DAX valida",
+    "syntaxError": "Errore di sintassi DAX"
+  },
+  "visuals": {
+    "visualizations": "Visualizzazioni",
+    "fields": "Campi",
+    "formatVisual": "Formatta elemento visivo",
+    "filtersPane": "Pannello Filtri",
+    "filterOnVisual": "Filtri su questo elemento visivo",
+    "filterOnPage": "Filtri su questa pagina",
+    "filterAllPages": "Filtri su tutte le pagine"
+  },
+  "security": {
+    "manageRoles": "Gestisci ruoli",
+    "viewAs": "Visualizza come",
+    "roleName": "Nome ruolo",
+    "tableFilterRule": "Regola filtro tabella"
+  },
+  "api": {
+    "invalidRequest": "Richiesta non valida",
+    "internalError": "Errore interno del server"
+  }
+}

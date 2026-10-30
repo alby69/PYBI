@@ -34,3 +34,6 @@ pybi = "pybi.main:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pybi*", "backend*"]
+
+[tool.setuptools.package-data]
+"pybi.ui" = ["locales/*.json"]

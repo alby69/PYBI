@@ -33,4 +33,4 @@ pybi = "pybi.main:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pybi*"]
+include = ["pybi*", "backend*"]

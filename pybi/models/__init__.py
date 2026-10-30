@@ -1,4 +1,4 @@
-"""PyBI Data Models for DAX and Security RLS."""
+"""PyBI Data Models for DAX, Security RLS and Report View."""
 
 from pybi.models.dax import (
     CompletionItem,
@@ -9,6 +9,15 @@ from pybi.models.dax import (
     DAXValidationRequest,
     DAXValidationResponse,
     MeasureDefinition,
+)
+from pybi.models.report import (
+    DEFAULT_PAGE_HEIGHT,
+    DEFAULT_PAGE_WIDTH,
+    PAGE_PRESETS,
+    ReportLayout,
+    ReportPage,
+    VisualPosition,
+    VisualWidget,
 )
 from pybi.models.security import (
     RLSUserContext,
@@ -30,4 +39,11 @@ __all__ = [
     "SecurityRole",
     "UserRoleMapping",
     "RLSUserContext",
+    "PAGE_PRESETS",
+    "DEFAULT_PAGE_WIDTH",
+    "DEFAULT_PAGE_HEIGHT",
+    "VisualPosition",
+    "VisualWidget",
+    "ReportPage",
+    "ReportLayout",
 ]

@@ -12,6 +12,7 @@ from pybi.api.v1.dashboards import router as v1_dashboards_router
 from pybi.api.v1.exports import router as v1_exports_router
 from pybi.api.v1.ui_schema import router as v1_ui_schema_router
 from pybi.api.v1.viewer import router as v1_viewer_router
+from pybi.api.v1.reports import router as v1_reports_router
 from pybi.api.routers.semantic import router as semantic_router
 from backend.api.v1.mcp import router as v1_mcp_router
 from pybi.api.routers.etl_export import router as etl_export_router
@@ -40,6 +41,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(v1_exports_router)
     app.include_router(v1_ui_schema_router)
     app.include_router(v1_viewer_router)
+    app.include_router(v1_reports_router)
     app.include_router(semantic_router)
     app.include_router(v1_mcp_router)
     app.include_router(etl_export_router)

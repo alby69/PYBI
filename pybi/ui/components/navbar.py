@@ -6,7 +6,8 @@ WORKSPACE_NAV_ITEMS = [
     ('Home', '/', 'home'),
     ('Data (ETL)', '/power-query', 'transform'),
     ('Model View', '/model-editor', 'account_tree'),
-    ('Report (Dashboard)', '/dashboard-editor', 'dashboard'),
+    ('Report View', '/report', 'insert_chart'),
+    ('Dashboard', '/dashboard-editor', 'dashboard'),
     ('Public Viewer', '/viewer', 'visibility'),
 ]
 

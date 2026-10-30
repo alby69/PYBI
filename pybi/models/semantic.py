@@ -105,6 +105,8 @@ class ColumnMetadata(BaseModel):
     display_folder: Optional[str] = None
     format_string: Optional[str] = None
     description: Optional[str] = None
+    expression: Optional[str] = Field(None, description="DAX expression for calculated columns")
+    is_calculated: bool = Field(False, description="Whether the column is calculated via DAX")
 
 
 class TableMetadata(BaseModel):

@@ -38,6 +38,11 @@ def setup_routes():
         from pybi.ui.pages.model_editor import create_model_editor_page
         create_model_editor_page()
 
+    @ui.page('/report')
+    def report_page(request: Request):
+        from pybi.ui.pages.report_editor import create_report_editor_page
+        create_report_editor_page(initial_project=str(request.query_params.get('project', '') or 'default'))
+
     @ui.page('/dashboard-editor')
     def dashboard_editor_page():
         from pybi.ui.pages.dashboard_editor import create_dashboard_editor_page

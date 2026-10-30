@@ -1,0 +1,171 @@
+/* Power BI inspired design tokens and utility classes for the Report View. */
+
+:root {
+  --pbi-accent: #118dff;
+  --pbi-accent-hover: #0f7ae5;
+  --pbi-accent-soft: #eff6fc;
+  --pbi-bg-canvas: #eaeaea;
+  --pbi-bg-visual: #ffffff;
+  --pbi-bg-pane: #fafafa;
+  --pbi-bg-header: #f0f0f0;
+  --pbi-bg-ribbon: #f3f2f1;
+  --pbi-pane-border: #e1dfdd;
+  --pbi-text-main: #252423;
+  --pbi-text-muted: #605e5c;
+  --pbi-shadow-visual: 0 1.6px 3.6px rgba(0, 0, 0, 0.13), 0 0.3px 0.9px rgba(0, 0, 0, 0.11);
+  --pbi-shadow-dropdown: 0 6.4px 14.4px rgba(0, 0, 0, 0.13), 0 1.2px 3.6px rgba(0, 0, 0, 0.11);
+  --pbi-shadow-modal: 0 25.6px 57.6px rgba(0, 0, 0, 0.22), 0 4.8px 14.4px rgba(0, 0, 0, 0.18);
+  --pbi-color-1: #118dff;
+  --pbi-color-2: #12239e;
+  --pbi-color-3: #e66c37;
+  --pbi-color-4: #6b007b;
+  --pbi-color-5: #e044a7;
+  --pbi-color-6: #744ec2;
+  --pbi-color-7: #d9b200;
+  --pbi-color-8: #d64550;
+}
+
+html[data-theme='dark'] {
+  --pbi-bg-canvas: #111111;
+  --pbi-bg-visual: #1a1918;
+  --pbi-bg-pane: #201f1e;
+  --pbi-bg-header: #323130;
+  --pbi-bg-ribbon: #252423;
+  --pbi-pane-border: #3b3a39;
+  --pbi-text-main: #f3f2f1;
+  --pbi-text-muted: #a19f9d;
+  --pbi-accent-soft: #123a5c;
+}
+
+html[data-theme='city-park'] {
+  --pbi-bg-canvas: #f4f6f7;
+  --pbi-bg-visual: #ffffff;
+  --pbi-bg-pane: #f7f9fa;
+  --pbi-bg-header: #e2e7ea;
+  --pbi-bg-ribbon: #eef2f4;
+  --pbi-pane-border: #d5dde2;
+  --pbi-text-main: #1e2829;
+  --pbi-text-muted: #5f6b6d;
+}
+
+.bg-pbi-pane { background-color: var(--pbi-bg-pane); }
+.bg-pbi-header { background-color: var(--pbi-bg-header); }
+.bg-pbi-ribbon { background-color: var(--pbi-bg-ribbon); }
+.bg-pbi-accent { background-color: var(--pbi-accent); }
+.bg-pbi-pane-border { background-color: var(--pbi-pane-border); }
+.border-pbi-pane-border { border-color: var(--pbi-pane-border); }
+.border-pbi-accent { border-color: var(--pbi-accent); }
+.text-pbi-text { color: var(--pbi-text-main); }
+.text-pbi-text-muted { color: var(--pbi-text-muted); }
+.text-pbi-accent { color: var(--pbi-accent); }
+.ring-pbi-accent { --tw-ring-color: var(--pbi-accent); }
+
+.text-pbi-xs { font-size: 10px; line-height: 1.25; }
+.text-pbi-sm { font-size: 11px; line-height: 1.3; }
+.text-pbi-base { font-size: 12px; line-height: 1.35; }
+.text-pbi-md { font-size: 13px; line-height: 1.35; }
+.text-pbi-lg { font-size: 16px; line-height: 1.3; }
+.text-pbi-kpi { font-size: 24px; line-height: 1.1; }
+
+.shadow-pbi-card { box-shadow: var(--pbi-shadow-visual); }
+.shadow-pbi-dropdown { box-shadow: var(--pbi-shadow-dropdown); }
+.shadow-pbi-modal { box-shadow: var(--pbi-shadow-modal); }
+
+.pbi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 3px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.pbi-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.pbi-btn-primary {
+  background: var(--pbi-accent);
+  color: #ffffff;
+  border-color: var(--pbi-accent);
+}
+.pbi-btn-primary:hover:not(:disabled) { background: var(--pbi-accent-hover); }
+.pbi-btn-ghost { color: var(--pbi-text-main); }
+.pbi-btn-ghost:hover:not(:disabled) { background: var(--pbi-pane-border); }
+
+.add-filter-btn {
+  display: block;
+  width: 100%;
+  border: 1px dashed var(--pbi-pane-border);
+  border-radius: 2px;
+  padding: 3px 5px;
+  text-align: left;
+  font-size: 10px;
+  color: var(--pbi-text-muted);
+}
+.add-filter-btn:hover {
+  border-color: var(--pbi-accent);
+  background: var(--pbi-accent-soft);
+  color: var(--pbi-accent);
+}
+
+.filter-section { border-bottom: 1px solid var(--pbi-pane-border); }
+.filter-section-title {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--pbi-text-main);
+  background: #fafafa;
+}
+.filter-section-title:hover { background: #f3f2f1; }
+html[data-theme='dark'] .filter-section-title { background: #252423; }
+html[data-theme='dark'] .filter-section-title:hover { background: #323130; }
+.filter-icon-btn {
+  display: inline-flex;
+  height: 16px;
+  min-width: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  padding: 0 2px;
+  font-size: 9px;
+  line-height: 1;
+}
+.filter-icon-btn:hover { background: #e1dfdd; }
+
+/* Scrollbars matching the compact Power BI panes. */
+.report-canvas-viewport::-webkit-scrollbar,
+.data-pane ::-webkit-scrollbar,
+.visualizations-pane ::-webkit-scrollbar,
+.formatting-pane ::-webkit-scrollbar,
+.data-table-view ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.report-canvas-viewport::-webkit-scrollbar-thumb,
+.data-pane ::-webkit-scrollbar-thumb,
+.visualizations-pane ::-webkit-scrollbar-thumb,
+.formatting-pane ::-webkit-scrollbar-thumb,
+.data-table-view ::-webkit-scrollbar-thumb {
+  background: #c8c6c4;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+.report-canvas-viewport::-webkit-scrollbar-thumb:hover,
+.data-pane ::-webkit-scrollbar-thumb:hover,
+.visualizations-pane ::-webkit-scrollbar-thumb:hover,
+.formatting-pane ::-webkit-scrollbar-thumb:hover,
+.data-table-view ::-webkit-scrollbar-thumb:hover {
+  background: #a19f9d;
+  background-clip: content-box;
+}
+
+/* Keep the report editor flush with the NiceGUI page chrome. */
+.main-shell { font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }

@@ -1,5 +1,5 @@
-"""Re-export ETLEngine from pybi.etl.duckdb_engine for backend module paths."""
+"""Compatibility facade for :mod:`pybi.etl.duckdb_engine`."""
 
-from pybi.etl.duckdb_engine import ETLEngine
+from backend._compat import alias_module as _alias_module
 
-__all__ = ["ETLEngine"]
+_alias_module(__name__, "pybi.etl.duckdb_engine")

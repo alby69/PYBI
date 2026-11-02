@@ -1,7 +1,7 @@
 """DAX expression translator for PyBI Semantic Model."""
 
 from typing import Any, Callable, List, Optional
-from backend.core.dax_engine import DaxEngine
+from pybi.core.dax_translator import DaxEngine
 
 
 class DaxTranslator:

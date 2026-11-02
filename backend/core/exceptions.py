@@ -1,25 +1,5 @@
-"""Custom exception classes for PyBI."""
+"""Compatibility facade for :mod:`pybi.core.exceptions`."""
 
+from backend._compat import alias_module as _alias_module
 
-class PYBIError(Exception):
-    """Base exception for PyBI."""
-
-    pass
-
-
-class CompilationError(PYBIError):
-    """Raised when the compiler fails to translate a DAG into SQL."""
-
-    pass
-
-
-class FoldingError(CompilationError):
-    """Raised when an ETL node cannot be folded into SQL."""
-
-    pass
-
-
-class ValidationError(PYBIError):
-    """Raised when a node or pipeline configuration is invalid."""
-
-    pass
+_alias_module(__name__, "pybi.core.exceptions")

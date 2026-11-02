@@ -1,5 +1,5 @@
-"""Query resolver module re-exporting SemanticQueryResolver for Phase 6 Semantic Layer."""
+"""Compatibility facade for :mod:`pybi.core.query_resolver`."""
 
-from pybi.semantic.engine import SemanticQueryResolver
+from backend._compat import alias_module as _alias_module
 
-__all__ = ["SemanticQueryResolver"]
+_alias_module(__name__, "pybi.core.query_resolver")

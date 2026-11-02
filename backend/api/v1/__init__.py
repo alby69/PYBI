@@ -1,1 +1,3 @@
-"""PyBI REST API v1 Package."""
+"""Compatibility exports for :mod:`pybi.api.v1`."""
+
+from pybi.api.v1 import *

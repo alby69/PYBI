@@ -25,10 +25,10 @@ python3 -m pytest
 ---
 
 ## 3. Extending the DAX Engine
-To add a new DAX function (e.g. `PRODUCT`), use the `@DaxEngine.register` decorator in `backend/core/dax_engine/translator.py`:
+To add a new DAX function (e.g. `PRODUCT`), use the `@DaxEngine.register` decorator in `pybi/core/dax_translator.py`:
 
 ```python
-from backend.core.dax_engine import DaxEngine
+from pybi.core.dax_translator import DaxEngine
 
 @DaxEngine.register("PRODUCT")
 def _translate_product(args, model=None):
@@ -37,6 +37,8 @@ def _translate_product(args, model=None):
     arg = DaxEngine.translate(args[0], model)
     return f"PRODUCT({arg})"
 ```
+
+`backend.*` import paths remain available as compatibility facades. New code should use `pybi.*` imports.
 
 ---
 
@@ -48,3 +50,4 @@ Or start backend REST API directly:
 ```bash
 python3 -m backend.main
 ```
+This legacy command remains available for compatibility; the application and API implementations are maintained under `pybi`.

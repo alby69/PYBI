@@ -1,7 +1,3 @@
-"""Backend package for PyBI."""
+"""Compatibility namespace for the canonical :mod:`pybi` package."""
 
-import sys
-import pybi
-
-# Ensure backend submodules are accessible via backend namespace
-sys.modules["backend"] = sys.modules[__name__]
+from pybi import __version__

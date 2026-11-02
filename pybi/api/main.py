@@ -22,7 +22,7 @@ from pybi.api.v1.viewer import router as v1_viewer_router
 from pybi.api.v1.reports import router as v1_reports_router
 from pybi.api.v1.locales import router as v1_locales_router
 from pybi.api.routers.semantic import router as semantic_router
-from backend.api.v1.mcp import router as v1_mcp_router
+from pybi.api.v1.mcp import router as v1_mcp_router
 from pybi.api.routers.etl_export import router as etl_export_router
 from pybi.api.routers.dax import router as dax_router
 from pybi.api.routers.security import router as security_router

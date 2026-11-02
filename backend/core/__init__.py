@@ -1,5 +1,3 @@
-"""Core package for PyBI."""
+"""Compatibility exports for :mod:`pybi.core`."""
 
-from .storage import FileProjectStorage, ProjectStorage, default_storage
-
-__all__ = ["ProjectStorage", "FileProjectStorage", "default_storage"]
+from pybi.core import *

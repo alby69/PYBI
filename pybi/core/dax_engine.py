@@ -7,7 +7,7 @@ from pybi.models.dax import (
 )
 
 # Re-export backend DaxEngine for compatibility
-from backend.core.dax_engine import DaxEngine as BackendDaxEngine
+from pybi.core.dax_translator import DaxEngine as BackendDaxEngine
 
 DAX_KEYWORDS = ["VAR", "RETURN", "EVALUATE", "DEFINE", "MEASURE", "TRUE", "FALSE", "BLANK"]
 

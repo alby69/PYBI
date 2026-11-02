@@ -1,7 +1,7 @@
 # 🔌 Model Context Protocol (MCP) & AI Integration
 
 ## 1. Overview
-PyBI implements native Model Context Protocol (MCP) server endpoints (`backend/mcp`), enabling LLM agents (Claude Desktop, Cursor, ChatGPT, Qwen, DeepSeek) to interact with the semantic model without hallucinating schemas or business rules.
+PyBI implements Model Context Protocol (MCP) tools in `pybi/mcp_integration`, enabling compatible LLM clients to interact with the semantic model. Historical `backend.mcp` imports remain available as compatibility facades.
 
 ---
 
@@ -21,13 +21,14 @@ PyBI implements native Model Context Protocol (MCP) server endpoints (`backend/m
 ## 3. Configuration with Claude Desktop / Cursor
 
 Add the following configuration to your `claude_desktop_config.json`:
+Install the optional MCP SDK in the Python environment used by the command (`pip install mcp`).
 
 ```json
 {
   "mcpServers": {
     "pybi-semantic-engine": {
       "command": "python3",
-      "args": ["-m", "backend.mcp.server"]
+      "args": ["-m", "pybi.mcp_integration.server"]
     }
   }
 }

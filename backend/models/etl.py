@@ -1,5 +1,5 @@
-"""Re-export ETL models from pybi.schemas.etl for backend module paths."""
+"""Compatibility facade for :mod:`pybi.schemas.etl`."""
 
-from pybi.schemas.etl import ETLExecuteRequest, ETLPreviewRequest, ETLQuery, ETLStep
+from backend._compat import alias_module as _alias_module
 
-__all__ = ["ETLStep", "ETLQuery", "ETLExecuteRequest", "ETLPreviewRequest"]
+_alias_module(__name__, "pybi.schemas.etl")

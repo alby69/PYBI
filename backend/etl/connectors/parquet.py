@@ -1,17 +1,5 @@
-"""Parquet data connector using Polars."""
+"""Compatibility facade for :mod:`pybi.etl.connectors.parquet`."""
 
-from typing import Any
-import polars as pl
+from backend._compat import alias_module as _alias_module
 
-
-def read_parquet(filepath: str, **kwargs: Any) -> pl.DataFrame:
-    """Read Parquet file into a Polars DataFrame.
-
-    Args:
-        filepath: Path to the Parquet file.
-        **kwargs: Additional keyword arguments passed to polars.read_parquet.
-
-    Returns:
-        pl.DataFrame: The loaded DataFrame.
-    """
-    return pl.read_parquet(filepath, **kwargs)
+_alias_module(__name__, "pybi.etl.connectors.parquet")

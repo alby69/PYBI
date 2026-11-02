@@ -1,1 +1,3 @@
-"""Models package for backend."""
+"""Compatibility exports for :mod:`pybi.models`."""
+
+from pybi.models import *

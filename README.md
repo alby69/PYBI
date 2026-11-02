@@ -2,7 +2,7 @@
 
 [![CI/CD Pipeline](https://github.com/alby69/PYBI/actions/workflows/ci.yml/badge.svg)](https://github.com/alby69/PYBI/actions/workflows/ci.yml)
 
-**PyBI** (Python Business Intelligence) is an open-source, 100% Python-based BI platform designed as a modern alternative to PowerBI Desktop, featuring a decoupled REST API architecture and Enterprise-grade analytical features.
+**PyBI** (Python Business Intelligence) is an open-source, 100% Python-based BI platform designed as a modern alternative to PowerBI Desktop, combining an integrated NiceGUI application, REST API, and analytical features.
 
 ---
 
@@ -30,10 +30,11 @@
 
 ---
 
-## 🏛️ Architecture & Stack (Decoupled API-First Engine)
+## 🏛️ Architecture & Stack
 
-- **Backend (Pure REST API):** Pure FastAPI server exposing `/api/v1/` endpoints for Projects, ETL, Dashboards, Files, Exports, Semantic Queries, and Viewer with Pydantic schemas.
-- **Frontend Core:** NiceGUI + Vue 3 & Quasar with **Declarative JSON-to-UI Engine (`DynamicRenderer`)** consuming REST APIs.
+- **Application & REST API:** Canonical Python package `pybi`, with FastAPI endpoints under `/api/v1/` and Pydantic schemas.
+- **Legacy compatibility:** `backend.*` import paths and the `backend.main` command delegate to implementations under `pybi`.
+- **Frontend Core:** Integrated NiceGUI application with Vue 3 & Quasar components and the **Declarative JSON-to-UI Engine (`DynamicRenderer`)**.
 - **UI State Management:** Pinia / Vue Reactive Store (`uiStore.js`) fetching schemas from FastAPI (`/api/v1/ui/schema/{page_name}`)
 - **ETL Power Query Editor:** Power Query-style split view with interactive Data Grid and linear Applied Steps panel
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom UI element

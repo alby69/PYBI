@@ -9,6 +9,7 @@ Docker image could not even import pybi.etl and /etl-editor returned HTTP 500.
 import ast
 import pathlib
 import re
+import sys
 
 import pytest
 
@@ -21,7 +22,10 @@ STDLIB_AND_LOCAL = {
     '__future__', 'math', 'os', 'pathlib', 'random', 're', 'secrets', 'socket', 'sqlite3', 'string', 'subprocess',
     'shutil', 'sys', 'tempfile', 'textwrap', 'time', 'traceback', 'typing', 'unittest', 'urllib', 'uuid',
     'xml', 'zipfile', 'pybi', 'backend',
-}
+} | sys.stdlib_module_names
+
+# These imports are optional at runtime or are provided by a declared dependency.
+OPTIONAL_OR_TRANSITIVE = {'mcp', 'starlette'}
 
 
 def declared_requirements():
@@ -68,7 +72,7 @@ def imported_top_level_modules():
                 if node.level == 0 and node.module:
                     m = node.module.split('.')[0]
                     modules.add(MODULE_MAP.get(m, m))
-    return modules - STDLIB_AND_LOCAL
+    return modules - STDLIB_AND_LOCAL - OPTIONAL_OR_TRANSITIVE
 
 
 @pytest.mark.parametrize('module', sorted(imported_top_level_modules()))

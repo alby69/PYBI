@@ -16,7 +16,7 @@ from pybi.ui.components.navbar import render_navbar
 from pybi.export.dashboard_exporter import render_export_dialog
 from pybi.ui.components.search_bar import SearchBar
 from pybi.ui.components.widget_configurator import WidgetConfigurator, render_data_status_badge
-from pybi.core.model_sync import load_project_semantic_model
+from pybi.semantic.model_sync import load_project_semantic_model
 from pybi.ui.components.widget_data import (
     available_sources,
     bind_widget_data,

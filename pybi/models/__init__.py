@@ -1,6 +1,6 @@
 """PyBI Data Models for DAX, Security RLS and Report View."""
 
-from pybi.models.dax import (
+from pybi.semantic.dax_models import (
     CompletionItem,
     DAXAutoCompleteRequest,
     DAXAutoCompleteResponse,
@@ -10,7 +10,7 @@ from pybi.models.dax import (
     DAXValidationResponse,
     MeasureDefinition,
 )
-from pybi.models.report import (
+from pybi.report.models import (
     DEFAULT_PAGE_HEIGHT,
     DEFAULT_PAGE_WIDTH,
     PAGE_PRESETS,
@@ -19,7 +19,7 @@ from pybi.models.report import (
     VisualPosition,
     VisualWidget,
 )
-from pybi.models.security import (
+from pybi.semantic.security_models import (
     RLSUserContext,
     SecurityRole,
     TableFilterRule,

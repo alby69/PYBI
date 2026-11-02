@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
-from pybi.core.report_storage import (
+from pybi.report.storage import (
     build_visual_data,
     list_report_tables,
     load_report_layout,
@@ -19,7 +19,7 @@ from pybi.core.report_storage import (
     save_report_layout,
 )
 from pybi.core.storage import default_storage
-from pybi.models.report import ReportLayout
+from pybi.report.models import ReportLayout
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/report", tags=["Report View"])
 

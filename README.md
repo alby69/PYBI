@@ -25,21 +25,21 @@
   - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).
 - **Potenziamento Engine ETL Backend:** Supporto completo all'operatore di concatenazione standard DuckDB `||` e alla funzione `CONCAT()` durante la creazione di colonne calcolate (`Add Custom Column`).
 - **Fondamenta Fase 6 (Enterprise Parity & Hardening):**
-  - **Semantic Layer Foundations (`pybi/core/query_resolver.py`):** Risoluzione automatica di query multi-tabella con clausole `JOIN` automatiche in DuckDB tramite `SemanticQueryResolver`.
-  - **Dynamic Row-Level Security (RLS Engine in `pybi/core/rls_engine.py`):** Iniezione dinamica e sicura di clausole `WHERE` basate sui claims dell'utente autenticato (`allowed_regions`, `user_id`, `department`).
+  - **Semantic Layer Foundations (`pybi/semantic/engine.py`):** Risoluzione automatica di query multi-tabella con clausole `JOIN` automatiche in DuckDB tramite `SemanticQueryResolver`.
+  - **Dynamic Row-Level Security (RLS Engine in `pybi/semantic/rls.py`):** Iniezione dinamica e sicura di clausole `WHERE` basate sui claims dell'utente autenticato (`allowed_regions`, `user_id`, `department`).
 
 ---
 
 ## 🏛️ Architecture & Stack
 
 - **Application & REST API:** Canonical Python package `pybi`, with FastAPI endpoints under `/api/v1/` and Pydantic schemas.
-- **Legacy compatibility:** `backend.*` import paths and the `backend.main` command delegate to implementations under `pybi`.
+- **Legacy compatibility:** `backend` is deprecated; only the `backend.main` launch wrapper remains. Import application modules from `pybi.*`.
 - **Frontend Core:** Integrated NiceGUI application with Vue 3 & Quasar components and the **Declarative JSON-to-UI Engine (`DynamicRenderer`)**.
 - **UI State Management:** Pinia / Vue Reactive Store (`uiStore.js`) fetching schemas from FastAPI (`/api/v1/ui/schema/{page_name}`)
 - **ETL Power Query Editor:** Power Query-style split view with interactive Data Grid and linear Applied Steps panel
 - **Dashboard Grid Canvas:** [Vue Grid Layout (`grid-layout-plus`)](https://grid-layout-plus.netlify.app/) wrapped as a custom UI element
 - **Analytical Engine:** DuckDB + Polars
-- **Connectors & Caching:** SQLAlchemy (Snowflake, BigQuery, Postgres, SQLite), Redis Query Cache
+- **Connectors & Caching:** SQLAlchemy (Snowflake, BigQuery, Postgres, SQLite); `DATABASE_URL` and `REDIS_URL` are reserved settings and do not yet enable alternate storage/cache backends.
 - **Publishing & Export Engine:** Headless Jinja2 + WeasyPrint / Async Worker Queue
 - **Auth & RBAC:** Casbin + PyJWT
 
@@ -108,8 +108,13 @@ start.bat
 
 ### 1. Installation
 ```bash
-pip install -r requirements.txt
+pip install -e .
+cp .env.example .env
 ```
+
+For local development, set `DATA_DIR=pybi_data` in `.env` (the example defaults
+to `/app/data` for Docker). Configure `PYBI_JWT_SECRET` with a random value of
+at least 32 characters and set `PYBI_ENV=production` before deployment.
 
 ### 2. Launching the Application
 ```bash
@@ -131,5 +136,7 @@ PyBI includes a robust Publishing & Export Engine (`pybi.export`) for freezing a
 
 Run tests locally using pytest:
 ```bash
+pip install -e ".[test]"
+playwright install --with-deps chromium
 python3 -m pytest
 ```

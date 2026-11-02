@@ -1,7 +1,7 @@
 # 🔌 Model Context Protocol (MCP) & AI Integration
 
 ## 1. Overview
-PyBI implements Model Context Protocol (MCP) tools in `pybi/mcp_integration`, enabling compatible LLM clients to interact with the semantic model. Historical `backend.mcp` imports remain available as compatibility facades.
+PyBI implements Model Context Protocol (MCP) tools in `pybi/mcp_integration`, enabling compatible LLM clients to interact with the semantic model. New code should use this canonical package; the former `backend.mcp` imports have been removed.
 
 ---
 

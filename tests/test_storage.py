@@ -129,8 +129,9 @@ def test_resolve_storage_dir_uses_data_dir(monkeypatch):
     assert resolve_storage_dir() == "/app/data"
 
 
-def test_resolve_storage_dir_falls_back_to_default(monkeypatch):
+def test_resolve_storage_dir_falls_back_to_default(monkeypatch, tmp_path):
     monkeypatch.delenv("DATA_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
     assert resolve_storage_dir() == "pybi_data"
 
 

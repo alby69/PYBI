@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from pybi.core.filtering import build_where_clauses
+
 
 @dataclass
 class FilterState:
@@ -76,30 +78,15 @@ class FilterContext:
         else:
             filters = list(self._active_filters.values())
 
-        if not filters:
-            return ""
-
-        conditions = []
+        filter_values: Dict[str, Any] = {}
         for f in filters:
             if f.operator == "IN":
-                vals_list = []
-                for v in f.values:
-                    if isinstance(v, str):
-                        v_str = str(v).replace("'", "''")
-                        vals_list.append(f"'{v_str}'")
-                    else:
-                        vals_list.append(str(v))
-                vals = ", ".join(vals_list)
-                conditions.append(f"{f.column} IN ({vals})")
+                filter_values[f.column] = f.values
             else:
-                val = f.values[0] if f.values else ""
-                if isinstance(val, str):
-                    val_repr = "'" + str(val).replace("'", "''") + "'"
-                else:
-                    val_repr = str(val)
-                conditions.append(f"{f.column} {f.operator} {val_repr}")
+                filter_values[f.column] = {f.operator: f.values[0]} if f.values else {}
 
-        return "WHERE " + " AND ".join(conditions)
+        conditions, _ = build_where_clauses(filter_values, quote_columns=False)
+        return "WHERE " + " AND ".join(conditions) if conditions else ""
 
     def subscribe(self, listener: Callable) -> None:
         """Register a subscriber listener callback."""

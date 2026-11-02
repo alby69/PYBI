@@ -1,31 +1,13 @@
 import os
-import sys
+
 import duckdb
 import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-# Ensure both 'model.schema' and 'pybi.model.schema' are importable in test suites
-pybi_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pybi"))
-if pybi_dir not in sys.path:
-    sys.path.insert(0, pybi_dir)
+os.environ["DATA_DIR"] = "pybi_data"
 
-# Module aliases for pybi.backend and backend modules
-import backend
-import backend.main
-import backend.models
-import backend.models.etl
-import backend.engine
-import backend.engine.etl_engine
-
-sys.modules["pybi.backend"] = backend
-sys.modules["pybi.backend.main"] = backend.main
-sys.modules["pybi.backend.models"] = backend.models
-sys.modules["pybi.backend.models.etl"] = backend.models.etl
-sys.modules["pybi.backend.engine"] = backend.engine
-sys.modules["pybi.backend.engine.etl_engine"] = backend.engine.etl_engine
-
-from backend.main import app
+from pybi.api.main import app
 
 
 @pytest.fixture(scope="session")

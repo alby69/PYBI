@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pybi.models.dax import (
+from pybi.semantic.dax_models import (
     DAXAutoCompleteRequest,
     DAXAutoCompleteResponse,
     DAXValidationRequest,
     DAXValidationResponse,
     MeasureDefinition,
 )
-from pybi.core.dax_engine import DAXEngine
+from pybi.semantic.dax_api import DAXEngine
 
 router = APIRouter(prefix="/api/v1/projects/{project_id}/dax", tags=["DAX Engine"])
 

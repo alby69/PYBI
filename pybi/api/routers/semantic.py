@@ -7,7 +7,7 @@ import duckdb
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from pybi.models.semantic import (
+from pybi.semantic.model_view import (
     SemanticModel,
     TableMetadata,
     ColumnMetadata,
@@ -19,8 +19,8 @@ from pybi.models.semantic import (
     CrossFilterDirection,
     JoinType,
 )
-from pybi.core.autodetect_relationships import autodetect_model_relationships
-from pybi.core.semantic_model import (
+from pybi.semantic.relationships import autodetect_model_relationships
+from pybi.semantic.schema import (
     SemanticModel as CoreSemanticModel,
     SemanticTable as CoreSemanticTable,
     SemanticColumn as CoreSemanticColumn,
@@ -29,7 +29,7 @@ from pybi.core.semantic_model import (
     Cardinality as CoreCardinality,
     JoinType as CoreJoinType,
 )
-from pybi.core.model_sync import (
+from pybi.semantic.model_sync import (
     load_project_semantic_model as core_load_project_semantic_model,
     save_project_semantic_model as core_save_project_semantic_model,
 )

@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from pybi.core.semantic_model import (
+from pybi.semantic.schema import (
     Cardinality,
     JoinType,
     RLSRule,

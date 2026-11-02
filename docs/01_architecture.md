@@ -1,49 +1,85 @@
-# 🏛️ PyBI Architecture Overview
+# PyBI Architecture Overview
 
-## 1. System Vision & Principles
-PyBI (Python Business Intelligence) is an open-source, 100% Python-based BI platform built as an integrated Python application with a REST API, a Power BI-style semantic layer, and AI integration via the Model Context Protocol (MCP).
+## Principles
 
-### Guiding Architectural Principles
-- **KISS (Keep It Simple, Stupid):** Streamlined DuckDB and Polars execution without unnecessary operational overhead.
-- **DRY (Don't Repeat Yourself):** Centralized semantic model definitions and single-source documentation.
-- **Canonical Package:** `pybi` is the canonical package for application behavior and runtime wiring.
-- **Compatibility:** `backend` preserves historical import paths and delegates to implementations in `pybi`.
-- **Separation of Concerns:** API, semantic, ETL, export, storage, and UI responsibilities are grouped under `pybi`; this is not yet a strict ports-and-adapters architecture.
+- `pybi` is the canonical application package. New implementation code belongs there.
+- Modules have one owner: semantic definitions and engines live in `pybi.semantic`,
+  ETL execution in `pybi.etl`, dashboard filter state in `pybi.dashboard`, and
+  report persistence/rendering in `pybi.report`.
+- `pybi.core` contains shared infrastructure such as storage, events, filtering
+  primitives, interfaces, and exceptions; domain behavior should not be added there.
+- The legacy `pybi.model`, `pybi.models`, and `backend` paths are compatibility
+  shims. Use canonical `pybi.*` modules in new code.
 
----
-
-## 2. Current Package Layout & Module Responsibilities
+## Current Package Layout
 
 ```text
-pybi-repo/
-├── README.md                 # Minimal root README with quickstart and docs links
-├── pyproject.toml            # Unified dependency definition
-├── docker-compose.yml        # Multi-container orchestration
-│
-├── pybi/                     # Canonical application package
-│   ├── main.py               # NiceGUI application entry point
-│   ├── api/                  # REST application wiring, schemas, and routes
-│   ├── core/                 # Shared interfaces, storage, semantic and query helpers
-│   ├── etl/                  # Connectors, compilers, execution, and scheduling
-│   ├── mcp_integration/      # MCP server and tool implementations
-│   ├── model/                # DAX translation helpers
-│   ├── semantic/             # Semantic query behavior
-│   ├── export/               # Export workflows
-│   ├── publish/              # Publishing workflows
-│   ├── frontend/             # Vue components and JavaScript frontend modules
-│   └── ui/                   # NiceGUI pages, components, and static assets
-│
-├── backend/                  # Legacy import-compatible facades to pybi
-│   ├── main.py               # Compatibility entry point for the REST app
-│   ├── api/ core/ etl/       # Compatibility modules; implementations live in pybi
-│   └── mcp/ models/ engine/  # Compatibility modules; implementations live in pybi
-│
-└── docs/                     # Consolidated Documentation
-    ├── 01_architecture.md
-    ├── 02_semantic_layer_dax.md
-    ├── 03_mcp_ai_integration.md
-    ├── 04_api_reference.md
-    └── 05_developer_guide.md
+pybi/
+├── config.py                 # Pydantic Settings and environment configuration
+├── api/                      # FastAPI app, DTOs, versioned routes
+├── auth/                     # JWT and RBAC
+├── core/                     # Shared infrastructure and compatibility exports
+│   ├── events.py             # Synchronous internal event bus
+│   ├── filtering.py          # Shared SQL filter clause construction
+│   └── storage.py            # Project storage interface and file implementation
+├── semantic/                 # Semantic schemas, DAX, relationships, RLS, model sync
+│   ├── schema.py             # Persisted semantic model and YAML serialization
+│   ├── model_view.py         # Relationship-editor API schema
+│   ├── models.py             # Semantic query request/response adapters
+│   ├── dax_translator.py     # DAX-to-DuckDB translation registry
+│   ├── dax_api.py            # DAX validation and completion API engine
+│   ├── rls.py                # Row-level security
+│   └── engine.py             # Semantic SQL resolution and execution
+├── etl/                      # Connectors, nodes, compiler, executor, scheduler
+├── dashboard/                # Widget binding and the canonical FilterContext
+├── report/                   # Report models, query construction, visuals, storage
+├── export/                   # Static export, snapshots, templates
+├── mcp_integration/          # MCP server and tool implementations
+└── ui/, frontend/, publish/   # NiceGUI pages, frontend components, publishing
+
+backend/
+├── __init__.py               # Emits a DeprecationWarning
+└── main.py                   # Deprecated application entry point
 ```
 
-`backend` is retained for existing imports and deployment commands. Its modules re-export or alias the corresponding `pybi` implementations; new code should import from `pybi`. The application is integrated: the Vue components live under `pybi/frontend`, while the primary UI runtime is NiceGUI. The `backend.main` command remains available as a compatibility entry point for the REST application.
+The old `pybi.model` and `pybi.models` modules re-export canonical semantic and
+report definitions for existing callers. The `backend` subpackages have been
+removed; migrate imports such as `backend.api.*` to their corresponding `pybi.*`
+paths. `python -m backend.main` remains as a deprecated launch command.
+
+Several semantic schemas intentionally remain distinct because they represent
+different contracts: the persisted semantic model (`semantic.schema`), the
+relationship-editor payload (`semantic.model_view`), the semantic-query adapter
+(`semantic.models`), and the in-memory registration schema (`semantic.runtime_schema`).
+They share one package but are not interchangeable wire formats.
+
+## Runtime Configuration
+
+`pybi.config.Settings` reads environment variables and `.env`. Existing settings
+include `DATA_DIR`, `EXPORTS_DIR`, `DUCKDB_THREADS`, `DUCKDB_MAX_MEMORY`, and
+`PYBI_JWT_SECRET`. A production deployment must provide a JWT secret of at least
+32 characters. `DATABASE_URL` and `REDIS_URL` are accepted for deployment
+configuration but are not currently used to select storage or cache backends.
+
+## Module Communication and Filters
+
+```mermaid
+flowchart LR
+    API --> Semantic
+    API --> ETL
+    API --> Dashboard
+    API --> Report
+    Semantic --> Core
+    ETL --> Core
+    Dashboard --> Core
+    Report --> Dashboard
+    ETL -- execution.completed --> Events
+    Events --> Dashboard
+```
+
+ETL publishes project-scoped completion events. The default dashboard binder
+subscribes to successful executions and registers or refreshes output tables,
+without making the ETL engine import dashboard code. Dashboard `FilterContext`
+owns interactive/cross-filter state; report visuals and query building consume
+that context. Shared SQL clause formatting lives in `pybi.core.filtering` to
+avoid a semantic-to-dashboard import cycle.

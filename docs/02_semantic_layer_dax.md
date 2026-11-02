@@ -38,7 +38,7 @@ rls_rules:
 ---
 
 ## 2. DAX-to-SQL Translation Engine (`DaxEngine`)
-The `DaxEngine` (`pybi/core/dax_translator.py`) uses an extensible decorator-based registry pattern (`@DaxEngine.register`) to translate DAX expressions into DuckDB SQL fragments. Historical `backend.core.dax_engine` imports remain available as compatibility facades.
+The canonical `DaxEngine` (`pybi/semantic/dax_translator.py`) uses an extensible decorator-based registry pattern (`@DaxEngine.register`) to translate DAX expressions into DuckDB SQL fragments. The old `pybi.core` DAX modules are compatibility exports; `backend.core.*` import paths have been removed.
 
 ### Core Supported DAX Functions
 - **DIVIDE(numerator, denominator, [alternate]):** Translates to `COALESCE(num / NULLIF(den, 0), alt)`.
@@ -54,4 +54,4 @@ The `DaxEngine` (`pybi/core/dax_translator.py`) uses an extensible decorator-bas
 ---
 
 ## 3. Dynamic Row-Level Security (RLS)
-The `RLSEngine` (`pybi/core/rls_engine.py`) handles claim-based query filters and semantic security roles. Historical `backend.core.rls_engine` imports resolve to the canonical implementation.
+The `RLSEngine` (`pybi/semantic/rls.py`) handles claim-based query filters and semantic security roles. Security role schemas are defined in `pybi/semantic/security_models.py`.

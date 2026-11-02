@@ -1,7 +1,7 @@
-"""Unit tests for backend.core.dax_engine.DaxEngine."""
+"""Unit tests for the canonical semantic DAX engine."""
 
 import pytest
-from backend.core.dax_engine import DaxEngine
+from pybi.semantic.dax_translator import DaxEngine
 
 
 def test_dax_engine_divide():

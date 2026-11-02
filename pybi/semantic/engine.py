@@ -6,14 +6,14 @@ import duckdb
 import polars as pl
 import sqlglot
 
-from pybi.core.semantic_model import (
+from pybi.semantic.schema import (
     CoreSemanticModel,
     SemanticColumn,
     SemanticMeasure,
     SemanticModel as CoreModelType,
     SemanticTable,
 )
-from pybi.semantic.filter_context import build_where_clauses
+from pybi.core.filtering import build_where_clauses
 from pybi.semantic.models import (
     SemanticModel,
     SemanticQueryRequest,

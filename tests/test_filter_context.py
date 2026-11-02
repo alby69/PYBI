@@ -1,8 +1,9 @@
 import pytest
 import duckdb
-from model.schema import Table, Column, Relationship
-from model.measures import ModelEngine, Measure
-from dashboard.filter_context import FilterContext
+from pybi.semantic.runtime_schema import Table, Column, Relationship
+from pybi.semantic.model_engine import ModelEngine
+from pybi.semantic.measures import Measure
+from pybi.dashboard.filter_context import FilterContext
 
 # ============================================================================
 # FIXTURES

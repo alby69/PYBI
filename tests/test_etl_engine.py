@@ -2,8 +2,8 @@ import duckdb
 import polars as pl
 import pytest
 
-from pybi.backend.engine.etl_engine import ETLEngine
-from pybi.backend.models.etl import ETLStep
+from pybi.core.etl_engine import ETLEngine
+from pybi.schemas.etl import ETLStep
 
 
 def test_sql_generation_change_type():

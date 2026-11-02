@@ -2,8 +2,8 @@
 
 import json
 from fastapi.testclient import TestClient
-from backend.main import app
-from backend.mcp.tools import (
+from pybi.api.main import app
+from pybi.mcp_integration.tools import (
     execute_analytical_query,
     get_data_lineage,
     get_semantic_schema,

@@ -11,10 +11,12 @@ import duckdb
 import ibis
 import polars as pl
 
+from pybi.config import get_settings
+from pybi.core.events import ETL_EXECUTION_COMPLETED, event_bus
 from pybi.core.interfaces import ETLNode
 from pybi.etl.compiler import ETLCompiler
 from pybi.etl.optimizer import SQLOptimizer
-from pybi.model.engine import ModelEngine
+from pybi.semantic.model_engine import ModelEngine
 from pybi.etl.nodes.output import OutputNode
 
 from pybi.etl.connectors import (
@@ -78,11 +80,10 @@ def configure_duckdb_connection(
     max_memory: Optional[str] = None,
 ) -> duckdb.DuckDBPyConnection:
     """Apply performance pragmas to a DuckDB connection."""
-    env_threads = os.environ.get("DUCKDB_THREADS")
-    env_memory = os.environ.get("DUCKDB_MAX_MEMORY")
+    settings = get_settings()
 
-    target_threads = threads or (int(env_threads) if env_threads and env_threads.isdigit() else None)
-    target_memory = max_memory or env_memory
+    target_threads = threads or settings.duckdb_threads
+    target_memory = max_memory or settings.duckdb_max_memory
 
     if target_threads:
         conn.execute(f"PRAGMA threads={target_threads}")
@@ -112,11 +113,13 @@ class ETLExecutor:
         threads: Optional[int] = None,
         max_memory: Optional[str] = None,
         model_engine: Optional[ModelEngine] = None,
+        project_id: Optional[str] = None,
     ) -> None:
         """Initialize ETLExecutor."""
         self.duckdb_conn = duckdb_conn or duckdb.connect(database=":memory:")
         configure_duckdb_connection(self.duckdb_conn, threads=threads, max_memory=max_memory)
         self.base_dir = base_dir
+        self.project_id = project_id
 
         self.ibis_con = ibis.duckdb.connect()
         self.compiler = ETLCompiler(backend="duckdb", ibis_con=self.ibis_con)
@@ -173,7 +176,29 @@ class ETLExecutor:
 
         return result_df, raw_sql, optimized_sql
 
-    def execute(self, dag: Dict[str, Any]) -> ETLResult:
+    def execute(self, dag: Dict[str, Any], project_id: Optional[str] = None) -> ETLResult:
+        """Execute a pipeline and publish its result for interested modules."""
+        result = self._execute(dag)
+        self._publish_execution_completed(result, project_id)
+        return result
+
+    def _publish_execution_completed(
+        self,
+        result: ETLResult,
+        project_id: Optional[str] = None,
+    ) -> None:
+        resolved_project_id = project_id or self.project_id
+        if not resolved_project_id:
+            return
+        event_bus.publish(
+            ETL_EXECUTION_COMPLETED,
+            project_id=resolved_project_id,
+            status=result.status,
+            output_tables=result.output_tables,
+            error=result.error,
+        )
+
+    def _execute(self, dag: Dict[str, Any]) -> ETLResult:
         """Execute a visual DAG or linear Applied Steps query."""
         nodes = dag.get("nodes", [])
         edges = dag.get("edges", [])
@@ -183,7 +208,7 @@ class ETLExecutor:
         has_linear_steps = bool(dag.get("steps"))
         has_linear_source = bool(dag.get("source")) and isinstance(dag.get("source"), dict) and len(dag.get("source")) > 0
         if (has_linear_steps or has_linear_source) and not nodes:
-            return self.execute_linear_etl(dag)
+            return self._execute_linear_etl(dag)
         elif not nodes and not has_linear_steps and not has_linear_source:
             return ETLResult(status="success", logs=["No nodes or linear query steps found in ETL configuration."])
 
@@ -951,6 +976,17 @@ class ETLExecutor:
         self,
         query: Union[Dict[str, Any], Any],
         stop_at_step_index: Optional[int] = None,
+        project_id: Optional[str] = None,
+    ) -> ETLResult:
+        """Execute a linear query and publish its result when project-scoped."""
+        result = self._execute_linear_etl(query, stop_at_step_index)
+        self._publish_execution_completed(result, project_id)
+        return result
+
+    def _execute_linear_etl(
+        self,
+        query: Union[Dict[str, Any], Any],
+        stop_at_step_index: Optional[int] = None,
     ) -> ETLResult:
         """Execute linear Applied Steps ETL query sequentially."""
         logs: List[str] = []
@@ -1061,6 +1097,7 @@ def execute_dag(
     base_dir: Optional[str] = None,
     threads: Optional[int] = None,
     max_memory: Optional[str] = None,
+    project_id: Optional[str] = None,
 ) -> ETLResult:
     """Convenience function to execute an ETL DAG or linear query."""
     executor = ETLExecutor(
@@ -1068,6 +1105,7 @@ def execute_dag(
         base_dir=base_dir,
         threads=threads,
         max_memory=max_memory,
+        project_id=project_id,
     )
     return executor.execute(dag)
 
@@ -1077,7 +1115,12 @@ def execute_linear_etl(
     duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
     base_dir: Optional[str] = None,
     stop_at_step_index: Optional[int] = None,
+    project_id: Optional[str] = None,
 ) -> ETLResult:
     """Convenience function to execute a linear Applied Steps ETL query."""
-    executor = ETLExecutor(duckdb_conn=duckdb_conn, base_dir=base_dir)
+    executor = ETLExecutor(
+        duckdb_conn=duckdb_conn,
+        base_dir=base_dir,
+        project_id=project_id,
+    )
     return executor.execute_linear_etl(query, stop_at_step_index=stop_at_step_index)

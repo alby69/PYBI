@@ -1,28 +1,18 @@
-import inspect
-
-from backend.api.v1.etl import get_etl_dag, preview_node_output, save_etl_dag
-from backend.api.v1.models import ETLDAGSchema, ETLQuery, ETLStep
-
-
-def test_legacy_etl_handlers_keep_synchronous_contract():
-    assert not inspect.iscoroutinefunction(get_etl_dag)
-    assert not inspect.iscoroutinefunction(save_etl_dag)
-    assert not inspect.iscoroutinefunction(preview_node_output)
+import importlib
+import sys
+import warnings
 
 
-def test_legacy_etl_models_serialize_historical_field_names():
-    step = ETLStep(step_id="step_1", step_type="filter")
+def test_backend_root_is_deprecated():
+    sys.modules.pop("backend", None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        backend = importlib.import_module("backend")
 
-    assert step.model_dump() == {
-        "id": "step_1",
-        "name": None,
-        "operation": "filter",
-        "params": {},
-    }
+    assert backend.__version__
+    assert any("deprecated" in str(warning.message).lower() for warning in caught)
 
-    query = ETLQuery(steps=[step])
-    dag = ETLDAGSchema(steps=[step])
-    assert query.model_dump()["steps"][0]["id"] == "step_1"
-    assert query.model_dump()["steps"][0]["operation"] == "filter"
-    assert dag.model_dump()["steps"][0]["id"] == "step_1"
-    assert dag.model_dump()["steps"][0]["operation"] == "filter"
+
+def test_legacy_backend_main_exports_api_app():
+    module = importlib.import_module("backend.main")
+    assert module.app is not None

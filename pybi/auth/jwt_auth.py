@@ -2,13 +2,20 @@
 
 from datetime import datetime, timedelta, timezone
 import hashlib
-import os
+import logging
 import secrets
 from typing import Any, Dict, Optional
 
 import jwt
 
-SECRET_KEY = os.environ.get("PYBI_JWT_SECRET") or "pybi-secret-key-change-in-production"
+from pybi.config import get_settings
+
+SECRET_KEY = get_settings().jwt_secret
+if not SECRET_KEY:
+    SECRET_KEY = secrets.token_urlsafe(32)
+    logging.getLogger(__name__).warning(
+        "PYBI_JWT_SECRET is unset; using an ephemeral development key."
+    )
 ALGORITHM = "HS256"
 DEFAULT_EXPIRATION_MINUTES = 60 * 24  # 24 hours
 

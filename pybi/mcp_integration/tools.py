@@ -5,8 +5,8 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import duckdb
-from pybi.core.dax_translator import DaxEngine
-from pybi.core.model_sync import load_project_semantic_model
+from pybi.semantic.dax_translator import DaxEngine
+from pybi.semantic.model_sync import load_project_semantic_model
 from pybi.core.storage import default_storage
 
 log = logging.getLogger(__name__)

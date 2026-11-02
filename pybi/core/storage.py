@@ -7,6 +7,8 @@ import os
 import shutil
 from typing import Any, Dict, List, Optional, Union
 
+from pybi.config import get_settings
+
 
 DEFAULT_STORAGE_DIR = "pybi_data"
 ID_SAFE_CHARS = ("-", "_")
@@ -30,7 +32,7 @@ def sanitize_project_id(project_id: str) -> str:
 def resolve_storage_dir(storage_dir: Optional[str] = None) -> str:
     """Resolve the directory holding project JSON files.
 
-    Resolution order: explicit argument, DATA_DIR environment variable, "pybi_data".
+    Resolution order: explicit argument, configured DATA_DIR, "pybi_data".
 
     Args:
         storage_dir: Optional explicit directory overriding environment lookup.
@@ -40,7 +42,7 @@ def resolve_storage_dir(storage_dir: Optional[str] = None) -> str:
     """
     if storage_dir:
         return storage_dir
-    return os.environ.get("DATA_DIR") or DEFAULT_STORAGE_DIR
+    return get_settings().data_dir or DEFAULT_STORAGE_DIR
 
 
 class ProjectStorage(ABC):

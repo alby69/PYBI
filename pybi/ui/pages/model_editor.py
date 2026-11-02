@@ -4,7 +4,7 @@ import os
 from typing import Dict, Any, List, Optional
 from nicegui import ui
 
-from pybi.core.semantic_model import (
+from pybi.semantic.schema import (
     SemanticModel as CoreSemanticModel,
     SemanticTable,
     SemanticColumn,
@@ -15,8 +15,8 @@ from pybi.core.semantic_model import (
     JoinType,
     autodetect_relationships,
 )
-from pybi.core.autodetect_relationships import autodetect_model_relationships
-from pybi.core.model_sync import (
+from pybi.semantic.relationships import autodetect_model_relationships
+from pybi.semantic.model_sync import (
     get_semantic_model_path,
     load_project_semantic_model as _core_load_project_semantic_model,
     save_project_semantic_model,

@@ -599,7 +599,10 @@ class ETLEngine:
 
         # If query is a visual DAG (has nodes), use ETLExecutor directly
         if "nodes" in query_dict and query_dict["nodes"]:
-            executor = ETLExecutor(duckdb_conn=default_binder.duckdb_conn, base_dir=data_dir)
+            executor = ETLExecutor(
+                duckdb_conn=default_binder.duckdb_conn,
+                base_dir=data_dir,
+            )
             res = executor.execute(query_dict)
             if res.dataframes:
                 pl_df = list(res.dataframes.values())[-1]
@@ -624,7 +627,11 @@ class ETLEngine:
     ) -> Dict[str, Any]:
         """Execute full ETL transformation pipeline and save/register target table."""
         data_dir = default_storage.get_project_data_dir(project_id) if default_storage.project_exists(project_id) else None
-        executor = ETLExecutor(duckdb_conn=default_binder.duckdb_conn, base_dir=data_dir)
+        executor = ETLExecutor(
+            duckdb_conn=default_binder.duckdb_conn,
+            base_dir=data_dir,
+            project_id=project_id,
+        )
 
         if hasattr(query, "model_dump"):
             query_dict = query.model_dump()

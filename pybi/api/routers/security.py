@@ -1,8 +1,8 @@
 from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from pybi.models.security import RLSUserContext, SecurityRole, UserRoleMapping
-from pybi.core.rls_engine import RLSEngine
+from pybi.semantic.security_models import RLSUserContext, SecurityRole, UserRoleMapping
+from pybi.semantic.rls import RLSEngine
 
 router = APIRouter(prefix="/api/v1/security", tags=["Security RLS"])
 

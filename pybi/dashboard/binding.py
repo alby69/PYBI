@@ -6,9 +6,10 @@ from typing import Any, Callable, Dict, Optional, Union
 import duckdb
 import polars as pl
 
-from pybi.core.semantic_model import SemanticModel as CoreSemanticModel
+from pybi.semantic.schema import SemanticModel as CoreSemanticModel
 from pybi.semantic.engine import SemanticQueryResolver
 from pybi.semantic.models import SemanticModel, SemanticQueryRequest, SemanticQueryResponse
+from pybi.core.events import ETL_EXECUTION_COMPLETED, event_bus
 
 
 @dataclass
@@ -24,7 +25,11 @@ class WidgetBinding:
 class DataBinder:
     """Manager class linking dashboard widgets to Polars DataFrames, DuckDB queries, or Semantic Models with reactive callbacks."""
 
-    def __init__(self, duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None) -> None:
+    def __init__(
+        self,
+        duckdb_conn: Optional[duckdb.DuckDBPyConnection] = None,
+        observe_etl_events: bool = False,
+    ) -> None:
         """Initialize DataBinder.
 
         Args:
@@ -34,6 +39,20 @@ class DataBinder:
         self._sources: Dict[str, pl.DataFrame] = {}
         self._bindings: Dict[str, WidgetBinding] = {}
         self.semantic_resolver = SemanticQueryResolver(self.duckdb_conn)
+        if observe_etl_events:
+            event_bus.subscribe(
+                ETL_EXECUTION_COMPLETED,
+                self._on_etl_execution_completed,
+            )
+
+    def _on_etl_execution_completed(self, event: Dict[str, Any]) -> None:
+        if event["status"] != "success":
+            return
+        for source_name, data in event["output_tables"].items():
+            if source_name in self._sources:
+                self.update_source(source_name, data)
+            else:
+                self.register_source(source_name, data)
 
     def register_source(self, name: str, data: Union[pl.DataFrame, duckdb.DuckDBPyRelation]) -> None:
         """Register or overwrite a data source.
@@ -126,4 +145,4 @@ class DataBinder:
 
 
 # Global default binder instance
-default_binder = DataBinder()
+default_binder = DataBinder(observe_etl_events=True)

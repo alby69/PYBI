@@ -1,4 +1,4 @@
-"""Compatibility entry point for the canonical PyBI REST application."""
+"""Deprecated compatibility entry point for the canonical PyBI REST application."""
 
 from nicegui import app as nicegui_app
 from pybi.api.main import app as fastapi_app, register_routers

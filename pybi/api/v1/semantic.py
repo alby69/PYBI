@@ -6,13 +6,13 @@ import duckdb
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from pybi.core.model_sync import (
+from pybi.semantic.model_sync import (
     get_semantic_model_path,
     load_project_semantic_model,
     save_project_semantic_model,
     sync_etl_outputs_into_model,
 )
-from pybi.core.semantic_model import (
+from pybi.semantic.schema import (
     SemanticModel,
     SemanticTable,
     SemanticRelationship,

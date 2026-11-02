@@ -5,23 +5,23 @@ from concurrent.futures import ThreadPoolExecutor
 import csv
 import io
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from pybi.config import get_settings
 from pybi.export.context_binder import bind_filter_context
 from pybi.export.snapshot import create_snapshot
 
 # Define default exports directory
-DEFAULT_EXPORTS_DIR = os.getenv("EXPORTS_DIR", "pybi_data/exports")
+DEFAULT_EXPORTS_DIR = "pybi_data/exports"
 
 
 class ExportEngine:
     """Orchestrator for queuing and rendering static, versioned exports (PDF, HTML, MD, CSV)."""
 
     def __init__(self, exports_dir: Optional[str] = None):
-        self.exports_dir = Path(exports_dir or DEFAULT_EXPORTS_DIR)
+        self.exports_dir = Path(exports_dir or get_settings().exports_dir or DEFAULT_EXPORTS_DIR)
         self.exports_dir.mkdir(parents=True, exist_ok=True)
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self._executor = ThreadPoolExecutor(max_workers=4)

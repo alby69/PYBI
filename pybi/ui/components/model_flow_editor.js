@@ -2,7 +2,7 @@ import { VueFlow, Handle, Panel, useVueFlow } from 'https://cdn.jsdelivr.net/npm
 
 export default {
     template: `
-        <div style="width: 100%; height: 100%; min-height: 600px; position: relative;" class="model-flow-editor-container border rounded-lg bg-slate-50 overflow-hidden">
+        <div style="width: 100%; height: 100%; min-height: 600px; position: relative; background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 20px 20px;" class="model-flow-editor-container border border-slate-300 rounded-lg overflow-hidden">
             <VueFlow
                 v-model:nodes="localNodes"
                 v-model:edges="localEdges"
@@ -31,33 +31,49 @@ export default {
 
                 <template #node-table_card="props">
                     <div
-                        class="table-card bg-white border-2 rounded-lg shadow-md min-w-[220px] max-w-[280px] overflow-hidden transition-all duration-150"
-                        :class="props.selected ? 'border-blue-600 ring-2 ring-blue-200' : 'border-slate-300 hover:border-slate-400'"
+                        class="table-card bg-white border rounded-lg shadow-lg min-w-[220px] max-w-[280px] overflow-visible transition-all duration-150"
+                        :class="props.selected ? 'border-teal-700 ring-2 ring-teal-200' : 'border-slate-300 hover:border-teal-500'"
                     >
+                        <Handle
+                            type="target"
+                            id="__table_target__"
+                            position="left"
+                            style="width: 12px; height: 12px; background: #64748b; border: 2px solid white; left: -6px; top: 50%;"
+                        />
+                        <Handle
+                            type="source"
+                            id="__table_source__"
+                            position="right"
+                            style="width: 12px; height: 12px; background: #0f766e; border: 2px solid white; right: -6px; top: 50%;"
+                        />
                         <!-- Table Header -->
-                        <div class="bg-slate-800 text-white px-3 py-2 flex items-center justify-between cursor-move">
+                        <div
+                            class="text-white px-3 py-2 rounded-t-md flex items-center justify-between cursor-move"
+                            :class="props.data.is_fact ? 'bg-teal-800' : 'bg-slate-700'"
+                        >
                             <div class="flex items-center gap-1.5 font-semibold text-sm truncate">
-                                <span>📊</span>
+                                <span>{{ props.data.is_fact ? '▦' : '▤' }}</span>
                                 <span class="truncate">{{ props.data.label || props.id }}</span>
                             </div>
-                            <span class="text-[10px] text-slate-300 font-mono bg-slate-700 px-1.5 py-0.5 rounded">
-                                {{ props.data.source_table || props.id }}
-                            </span>
+                            <span class="text-[10px] text-white/80 font-mono bg-black/20 px-1.5 py-0.5 rounded">{{ props.data.is_fact ? 'FACT' : 'DIM' }}</span>
+                        </div>
+                        <div class="px-3 py-1 border-b border-slate-100 bg-slate-50 text-[10px] text-slate-500 font-mono truncate">
+                            Source: {{ props.data.source_table || props.id }}
                         </div>
 
                         <!-- Table Columns -->
-                        <div class="p-1.5 bg-slate-50 flex flex-col gap-1 max-h-[300px] overflow-y-auto">
+                        <div class="p-1.5 bg-white flex flex-col gap-1 max-h-[300px] overflow-y-auto rounded-b-md">
                             <div
                                 v-for="col in (props.data.columns || [])"
                                 :key="col.name"
-                                class="column-row relative flex items-center justify-between px-2 py-1 text-xs bg-white border border-slate-200 rounded hover:bg-blue-50 transition-colors"
+                                class="column-row relative flex items-center justify-between px-2 py-1.5 text-xs bg-white border border-slate-200 rounded hover:bg-teal-50 hover:border-teal-200 transition-colors"
                             >
                                 <!-- Target Handle (Left) -->
                                 <Handle
                                     type="target"
                                     :id="col.name"
                                     position="left"
-                                    style="width: 10px; height: 10px; background: #2563eb; border: 2px solid white; left: -6px;"
+                                    style="width: 10px; height: 10px; background: #64748b; border: 2px solid white; left: -6px;"
                                 />
 
                                 <div class="flex items-center gap-1 font-mono text-slate-800 truncate">
@@ -71,7 +87,7 @@ export default {
                                     type="source"
                                     :id="col.name"
                                     position="right"
-                                    style="width: 10px; height: 10px; background: #2563eb; border: 2px solid white; right: -6px;"
+                                    style="width: 10px; height: 10px; background: #0f766e; border: 2px solid white; right: -6px;"
                                 />
                             </div>
 

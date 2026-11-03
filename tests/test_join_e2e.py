@@ -72,3 +72,145 @@ def test_power_query_editor_loads(page):
 def test_get_data_opens_upload_file_chooser(page):
     with page.expect_file_chooser():
         page.get_by_role('button', name='Get Data').click()
+
+
+def test_query_panel_commands(page):
+    page.once('dialog', lambda dialog: dialog.accept('E2E Query'))
+    page.get_by_role('button', name='New Query').click()
+    query_row = page.locator('.queries-pane .group.relative').filter(has_text='E2E Query').first
+    expect(query_row).to_be_visible()
+    query_row.click()
+    expect(page.get_by_text('Active Table: E2E Query')).to_be_visible()
+
+    query_row.locator('button[title="Query actions"]').click()
+    page.get_by_text('📋 Duplicate', exact=True).click()
+    duplicate_row = page.locator('.queries-pane .group.relative').filter(has_text='E2E Query_copy').first
+    expect(duplicate_row).to_be_visible()
+
+    query_row.locator('button[title="Query actions"]').click()
+    page.get_by_text('🔗 Reference', exact=True).click()
+    reference_row = page.locator('.queries-pane .group.relative').filter(has_text='E2E Query_ref').first
+    expect(reference_row).to_be_visible()
+
+    query_row.locator('button[title="Query actions"]').click()
+    page.once('dialog', lambda dialog: dialog.accept('Renamed Query'))
+    page.get_by_text('✏️ Rename', exact=True).click()
+    renamed_row = page.locator('.queries-pane .group.relative').filter(has_text='Renamed Query').first
+    expect(renamed_row).to_be_visible()
+    expect(page.get_by_text('Query renamed to "Renamed Query".')).to_be_visible()
+
+    renamed_row.locator('button[title="Query actions"]').click()
+    page.once('dialog', lambda dialog: dialog.accept('Archive'))
+    page.get_by_text('📁 Move to Group', exact=True).click()
+    expect(page.get_by_text('📁 Archive')).to_be_visible()
+    expect(page.get_by_text('Query "Renamed Query" moved to group "Archive".')).to_be_visible()
+
+    page.locator('.queries-pane input').fill('E2E Query_ref')
+    expect(reference_row).to_be_visible()
+    expect(renamed_row).not_to_be_visible()
+    page.locator('.queries-pane input').fill('')
+
+    renamed_row.locator('button[title="Query actions"]').click()
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.get_by_text('🗑️ Delete', exact=True).click()
+    expect(renamed_row).not_to_be_visible()
+
+
+def test_model_editor_can_remove_selected_table(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    bindings = page.locator('.vue-flow__edge-path').evaluate_all("edges => edges.map(edge => { const hasHandle = (node, id) => [...document.querySelectorAll('.vue-flow__handle')].some(handle => handle.dataset.nodeid === node && handle.dataset.handleid === id); const source = edge.getAttribute('source'); const target = edge.getAttribute('target'); const sourceHandle = edge.getAttribute('sourceHandleId'); const targetHandle = edge.getAttribute('targetHandleId'); return { sourceAttached: hasHandle(source, sourceHandle), targetAttached: hasHandle(target, targetHandle) }; })")
+    assert bindings and all(edge['sourceAttached'] and edge['targetAttached'] for edge in bindings)
+    table_node = page.locator('.vue-flow__node').filter(has_text='sales').first
+    expect(table_node).to_be_visible(timeout=20000)
+    table_node.click()
+    expect(page.get_by_text('Proprietà Tabella')).to_be_visible()
+
+    stores_node = page.locator('.vue-flow__node').filter(has_text='stores').first
+    expect(stores_node).to_be_visible()
+    box = stores_node.bounding_box()
+    page.mouse.move(box['x'] + 100, box['y'] + 12)
+    page.mouse.down()
+    page.mouse.move(box['x'] + 220, box['y'] + 112, steps=8)
+    page.mouse.up()
+    expect(page.get_by_text('State: Position saved for "stores"')).to_be_visible(timeout=5000)
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__node').filter(has_text='stores')).to_be_visible()
+
+    table_node = page.locator('.vue-flow__node').filter(has_text='sales').first
+    table_node.click()
+    page.get_by_role('button', name='Rimuovi tabella dal modello').click()
+    expect(page.locator('.vue-flow__node').filter(has_text='sales')).to_have_count(0)
+    expect(page.locator('.vue-flow__edge')).to_have_count(0)
+    expect(page.get_by_text('Tabella "sales" rimossa dal modello')).to_be_visible()
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__node').filter(has_text='sales')).to_have_count(0)
+    stores_node = page.locator('.vue-flow__node').filter(has_text='stores').first
+    expect(stores_node).to_be_visible()
+    stores_node.click()
+    page.get_by_role('button', name='Rimuovi tabella dal modello').click()
+    expect(page.locator('.vue-flow__node')).to_have_count(0)
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__node')).to_have_count(0)
+
+
+def test_model_editor_relationship_columns_follow_selected_table(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    page.get_by_role('button', name='Generate from Schema').click()
+    page.locator('.vue-flow__edge-path').first.wait_for()
+    page.locator('.vue-flow__edge-path').first.click()
+
+    from_table = page.get_by_role('combobox', name='Tabella di Origine (From Table)')
+    from_column = page.get_by_role('combobox', name='Campo di Origine (From Column)')
+    from_table.click()
+    page.get_by_role('option', name='stores', exact=True).click()
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('source', 'stores')
+    from_column.click()
+    from_columns_menu = page.locator('.q-menu').last
+    expect(from_columns_menu).to_contain_text('store_name')
+    expect(from_columns_menu).to_contain_text('country')
+    page.get_by_role('option', name='store_name', exact=True).click()
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('sourceHandleId', 'store_name')
+
+    to_table = page.get_by_role('combobox', name='Tabella di Destinazione (To Table)')
+    to_column = page.get_by_role('combobox', name='Campo di Destinazione (To Column)')
+    to_table.click()
+    page.get_by_role('option', name='sales', exact=True).click()
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('target', 'sales')
+    to_column.click()
+    to_columns_menu = page.locator('.q-menu').last
+    expect(to_columns_menu).to_contain_text('region')
+    page.get_by_role('option', name='sale_id', exact=True).click()
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('targetHandleId', 'sale_id')
+
+
+def test_model_editor_relationships_delete_from_manager_and_properties(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    page.get_by_role('button', name='Generate from Schema').click()
+    edge = page.locator('.vue-flow__edge-path').first
+    expect(edge).to_be_visible()
+    initial_count = page.locator('.vue-flow__edge-path').count()
+
+    page.get_by_role('button', name='Gestisci relazioni').click()
+    expect(page.get_by_text('sales.store_id  →  stores.store_id')).to_be_visible()
+    page.locator('.relationship-entry').first.get_by_role('button', name='Elimina', exact=True).click()
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(initial_count - 1)
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(initial_count - 1)
+
+    page.get_by_role('button', name='Generate from Schema').click()
+    edge = page.locator('.vue-flow__edge-path').first
+    expect(edge).to_be_visible()
+    sidebar_count = page.locator('.vue-flow__edge-path').count()
+    edge.click()
+    page.get_by_role('button', name='Elimina Relazione').click()
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(sidebar_count - 1)
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(sidebar_count - 1)

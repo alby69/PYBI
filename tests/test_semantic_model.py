@@ -18,7 +18,20 @@ from pybi.core.semantic_model import (
 from pybi.dashboard.binding import DataBinder
 from pybi.semantic.engine import SemanticQueryResolver
 from pybi.semantic.models import SemanticQueryRequest
+from pybi.semantic.schema import SemanticColumn as ModelColumn, SemanticTable as ModelTable
+from pybi.ui.pages.model_editor import _resolve_relationship_handle
 from pybi.ui.components.widget_data import bind_widget_data
+
+
+def test_model_editor_resolves_relationship_columns_to_node_handles():
+    table = ModelTable(
+        name="orders",
+        source_table="orders_source",
+        columns=[ModelColumn(name="Customer", column_name="customer_id")],
+    )
+
+    assert _resolve_relationship_handle(table, "customer_id", "__table_source__") == "Customer"
+    assert _resolve_relationship_handle(table, "deleted_id", "__table_source__") == "__table_source__"
 
 
 def test_semantic_model_instantiation_and_yaml_roundtrip():

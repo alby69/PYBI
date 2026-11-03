@@ -112,3 +112,5 @@ def test_power_query_custom_column_modal_structure():
     assert "CASE WHEN" in content
     assert "functionCatalog" in content
     assert "newColumnName" in content
+    assert "@click=\"insertColumn(col)\"" in content
+    assert "String(column).replace(/\"/g, '\"\"')" in content

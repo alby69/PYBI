@@ -11,8 +11,11 @@
 - **✨ Novità: Vista Modello in stile Power BI:**
   - **Canvas grafico Vue Flow per la gestione delle relazioni:** Creazione grafica delle relazioni fra tabelle tramite trascinamento diretto (drag-and-drop) a livello di singolo campo/colonna.
   - **Visualizzazione differenziata delle relazioni:** Linee continue per relazioni attive (`is_active: true`) e tratteggiate (`stroke-dasharray: 5,5`) per relazioni inattive.
-  - **Pannello delle Proprietà Reattivo a Destra:** Selezione interattiva di Tabella/Campo di Origine e Destinazione con aggiornamento dinamico delle colonne, modifica della Cardinalità (`1:1`, `1:*`, `*:1`, `*:*`), del Tipo di Join (`LEFT`, `INNER`, `RIGHT`, `FULL`) e dello stato Attivo.
-  - **Finestra Modale "Gestisci relazioni" & Autodetect:** Dialogo centralizzato con pulsante **"Rileva automaticamente"** (Autodetect) che analizza la struttura del modello per proporre relazioni valide in base a nomi di colonna e tipi di dato corrispondenti.
+  - **Pannello Proprietà Reattivo:** Cambiare tabella aggiorna subito le colonne disponibili; cardinalità (`1:1`, `1:*`, `*:1`, `*:*`), join (`LEFT`, `INNER`, `RIGHT`, `FULL`) e stato vengono salvati quando modificati.
+  - **Gestione Relazioni:** Il dialogo elenca ogni collegamento con estremi, cardinalità, join e stato, e permette di aprire le proprietà o eliminare la singola relazione. Le eliminazioni dal dialogo o dal pannello rimuovono subito l'arco e persistono al reload.
+  - **Connessioni Resilienti:** Gli archi si agganciano agli handle della colonna semantica o fisica; se la colonna non esiste più, usano un handle sul bordo della tabella invece di finire nel vuoto.
+  - **Autodetect e Layout:** Il rilevamento propone relazioni in base ai nomi e ai tipi delle colonne. Le posizioni delle tabelle trascinate vengono salvate nel modello.
+  - **Rimozione Tabella:** Rimuove la tabella dal modello e le relazioni e regole RLS collegate, senza cancellare il file sorgente.
   ![Vista Modello Relazioni](screenshots/model_view_relationships.png)
 
 - **Miglioramenti UI/UX Editor ETL & Dashboard (Report):**
@@ -22,6 +25,8 @@
     - **Rilevamento e Selezione Campi:** Feedback visivo con banner di avviso ambrato se la fonte dati è vuota o non elaborata, pulsante di aggiornamento rapido 🔄 per ricaricare le colonne della fonte e supporto alla digitazione manuale dei campi (`with_input=True`).
   - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.
   - **State Management dei Passaggi Applicati per Tabella:** Gestione indipendente dello stato `appliedStepsByTable` nello store Vue (`uiStore.js`) e nel Power Query Editor, per conservare ed aggiornare i passaggi specifici di ciascuna tabella sorgente selezionata.
+  - **Importazione e Query:** `Get Data` apre il selettore del pulsante Upload della pagina. New, Duplicate, Reference, Rename, Move to Group e Delete aggiornano l'elenco reattivo del pannello Query.
+  - **Colonne Calcolate:** I campi inseriti da Available Columns usano identificatori DuckDB quotati e con virgolette escape (`"nome colonna"`), evitando errori di preview causati da nomi o spazi.
   - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).
 - **Potenziamento Engine ETL Backend:** Supporto completo all'operatore di concatenazione standard DuckDB `||` e alla funzione `CONCAT()` durante la creazione di colonne calcolate (`Add Custom Column`).
 - **Fondamenta Fase 6 (Enterprise Parity & Hardening):**
@@ -47,7 +52,7 @@
 
 ## 🏢 Enterprise Features
 
-- **Semantic Model (`semantic_model.yaml`):** Multi-table relationship definitions (`1:1`, `1:*`, `*:1`), hierarchies, and calculated measures.
+- **Semantic Model (`semantic_model.yaml`):** Multi-table relationship definitions (`1:1`, `1:*`, `*:1`), hierarchies, calculated measures, and saved Model View positions.
 - **Dynamic Row-Level Security (RLS):** Contextual `WHERE` filter injection based on authenticated JWT claims (`allowed_regions`, `user_id`).
 - **Enterprise Connectors & DirectQuery:** Live query execution on external databases (Snowflake, BigQuery, Postgres) via DuckDB secrets and SQLAlchemy.
 - **ALM & Project Portability (`.pybi` Bundles):** Export and import full project bundles (layouts, ETL DAGs, semantic models, data) as `.pybi` packages.
@@ -71,6 +76,12 @@ PyBI exposes a complete versioned REST API under `/api/v1`:
   - `POST /execute` — Execute ETL query pipeline
   - `POST /preview` — Preview intermediate dataframe results at step index (`step_index`)
   - `GET /jobs/{job_id}` — Poll background job status
+- **Semantic model (`/api/v1/projects/{project_id}/semantic`):**
+  - `GET /` and `PUT /` — Fetch or save the complete model, including table positions
+  - `POST /relationships` — Create or update one relationship
+  - `PUT /relationships` — Replace the relationship list
+  - `DELETE /relationships/{rel_id}` — Delete one relationship
+  - `POST /relationships/autodetect` — Propose relationships from the model schema
 - **Dashboards (`/api/v1/projects/{project_id}/dashboards`):**
   - `GET /` — List project dashboards
   - `POST /` — Create new dashboard
@@ -79,7 +90,7 @@ PyBI exposes a complete versioned REST API under `/api/v1`:
   - `DELETE /{dashboard_id}` — Delete dashboard
 - **Files (`/api/v1/projects/{project_id}/files`):**
   - `GET /` — List uploaded data files
-  - `POST /` — Upload CSV, Parquet, or SQLite file
+  - `POST /` — Upload a project data file (Power Query accepts CSV, Parquet, JSON, SQLite, and DB files)
   - `DELETE /{filename}` — Delete specific data file
 - **Viewer (`/api/v1/viewer`):**
   - `GET /{project_id}/dashboards/{dashboard_id}/data` — Read-only aggregated widget data for rendering

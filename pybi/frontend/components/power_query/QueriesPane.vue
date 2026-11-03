@@ -118,7 +118,7 @@ export default {
       return this.store.selectedTable || (this.tables.length > 0 ? this.tableName(this.tables[0]) : null);
     },
     queriesList() {
-      const source = this.tables.length > 0 ? this.tables : (this.store.tables || []);
+      const source = this.store.tables || [];
       const names = source.map(item => this.tableName(item)).filter(Boolean);
       return Array.from(new Set(names)).map(name => ({
         name,

@@ -63,7 +63,7 @@
               <button
                 v-for="col in availableColumns"
                 :key="col"
-                @click="insertToken(`[${col}]`)"
+                @click="insertColumn(col)"
                 class="px-2 py-0.5 rounded bg-slate-100 hover:bg-blue-100 text-slate-800 hover:text-blue-900 border border-slate-300 font-mono text-[10px] truncate"
                 :title="`Insert ${col}`"
               >
@@ -164,6 +164,10 @@ export default {
     },
     insertToken(token) {
       this.expression = (this.expression ? this.expression + ' ' : '') + token;
+    },
+    insertColumn(column) {
+      const escaped = String(column).replace(/"/g, '""');
+      this.insertToken(`"${escaped}"`);
     },
     submit() {
       if (!this.newColumnName || !this.expression) return;

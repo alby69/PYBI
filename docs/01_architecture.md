@@ -23,7 +23,7 @@ pybi/
 │   ├── filtering.py          # Shared SQL filter clause construction
 │   └── storage.py            # Project storage interface and file implementation
 ├── semantic/                 # Semantic schemas, DAX, relationships, RLS, model sync
-│   ├── schema.py             # Persisted semantic model and YAML serialization
+│   ├── schema.py             # Persisted semantic model, canvas positions, and YAML serialization
 │   ├── model_view.py         # Relationship-editor API schema
 │   ├── models.py             # Semantic query request/response adapters
 │   ├── dax_translator.py     # DAX-to-DuckDB translation registry
@@ -46,6 +46,11 @@ The old `pybi.model` and `pybi.models` modules re-export canonical semantic and
 report definitions for existing callers. The `backend` subpackages have been
 removed; migrate imports such as `backend.api.*` to their corresponding `pybi.*`
 paths. `python -m backend.main` remains as a deprecated launch command.
+
+The active Model View page is `pybi/ui/pages/model_editor.py`; its Vue Flow
+canvas is wrapped by `pybi/ui/components/model_flow_editor.js`. The separate
+`pybi/ui/components/model/ModelView.vue` component tree is not the page mounted
+at `/model-editor`.
 
 Several semantic schemas intentionally remain distinct because they represent
 different contracts: the persisted semantic model (`semantic.schema`), the

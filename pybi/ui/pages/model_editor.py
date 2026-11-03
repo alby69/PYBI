@@ -31,9 +31,9 @@ from pybi.ui.components.model_flow_editor import ModelFlowEditor
 
 
 def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
-    """Load semantic model for project, initializing default tables if none exist."""
+    """Load a project model, seeding example tables only before its first save."""
     model = _core_load_project_semantic_model(project_id)
-    if not model.tables:
+    if not model.tables and not os.path.exists(get_semantic_model_path(project_id)):
         t1 = SemanticTable(
             name='sales',
             source_table='sales_data',
@@ -73,6 +73,13 @@ def load_project_semantic_model(project_id: str) -> CoreSemanticModel:
     return model
 
 
+def _resolve_relationship_handle(table: SemanticTable, column_name: str, fallback_handle: str) -> str:
+    for column in table.columns:
+        if column_name in (column.name, column.column_name):
+            return column.name
+    return fallback_handle
+
+
 def create_model_editor_page():
     """Render the Semantic Model View & Visual Relationship Builder page (Power BI style)."""
     render_navbar(active='/model-editor')
@@ -81,12 +88,14 @@ def create_model_editor_page():
 
     current_model: CoreSemanticModel = CoreSemanticModel(name='default_model')
     selected_rel_index: Optional[int] = None
+    selected_table_name: Optional[str] = None
 
     def load_model_for_project():
-        nonlocal current_model, selected_rel_index
+        nonlocal current_model, selected_rel_index, selected_table_name
         pid = project_manager.project_id
         current_model = load_project_semantic_model(pid)
         selected_rel_index = None
+        selected_table_name = None
         refresh_model_ui()
         status_label.set_text(f'State: Model loaded for "{pid}"')
 
@@ -117,23 +126,32 @@ def create_model_editor_page():
 
         # Properties Panel Container (Right Sidebar ~ 25-30% width)
         with ui.card().classes('w-80 shadow-md border border-slate-300 p-4 bg-white rounded-lg flex flex-col gap-3').style('min-height: 600px; height: 620px;'):
-            ui.label('⚙️ Proprietà Relazione').classes('font-bold text-base text-slate-800 border-b pb-2 w-full')
+            properties_title = ui.label('⚙️ Proprietà Relazione').classes('font-bold text-base text-slate-800 border-b pb-2 w-full')
 
-            prop_from_tbl = ui.select([], label='Tabella di Origine (From Table)').classes('w-full')
-            prop_from_col = ui.select([], label='Campo di Origine (From Column)').classes('w-full')
+            relationship_properties = ui.column().classes('w-full gap-3')
+            with relationship_properties:
+                prop_from_tbl = ui.select([], label='Tabella di Origine (From Table)').classes('w-full')
+                prop_from_col = ui.select([], label='Campo di Origine (From Column)').classes('w-full')
 
-            prop_to_tbl = ui.select([], label='Tabella di Destinazione (To Table)').classes('w-full')
-            prop_to_col = ui.select([], label='Campo di Destinazione (To Column)').classes('w-full')
+                prop_to_tbl = ui.select([], label='Tabella di Destinazione (To Table)').classes('w-full')
+                prop_to_col = ui.select([], label='Campo di Destinazione (To Column)').classes('w-full')
 
-            prop_cardinality = ui.select(['1:1', '1:*', '*:1', '*:*'], label='Cardinalità', value='*:1').classes('w-full')
-            prop_join_type = ui.select(['LEFT', 'INNER', 'RIGHT', 'FULL'], label='Tipo di Join', value='LEFT').classes('w-full')
+                prop_cardinality = ui.select(['1:1', '1:*', '*:1', '*:*'], label='Cardinalità', value='*:1').classes('w-full')
+                prop_join_type = ui.select(['LEFT', 'INNER', 'RIGHT', 'FULL'], label='Tipo di Join', value='LEFT').classes('w-full')
 
-            with ui.row().classes('w-full items-center justify-between pt-1'):
-                ui.label('Stato Attivo (Active)').classes('text-xs font-semibold text-slate-700')
-                prop_is_active = ui.switch(value=True).props('dense color=primary')
+                with ui.row().classes('w-full items-center justify-between pt-1'):
+                    ui.label('Stato Attivo (Active)').classes('text-xs font-semibold text-slate-700')
+                    prop_is_active = ui.switch(value=True).props('dense color=primary')
 
-            with ui.row().classes('w-full gap-2 mt-auto pt-3 border-t'):
-                ui.button('Elimina Relazione', on_click=lambda: delete_selected_relationship()).props('color=negative icon=delete flat dense').classes('w-full')
+                with ui.row().classes('w-full gap-2 mt-auto pt-3 border-t'):
+                    ui.button('Elimina Relazione', on_click=lambda: delete_selected_relationship()).props('color=negative icon=delete flat dense').classes('w-full')
+
+            table_properties = ui.column().classes('w-full gap-3')
+            with table_properties:
+                selected_table_label = ui.label('').classes('text-sm font-semibold text-slate-800 break-all')
+                ui.label('La rimozione elimina la tabella dal modello e rimuove le relazioni e le regole RLS collegate. Il file sorgente non viene cancellato.').classes('text-xs text-slate-500')
+                ui.button('Rimuovi tabella dal modello', on_click=lambda: delete_selected_table()).props('color=negative icon=delete dense').classes('w-full')
+            table_properties.set_visibility(False)
 
     # Accordion Sections for Measures, RLS Rules, and YAML Preview
     with ui.expansion('📐 Calculated Measures & Row-Level Security (RLS)', icon='security').classes('w-full q-mb-md bg-white border rounded-lg'):
@@ -141,11 +159,16 @@ def create_model_editor_page():
 
     yaml_preview_container = ui.expansion('📄 View/Edit YAML Specification', icon='code').classes('w-full q-mb-md bg-white border rounded-lg')
 
-    def save_model():
+    def persist_model_state(message: str):
         pid = project_manager.project_id
         filepath = save_project_semantic_model(pid, current_model)
+        status_label.set_text(message)
+        return filepath
+
+    def save_model():
+        pid = project_manager.project_id
+        filepath = persist_model_state(f'State: Saved model for "{pid}"')
         ui.notify(f'Semantic model saved to {os.path.basename(filepath)}', type='positive')
-        status_label.set_text(f'State: Saved model for "{pid}"')
         refresh_model_ui()
 
     def auto_generate_schema():
@@ -246,6 +269,14 @@ def create_model_editor_page():
         current_model.tables = tables
         # Include ETL query outputs (e.g. "tab_dati") alongside raw data files.
         sync_etl_outputs_into_model(pid, current_model)
+        table_names = {table.name for table in current_model.tables}
+        current_model.relationships = [
+            relationship for relationship in current_model.relationships
+            if relationship.from_table in table_names and relationship.to_table in table_names
+        ]
+        current_model.rls_rules = [rule for rule in current_model.rls_rules if rule.target_table in table_names]
+        if current_model.default_table not in table_names:
+            current_model.default_table = current_model.tables[0].name if current_model.tables else None
         # Autodetect relationships between newly generated tables
         new_rels = autodetect_relationships(current_model.tables, current_model.relationships)
         if new_rels:
@@ -256,36 +287,37 @@ def create_model_editor_page():
 
     def update_columns_for_table(table_name: str, dropdown_target: ui.select):
         tbl = current_model.get_table(table_name)
-        if tbl:
-            cols = [c.name for c in tbl.columns]
-            dropdown_target.options = cols
-            if cols and dropdown_target.value not in cols:
-                dropdown_target.value = cols[0]
-        else:
-            dropdown_target.options = []
+        cols = [column.name for column in tbl.columns] if tbl else []
+        current_value = dropdown_target.value
+        selected_value = current_value if current_value in cols else (cols[0] if cols else None)
+        dropdown_target.set_options(cols, value=selected_value)
 
     def on_from_table_change(e):
         update_columns_for_table(e.value, prop_from_col)
-        update_selected_relationship_from_ui()
+        update_selected_relationship_from_ui(from_table=e.value)
 
     def on_to_table_change(e):
         update_columns_for_table(e.value, prop_to_col)
-        update_selected_relationship_from_ui()
+        update_selected_relationship_from_ui(to_table=e.value)
 
-    prop_from_tbl.on('update:model-value', on_from_table_change)
-    prop_to_tbl.on('update:model-value', on_to_table_change)
-    prop_from_col.on('update:model-value', lambda e: update_selected_relationship_from_ui())
-    prop_to_col.on('update:model-value', lambda e: update_selected_relationship_from_ui())
-    prop_cardinality.on('update:model-value', lambda e: update_selected_relationship_from_ui())
-    prop_join_type.on('update:model-value', lambda e: update_selected_relationship_from_ui())
-    prop_is_active.on('update:model-value', lambda e: update_selected_relationship_from_ui())
+    prop_from_tbl.on_value_change(on_from_table_change)
+    prop_to_tbl.on_value_change(on_to_table_change)
+    prop_from_col.on_value_change(lambda e: update_selected_relationship_from_ui())
+    prop_to_col.on_value_change(lambda e: update_selected_relationship_from_ui())
+    prop_cardinality.on_value_change(lambda e: update_selected_relationship_from_ui())
+    prop_join_type.on_value_change(lambda e: update_selected_relationship_from_ui())
+    prop_is_active.on_value_change(lambda e: update_selected_relationship_from_ui())
 
     def populate_properties_panel(rel_idx: Optional[int]):
-        nonlocal selected_rel_index
+        nonlocal selected_rel_index, selected_table_name
         selected_rel_index = rel_idx
+        selected_table_name = None
+        properties_title.set_text('⚙️ Proprietà Relazione')
+        relationship_properties.set_visibility(True)
+        table_properties.set_visibility(False)
         tables = [t.name for t in current_model.tables]
-        prop_from_tbl.options = tables
-        prop_to_tbl.options = tables
+        prop_from_tbl.set_options(tables)
+        prop_to_tbl.set_options(tables)
 
         if rel_idx is not None and 0 <= rel_idx < len(current_model.relationships):
             r = current_model.relationships[rel_idx]
@@ -309,13 +341,13 @@ def create_model_editor_page():
                 prop_to_tbl.value = tables[1] if len(tables) > 1 else tables[0]
                 update_columns_for_table(prop_to_tbl.value, prop_to_col)
 
-    def update_selected_relationship_from_ui():
+    def update_selected_relationship_from_ui(from_table=None, to_table=None):
         if selected_rel_index is None or selected_rel_index < 0 or selected_rel_index >= len(current_model.relationships):
             return
         r = current_model.relationships[selected_rel_index]
-        r.from_table = prop_from_tbl.value or r.from_table
+        r.from_table = from_table or prop_from_tbl.value or r.from_table
         r.from_column = prop_from_col.value or r.from_column
-        r.to_table = prop_to_tbl.value or r.to_table
+        r.to_table = to_table or prop_to_tbl.value or r.to_table
         r.to_column = prop_to_col.value or r.to_column
         r.cardinality = prop_cardinality.value or r.cardinality
         r.join_type = prop_join_type.value or r.join_type
@@ -323,29 +355,96 @@ def create_model_editor_page():
 
         # Update edges visual style
         refresh_canvas_edges()
+        persist_model_state('State: Relationship updated')
 
     def delete_selected_relationship():
+        if selected_rel_index is not None:
+            delete_relationship_at(selected_rel_index)
+
+    def delete_relationship_at(rel_idx: int):
         nonlocal selected_rel_index
-        if selected_rel_index is not None and 0 <= selected_rel_index < len(current_model.relationships):
-            current_model.relationships.pop(selected_rel_index)
-            selected_rel_index = None
-            ui.notify('Relazione eliminata', type='info')
-            refresh_model_ui()
+        if rel_idx < 0 or rel_idx >= len(current_model.relationships):
+            return False
+        relationship = current_model.relationships.pop(rel_idx)
+        selected_rel_index = None
+        refresh_canvas_edges()
+        persist_model_state('State: Relationship deleted')
+        refresh_model_ui()
+        ui.notify(
+            f'Relazione {relationship.from_table}.{relationship.from_column} → '
+            f'{relationship.to_table}.{relationship.to_column} eliminata',
+            type='positive',
+        )
+        return True
+
+    def handle_node_click(e):
+        nonlocal selected_rel_index, selected_table_name
+        node = e.args.get('node', {})
+        node_data = node.get('data') or {}
+        selected_table_name = node.get('id') or node_data.get('name')
+        if not selected_table_name:
+            return
+        selected_rel_index = None
+        table = current_model.get_table(selected_table_name)
+        if table:
+            properties_title.set_text('⚙️ Proprietà Tabella')
+            selected_table_label.set_text(f'{table.name} · sorgente: {table.source_table}')
+            relationship_properties.set_visibility(False)
+            table_properties.set_visibility(True)
+
+    def delete_selected_table():
+        nonlocal selected_rel_index, selected_table_name
+        table_name = selected_table_name
+        if not table_name or not current_model.get_table(table_name):
+            return
+        current_model.tables = [table for table in current_model.tables if table.name != table_name]
+        current_model.relationships = [
+            relationship for relationship in current_model.relationships
+            if relationship.from_table != table_name and relationship.to_table != table_name
+        ]
+        current_model.rls_rules = [rule for rule in current_model.rls_rules if rule.target_table != table_name]
+        if current_model.default_table == table_name:
+            current_model.default_table = current_model.tables[0].name if current_model.tables else None
+        selected_rel_index = None
+        selected_table_name = None
+        save_model()
+        ui.notify(f'Tabella "{table_name}" rimossa dal modello', type='positive')
+
+    def handle_node_drag_stop(e):
+        node = e.args.get('node', {})
+        position = node.get('position') or {}
+        table = current_model.get_table(node.get('id'))
+        if not table or 'x' not in position or 'y' not in position:
+            return
+        table.position_x = float(position['x'])
+        table.position_y = float(position['y'])
+        save_project_semantic_model(project_manager.project_id, current_model)
+        status_label.set_text(f'State: Position saved for "{table.name}"')
 
     def refresh_canvas_edges():
         edges = []
         for idx, r in enumerate(current_model.relationships):
+            from_table = current_model.get_table(r.from_table)
+            to_table = current_model.get_table(r.to_table)
+            if not from_table or not to_table:
+                continue
             card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
             jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
             is_act = getattr(r, 'is_active', True)
+            edge_color = '#0f766e' if is_act else '#94a3b8'
 
             edges.append({
                 'id': f'rel_{r.from_table}_{r.from_column}_{r.to_table}_{r.to_column}_{idx}',
                 'source': r.from_table,
-                'sourceHandle': r.from_column,
+                'sourceHandle': _resolve_relationship_handle(from_table, r.from_column, '__table_source__'),
+                'sourcePosition': 'right',
                 'target': r.to_table,
-                'targetHandle': r.to_column,
+                'targetHandle': _resolve_relationship_handle(to_table, r.to_column, '__table_target__'),
+                'targetPosition': 'left',
                 'label': card,
+                'labelStyle': {'fill': '#0f172a', 'fontWeight': 700, 'fontSize': '11px'},
+                'labelBgStyle': {'fill': '#ffffff', 'fillOpacity': 0.95},
+                'markerEnd': {'type': 'arrowclosed', 'color': edge_color},
                 'data': {
                     'rel_index': idx,
                     'from_table': r.from_table,
@@ -357,8 +456,8 @@ def create_model_editor_page():
                     'is_active': is_act,
                 },
                 'style': {
-                    'stroke': '#2563eb' if is_act else '#94a3b8',
-                    'strokeWidth': 2,
+                    'stroke': edge_color,
+                    'strokeWidth': 2.5,
                     'strokeDasharray': 'none' if is_act else '5,5',
                 }
             })
@@ -374,10 +473,14 @@ def create_model_editor_page():
             nodes.append({
                 'id': tbl.name,
                 'type': 'table_card',
-                'position': {'x': x_offset + (idx % 3) * 320, 'y': y_offset + (idx // 3) * 350},
+                'position': {
+                    'x': tbl.position_x if tbl.position_x is not None else x_offset + (idx % 3) * 320,
+                    'y': tbl.position_y if tbl.position_y is not None else y_offset + (idx // 3) * 350,
+                },
                 'data': {
                     'label': tbl.name,
                     'source_table': tbl.source_table,
+                    'is_fact': any(token in tbl.name.lower() for token in ('fact', 'sales', 'orders', 'transactions')),
                     'columns': [c.model_dump(mode='json') for c in tbl.columns],
                     'measures': [m.model_dump(mode='json') for m in tbl.measures],
                 }
@@ -456,6 +559,7 @@ def create_model_editor_page():
             current_model.relationships.append(new_rel)
             ui.notify(f'Relazione creata: {source_tbl}.{source_col} ➔ {target_tbl}.{target_col}', type='positive')
             populate_properties_panel(len(current_model.relationships) - 1)
+            persist_model_state('State: Relationship created')
             refresh_model_ui()
 
     def handle_edge_click(e):
@@ -476,34 +580,48 @@ def create_model_editor_page():
                     break
 
     flow_editor.on_connect(handle_on_connect)
+    flow_editor.on_node_click(handle_node_click)
+    flow_editor.on_node_drag_stop(handle_node_drag_stop)
     flow_editor.on_edge_click(handle_edge_click)
 
     # Dialogs
     def open_manage_relationships_dialog():
         dialog = ui.dialog()
-        with dialog, ui.card().classes('w-[650px] p-4 gap-3'):
-            ui.label('Gestisci Relazioni').classes('text-lg font-bold text-slate-800')
+        with dialog, ui.card().classes('w-[min(90vw,850px)] max-h-[85vh] p-4 gap-3'):
+            with ui.row().classes('w-full items-center justify-between border-b border-slate-200 pb-2'):
+                with ui.column().classes('gap-0'):
+                    ui.label('Gestisci relazioni').classes('text-lg font-bold text-slate-800')
+                    ui.label(f'{len(current_model.relationships)} relazioni nel modello').classes('text-xs text-slate-500')
+                ui.button(icon='close', on_click=dialog.close).props('flat round dense aria-label="Chiudi"')
 
-            rel_rows = []
-            for idx, r in enumerate(current_model.relationships):
-                card = r.cardinality.value if isinstance(r.cardinality, Cardinality) else str(r.cardinality)
-                jtype = r.join_type.value if isinstance(r.join_type, JoinType) else str(r.join_type)
-                rel_rows.append({
-                    'id': idx,
-                    'from': f'{r.from_table}.{r.from_column}',
-                    'cardinality': card,
-                    'to': f'{r.to_table}.{r.to_column}',
-                    'join_type': jtype,
-                    'active': '✅ Active' if getattr(r, 'is_active', True) else '❌ Inactive'
-                })
-            cols = [
-                {'name': 'from', 'label': 'From Key', 'field': 'from', 'align': 'left'},
-                {'name': 'cardinality', 'label': 'Cardinality', 'field': 'cardinality', 'align': 'center'},
-                {'name': 'to', 'label': 'To Key', 'field': 'to', 'align': 'left'},
-                {'name': 'join_type', 'label': 'Join Type', 'field': 'join_type', 'align': 'center'},
-                {'name': 'active', 'label': 'Status', 'field': 'active', 'align': 'center'},
-            ]
-            ui.table(columns=cols, rows=rel_rows, row_key='id').classes('w-full')
+            if not current_model.relationships:
+                ui.label('Nessuna relazione definita. Collega due colonne nel canvas o usa il rilevamento automatico.').classes(
+                    'w-full rounded border border-dashed border-slate-300 bg-slate-50 p-5 text-center text-sm text-slate-500'
+                )
+            else:
+                with ui.column().classes('w-full gap-2 overflow-y-auto'):
+                    for idx, relationship in enumerate(current_model.relationships):
+                        cardinality = relationship.cardinality.value if isinstance(relationship.cardinality, Cardinality) else str(relationship.cardinality)
+                        join_type = relationship.join_type.value if isinstance(relationship.join_type, JoinType) else str(relationship.join_type)
+                        active = getattr(relationship, 'is_active', True)
+                        with ui.row().classes('relationship-entry w-full items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2'):
+                            with ui.column().classes('min-w-0 flex-grow gap-0'):
+                                ui.label(f'{relationship.from_table}.{relationship.from_column}  →  {relationship.to_table}.{relationship.to_column}').classes(
+                                    'truncate font-mono text-xs font-semibold text-slate-800'
+                                )
+                                ui.label(f'{cardinality} · {join_type} · {"Attiva" if active else "Inattiva"}').classes(
+                                    'text-[11px] text-slate-500'
+                                )
+                            ui.button(
+                                'Proprietà',
+                                icon='tune',
+                                on_click=lambda index=idx: select_relationship_from_manager(index, dialog),
+                            ).props('flat dense color=primary')
+                            ui.button(
+                                'Elimina',
+                                icon='delete',
+                                on_click=lambda index=idx: delete_relationship_from_manager(index, dialog),
+                            ).props('flat dense color=negative')
 
             def run_autodetect():
                 new_rels = autodetect_relationships(current_model.tables, current_model.relationships)
@@ -520,6 +638,14 @@ def create_model_editor_page():
                 with ui.row().classes('gap-2'):
                     ui.button('Chiudi', on_click=dialog.close).props('flat dense')
         dialog.open()
+
+    def select_relationship_from_manager(rel_idx: int, dialog):
+        populate_properties_panel(rel_idx)
+        dialog.close()
+
+    def delete_relationship_from_manager(rel_idx: int, dialog):
+        if delete_relationship_at(rel_idx):
+            dialog.close()
 
     def open_add_measure_dialog():
         tables = [t.name for t in current_model.tables]

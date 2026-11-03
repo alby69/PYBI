@@ -41,6 +41,27 @@ def test_post_etl_preview_invalid_sql_expression(client):
     assert "syntax error" in response.json()["detail"].lower() or "errore" in response.json()["detail"].lower() or "error" in response.json()["detail"].lower()
 
 
+def test_post_etl_preview_calculated_column_with_quoted_identifier(client):
+    payload = {
+        "source_table": "sales",
+        "steps": [
+            {
+                "step_id": "step_calculated",
+                "step_type": "add_custom_column",
+                "parameters": {"new_column": "double_price", "expression": '"price" * 2'},
+            }
+        ],
+        "limit": 10,
+    }
+
+    response = client.post("/api/v1/projects/proj_001/etl/preview", json=payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "double_price" in data["columns"]
+    assert data["rows"][0]["double_price"] == 200.0
+
+
 def test_save_and_get_etl_query(client):
     query_payload = {
         "query_name": "Cleaned Sales",

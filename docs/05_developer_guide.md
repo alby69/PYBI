@@ -30,7 +30,36 @@ development uses a randomly generated, process-local key.
 python -m pytest
 ```
 
-## 3. Extending the DAX Engine
+## 3. Power Query and Model View
+
+Power Query is served at `/power-query`. Select or create a project before
+uploading a source. The Home ribbon's **Get Data** command opens the page-header
+uploader; the file is stored in the selected project. The query pane supports
+creating, selecting, duplicating, referencing, renaming, grouping, and deleting
+queries. Its list is driven by the reactive UI store, so query actions are
+visible immediately.
+Groups created with **Move to Group** organize the current pane and are not
+stored in the semantic model; use the ribbon's **Save** command to persist the
+current query definition and its transformation steps.
+
+Custom column formulas are DuckDB SQL expressions. Use double-quoted SQL
+identifiers for column references. The **Available Columns** buttons insert and
+escape those identifiers automatically; for example, a column named `Order ID`
+is inserted as `"Order ID"`.
+
+Model View is served at `/model-editor`. Drag column handles to create
+relationships, select an edge to edit its endpoint tables/columns, cardinality,
+join type, or active state, and use **Gestisci relazioni** to open or delete an
+individual relationship. Relationship edits, creation, and deletion persist
+immediately. Deleting a table removes it from the semantic model along with
+relationships and RLS rules that reference it; it does not delete the source
+file. Table canvas positions are also persisted. **Generate from Schema** removes
+relationships and RLS rules that refer to tables no longer present.
+
+Focused browser coverage for these flows lives in `tests/test_join_e2e.py`.
+Run it with `python -m pytest tests/test_join_e2e.py` (Chromium required).
+
+## 4. Extending the DAX Engine
 
 Add DAX translations in `pybi/semantic/dax_translator.py`:
 
@@ -46,7 +75,7 @@ def _translate_product(args, model=None):
     return f"PRODUCT({arg})"
 ```
 
-## 4. Module Placement
+## 5. Module Placement
 
 - API DTOs and routes belong in `pybi.api`.
 - Persisted semantic definitions, DAX, relationships, RLS, and synchronization
@@ -65,7 +94,7 @@ def _translate_product(args, model=None):
 Before adding a new module, check whether an existing canonical module already
 owns that responsibility and add a focused test for its public contract.
 
-## 5. Running the Development Server
+## 6. Running the Development Server
 
 ```bash
 python -m pybi.main

@@ -121,9 +121,6 @@ export default {
       return useUiStore();
     },
     tables() {
-      if (this.tablesProp.length > 0) {
-        return this.tablesProp.map(table => (typeof table === 'string' ? table : table.name)).filter(Boolean);
-      }
       return this.store.tables || [];
     },
     mergeTables() {
@@ -310,10 +307,12 @@ export default {
     handleSelectQuery(tableName) {
       this.store.setStatus(`Query "${tableName}" selected.`);
     },
-    handlePaneAction({ action, table }) {
+    handlePaneAction({ action, table, group }) {
       if (action === 'deleted') this.store.setStatus(`Query "${table}" deleted.`);
       if (action === 'duplicated') this.store.setStatus(`Query duplicated as "${table}".`);
       if (action === 'referenced') this.store.setStatus(`Reference query "${table}" created.`);
+      if (action === 'renamed') this.store.setStatus(`Query renamed to "${table}".`);
+      if (action === 'moved') this.store.setStatus(`Query "${table}" moved to group "${group}".`);
     },
     handleStepSelected() {},
     handleEditStepSettings({ step, index }) {

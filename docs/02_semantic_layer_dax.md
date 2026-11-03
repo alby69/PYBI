@@ -35,6 +35,21 @@ rls_rules:
     expression: "Region = '{user.allowed_regions}'"
 ```
 
+### Model View Editing
+
+The `/model-editor` canvas supports column-level relationship creation and
+selection. Relationship properties include endpoint tables and columns,
+cardinality, join type, and active state. Changing either endpoint table refreshes
+the corresponding column choices. Relationship creation, property changes, and
+deletion are persisted immediately; **Gestisci relazioni** provides per-row
+property and delete actions.
+
+Removing a table from the semantic model also removes its relationships and RLS
+rules, but leaves the project data file intact. `position_x` and `position_y` on
+semantic tables are optional canvas metadata used to restore table layout.
+Relationship handles resolve either the semantic column `name` or physical
+`column_name`; if neither is present, the editor uses a table-edge handle.
+
 ---
 
 ## 2. DAX-to-SQL Translation Engine (`DaxEngine`)

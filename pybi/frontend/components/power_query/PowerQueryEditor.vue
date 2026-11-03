@@ -202,7 +202,7 @@ export default {
     handleRibbonAction({ action, payload }) {
       const firstColumn = this.store.profilingColumn || this.columns[0];
       if (action === 'get-data') {
-        this.$emit('request-get-data');
+        window.dispatchEvent(new Event('pybi:request-data-upload'));
       } else if (action === 'undo') {
         this.store.undo();
       } else if (action === 'redo') {

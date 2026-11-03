@@ -123,10 +123,6 @@ def create_power_query_page():
                 applied_steps_by_table=applied,
                 project_id=project_id,
             ).classes("w-full h-full")
-            editor.on(
-                "request-get-data",
-                lambda: ui.notify("Use the Upload button in the page header to add a data source.", type="info"),
-            )
         status_label.set_text(
             f"{len(tables)} data source(s) · project '{project_id or 'none'}'"
         )
@@ -155,12 +151,19 @@ def create_power_query_page():
     with ui.row().classes("w-full items-center gap-3 flex-wrap bg-slate-50 border border-slate-200 rounded px-3 py-2"):
         project_manager = ProjectManager(value="", on_switch=handle_project_switch)
         ui.separator().props("vertical")
-        ui.upload(
+        upload = ui.upload(
             on_upload=handle_upload,
             label="Upload data source",
             auto_upload=True,
             multiple=False,
         ).props("accept=.csv,.parquet,.json,.sqlite,.db dense outlined").classes("w-64")
+        ui.add_head_html(
+            f'''<script>
+            window.addEventListener('pybi:request-data-upload', () => {{
+                document.getElementById('c{upload.id}')?.querySelector('input[type="file"]')?.click();
+            }});
+            </script>'''
+        )
         ui.button(
             "Manage Files",
             icon="folder",

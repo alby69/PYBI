@@ -67,3 +67,8 @@ def test_power_query_editor_loads(page):
     expect(page.get_by_text('Power Query Editor').first).to_be_visible()
     expect(page.get_by_text('Query Settings').first).to_be_visible()
     expect(page.get_by_role('button', name='Execute')).to_be_visible()
+
+
+def test_get_data_opens_upload_file_chooser(page):
+    with page.expect_file_chooser():
+        page.get_by_role('button', name='Get Data').click()

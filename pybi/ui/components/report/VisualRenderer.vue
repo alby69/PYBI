@@ -150,6 +150,18 @@
               :r="type === 'scatter_chart' ? 2.2 : 1.2"
               :fill="colors[index % colors.length]"
             />
+            <g v-if="dataLabelsVisible" class="pointer-events-none">
+              <template v-for="(point, pointIndex) in series.rawPoints" :key="`${series.name}-label-${pointIndex}`">
+                <text
+                  :x="point.x"
+                  :y="dataLabelPosition === 'inside' ? point.y + 2.5 : point.y - 2.5"
+                  :fill="dataLabelStyle.color"
+                  :font-size="dataLabelStyle.fontSize"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                >{{ formatNumber(series.values[pointIndex]) }}</text>
+              </template>
+            </g>
           </template>
         </svg>
         <div v-if="categories.length && xAxisVisible" class="flex shrink-0 justify-between gap-1 overflow-hidden" :style="xAxisLabelStyle">
@@ -280,6 +292,7 @@ const colors = computed(() => {
 });
 const dataLabels = computed(() => properties.value.dataLabels || {});
 const dataLabelsVisible = computed(() => !!dataLabels.value.show);
+const dataLabelPosition = computed(() => String(dataLabels.value.position || 'auto').toLowerCase());
 const dataLabelStyle = computed(() => ({
   color: dataLabels.value.color || '#605e5c',
   fontSize: `${Number(dataLabels.value.fontSize) || 10}px`,
@@ -415,6 +428,7 @@ const lineSeries = computed(() => {
       name: series.name,
       rawPoints,
       points: rawPoints.map(point => `${point.x},${point.y}`).join(' '),
+      values: series.values,
     };
   });
 });
@@ -507,6 +521,7 @@ watch(() => props.visual.id, () => { selectedSlicerValues.value = []; });
       dataLabels,
       dataLabelStyle,
       dataLabelsVisible,
+      dataLabelPosition,
       legend,
       legendStyle,
       legendWrapperStyle,

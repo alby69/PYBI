@@ -126,6 +126,21 @@
             </div>
           </details>
 
+          <details v-if="['line_chart', 'area_chart', 'combo_chart', 'scatter_chart'].includes(visualType)" class="format-section">
+            <summary class="format-section-title">📈 Linee</summary>
+            <div class="space-y-1 p-2">
+              <label class="format-row"><span>Mostra</span><input type="checkbox" :checked="showPoints" class="h-3 w-3 accent-blue-600" @change="patch('showPoints', $event.target.checked)" /></label>
+              <label class="format-row"><span>Grandezza</span><input :value="pointSize" type="number" step="0.5" min="0.1" max="10" class="format-control" @change="patch('pointSize', Number($event.target.value))" /></label>
+              <label class="format-row"><span>Forma</span>
+                <select :value="pointShape" class="format-control" @change="patch('pointShape', $event.target.value)">
+                  <option value="circle">Circle</option>
+                  <option value="square">Square</option>
+                  <option value="diamond">Diamond</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
           <details class="format-section">
             <summary class="format-section-title">🗂 Legenda</summary>
             <div class="space-y-1 p-2">
@@ -340,6 +355,16 @@ const yAxis = computed(() => props.value.yAxis || {});
 const gridlines = computed(() => props.value.gridlines || {});
 const lineWidth = computed(() => Number(props.value.lineWidth) || 1.8);
 const visualType = computed(() => String(visual.value?.type || '').toLowerCase());
+const showPoints = computed(() => {
+  const p = props.value || {};
+  return p.showPoints !== false;
+});
+const pointSize = computed(() => {
+  const p = props.value || {};
+  const defaultSize = type.value === 'scatter_chart' ? 2.2 : 1.2;
+  return Number(p.pointSize) || defaultSize;
+});
+const pointShape = computed(() => String(props.value?.pointShape || 'circle').toLowerCase());
 const border = computed(() => props.value.border || {});
 const shadow = computed(() => props.value.shadow || {});
 const header = computed(() => props.value.header || {});
@@ -483,6 +508,9 @@ function applyFx() {
       labels,
       lineWidth,
       visualType,
+      showPoints,
+      pointSize,
+      pointShape,
       legend,
       xAxis,
       yAxis,

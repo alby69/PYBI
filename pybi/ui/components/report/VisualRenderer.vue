@@ -154,14 +154,16 @@
               stroke-linejoin="round"
               stroke-linecap="round"
             />
-            <circle
-              v-for="(point, pointIndex) in series.rawPoints"
-              :key="`${series.name}-${pointIndex}`"
-              :cx="point.x"
-              :cy="point.y"
-              :r="type === 'scatter_chart' ? 2.2 : 1.2"
-              :fill="colors[index % colors.length]"
-            />
+            <g v-if="showPoints">
+              <circle
+                v-for="(point, pointIndex) in series.rawPoints"
+                :key="`${series.name}-${pointIndex}`"
+                :cx="point.x"
+                :cy="point.y"
+                :r="pointSize"
+                :fill="colors[index % colors.length]"
+              />
+            </g>
             <g v-if="dataLabelsVisible" class="pointer-events-none">
               <template v-for="(point, pointIndex) in series.rawPoints" :key="`${series.name}-label-${pointIndex}`">
                 <text
@@ -307,6 +309,9 @@ const dataLabelsVisible = computed(() => !!dataLabels.value.show);
 const dataLabelPosition = computed(() => String(dataLabels.value.position || 'auto').toLowerCase());
 const lineWidth = computed(() => Number(properties.value.lineWidth) || 1.8);
 const yAxisTicks = computed(() => [0, 0.2, 0.4, 0.6, 0.8, 1].map(fraction => ({ fraction, value: maxValue.value * fraction })));
+const showPoints = computed(() => properties.value.showPoints !== false);
+const pointSize = computed(() => Number(properties.value.pointSize) || (type.value === 'scatter_chart' ? 2.2 : 1.2));
+const pointShape = computed(() => String(properties.value.pointShape || 'circle').toLowerCase());
 const dataLabelStyle = computed(() => ({
   color: dataLabels.value.color || '#605e5c',
   fontSize: `${Number(dataLabels.value.fontSize) || 10}px`,
@@ -538,6 +543,9 @@ watch(() => props.visual.id, () => { selectedSlicerValues.value = []; });
       dataLabelPosition,
       lineWidth,
       yAxisTicks,
+      showPoints,
+      pointSize,
+      pointShape,
       legend,
       legendStyle,
       legendWrapperStyle,

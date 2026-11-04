@@ -7,6 +7,8 @@ from nicegui import ui
 from pybi.ui.components.navbar import render_navbar
 from pybi.ui.components.project_manager import ProjectManager
 from pybi.ui.components.report_registry import ReportMainShell
+from pybi.ui.shortcuts import render_shortcuts_help_button
+from pybi.ui.theme import default_theme
 
 THEME_CSS_PATH = Path(__file__).resolve().parents[1] / "assets" / "powerbi-theme.css"
 
@@ -28,14 +30,22 @@ def create_report_editor_page(initial_project: str = "default") -> None:
             if action in {"create", "delete", "select", "rename"}:
                 ui.notify(f'Progetto "{project_id}" caricato', type="info")
 
+        # Big banner header, aligned with the Power Query Editor page header.
+        with ui.row().classes("w-full items-end justify-between q-mt-sm"):
+            with ui.column().classes("gap-0"):
+                ui.label("Report View").classes("text-2xl font-bold text-slate-900")
+                ui.label(
+                    "Canvas, pagine, filtri, visualizzazioni, formattazione e vista dati in stile Power BI."
+                ).classes("text-sm text-slate-600")
+            with ui.row().classes("items-center gap-2"):
+                render_shortcuts_help_button()
+                default_theme.render_toggle_button()
+
+        # Toolbar with the project selector.
         with ui.row().classes(
-            "w-full shrink-0 items-center gap-3 border-b border-slate-300 bg-slate-100 px-3 py-1"
+            "w-full shrink-0 items-center gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2"
         ):
             project_manager = ProjectManager(value=initial_project or "default", on_switch=handle_project_switch)
-            ui.label("Report View").classes("text-sm font-bold text-slate-700")
-            ui.label(
-                "Canvas, pagine, filtri, visualizzazioni, formattazione e vista dati in stile Power BI."
-            ).classes("text-xs text-slate-500")
             ui.space()
 
         shell = ReportMainShell(project_id=project_manager.project_id)

@@ -157,8 +157,9 @@ export default defineComponent({
             return `${field.table || ''}|${field.column || field.name || ''}|${field.kind || 'column'}|${field.aggregation || 'SUM'}`;
           },
           set(value) {
+            search.value = '';
             if (!value) {
-              emit('update', { field: null, title: '' });
+              emit('update', { field: null, title: '', values: [], value: [] });
               return;
             }
             const [table, column, kind, aggregation] = String(value).split('|');
@@ -166,8 +167,10 @@ export default defineComponent({
             emit('update', {
               field: { ...source, table, column, name: column, kind: kind || source.kind || 'column', aggregation: aggregation || 'SUM' },
               title: source.label || column,
+              values: [],
+              value: [],
+              conditions: [{ operator: 'eq', value: '', value2: '' }],
             });
-            emit('load-options', '');
           },
         });
 
@@ -428,6 +431,7 @@ export default defineComponent({
     function updateFilter(scope, filter, patch) {
       store.updateFilter(scope, filter.id, patch, scope === 'visual' ? store.primarySelectedId : null);
       if (patch.field) loadOptions({ ...filter, ...patch }, '');
+      else if (patch.field === null) loadOptions(filter, '');
     }
 
     return {

@@ -29,8 +29,15 @@ from pybi.ui.theme import default_theme
 
 def create_dashboard_editor_page():
     render_navbar(active='/dashboard-editor')
-    ui.label('Dashboard Editor - Canvas & Chart Binding').classes('text-2xl font-bold q-mb-sm')
-    ui.label('Interactive dashboard layout builder using Vue Grid Layout with live DataBinder chart widgets.').classes('text-gray-600 q-mb-md')
+
+    # Big banner header, aligned with the Data (ETL) / Power Query Editor page header.
+    with ui.row().classes('w-full items-end justify-between q-mt-sm'):
+        with ui.column().classes('gap-0'):
+            ui.label('Dashboard Editor - Canvas & Chart Binding').classes('text-2xl font-bold text-slate-900')
+            ui.label('Interactive dashboard layout builder using Vue Grid Layout with live DataBinder chart widgets.').classes('text-sm text-slate-600')
+        with ui.row().classes('items-center gap-2'):
+            render_shortcuts_help_button()
+            default_theme.render_toggle_button()
 
     # Register initial sample data source if not registered
     try:
@@ -252,8 +259,6 @@ def create_dashboard_editor_page():
         ui.button(icon='undo', on_click=apply_undo).props('flat dense').tooltip('Undo (Ctrl+Z)')
         ui.button(icon='redo', on_click=apply_redo).props('flat dense').tooltip('Redo (Ctrl+Y)')
         search_bar.render_button()
-        render_shortcuts_help_button()
-        default_theme.render_toggle_button()
 
     # Dynamic Chart Widget bound to DataBinder
     with ui.card().classes('w-full q-mt-md p-4'):

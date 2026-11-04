@@ -1,5 +1,5 @@
 <template>
-  <div class="visualizations-pane flex h-full min-h-0 w-full min-w-0 flex-col border-l border-pbi-pane-border bg-pbi-pane text-pbi-text">
+  <div class="visualizations-pane flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden border-l border-pbi-pane-border bg-pbi-pane text-pbi-text">
     <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2" draggable="true" @dragstart="startPanelDrag($event)">
       <div class="flex items-center gap-1.5 text-pbi-md font-semibold">
         <span>📊</span><span>VISUALIZZAZIONI</span>

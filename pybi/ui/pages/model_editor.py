@@ -95,8 +95,15 @@ def _relationship_column_from_handle(handle_id: Optional[str], direction: str) -
 def create_model_editor_page():
     """Render the Semantic Model View & Visual Relationship Builder page (Power BI style)."""
     render_navbar(active='/model-editor')
-    ui.label('Model View - Visual Table & Relationship Editor').classes('text-2xl font-bold q-mb-xs')
-    ui.label('Power BI-style visual data modeling: field-level drag-and-drop relationships, reactive properties panel, autodetect & RLS management.').classes('text-gray-600 q-mb-md text-sm')
+
+    # Big banner header, aligned with the Data (ETL) / Power Query Editor page header.
+    with ui.row().classes('w-full items-end justify-between q-mt-sm'):
+        with ui.column().classes('gap-0'):
+            ui.label('Model View - Visual Table & Relationship Editor').classes('text-2xl font-bold text-slate-900')
+            ui.label('Power BI-style visual data modeling: field-level drag-and-drop relationships, reactive properties panel, autodetect & RLS management.').classes('text-sm text-slate-600')
+        with ui.row().classes('items-center gap-2'):
+            render_shortcuts_help_button()
+            default_theme.render_toggle_button()
 
     current_model: CoreSemanticModel = CoreSemanticModel(name='default_model')
     selected_rel_index: Optional[int] = None
@@ -129,9 +136,6 @@ def create_model_editor_page():
         ui.button('Adatta alla finestra', on_click=lambda: flow_editor.fit_view()).props('color=dark icon=zoom_out_map dense')
         ui.button('Add Measure', on_click=lambda: open_add_measure_dialog()).props('color=info icon=functions dense')
         ui.button('Add RLS Rule', on_click=lambda: open_add_rls_dialog()).props('color=warning icon=security dense')
-        ui.separator().props('vertical')
-        render_shortcuts_help_button()
-        default_theme.render_toggle_button()
 
     # Main Split View: Canvas on Left, Reactive Panel on Right
     with ui.row().classes('w-full gap-4 items-stretch q-mb-md').style('min-height: 600px; display: flex; flex-wrap: nowrap;'):

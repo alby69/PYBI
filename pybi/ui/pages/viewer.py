@@ -3,27 +3,25 @@
 from nicegui import ui
 
 from pybi.core.storage import default_storage
-from pybi.server.ui_schema import get_viewer_schema
 from pybi.ui.components.dashboard_grid import DashboardGrid
-from pybi.ui.components.dynamic_renderer import DynamicRenderer
 from pybi.ui.components.navbar import render_navbar
 from pybi.ui.components.widget_data import bind_widget_data, sample_layout
+from pybi.ui.shortcuts import render_shortcuts_help_button
+from pybi.ui.theme import default_theme
 
 
 def create_viewer_page(initial_project: str = ''):
     render_navbar(active='/viewer')
 
-    # Declarative UI schema header dynamic renderer
-    schema_data = get_viewer_schema(initial_project).model_dump()
-    DynamicRenderer(schema=schema_data, page_name='viewer')
-
-    with ui.row().classes('w-full items-center justify-between border-b pb-3 q-mb-md q-mt-md'):
+    # Big banner header, aligned with the Data (ETL) / Power Query Editor page header.
+    with ui.row().classes('w-full items-end justify-between q-mt-sm'):
         with ui.column().classes('gap-0'):
-            title_label = ui.label('🚀 Executive Sales Dashboard').classes('text-2xl font-bold text-gray-900')
-            ui.label('Public read-only viewer mode for end-user consultation. Choose a project and dashboard to consult.').classes('text-sm text-gray-500')
-
-        with ui.row().classes('gap-2 items-center'):
+            title_label = ui.label('🚀 Executive Sales Dashboard').classes('text-2xl font-bold text-slate-900')
+            ui.label('Public read-only viewer mode for end-user consultation. Choose a project and dashboard to consult.').classes('text-sm text-slate-600')
+        with ui.row().classes('items-center gap-2'):
             ui.chip('READ ONLY', color='positive', text_color='white', icon='lock').classes('font-bold text-xs')
+            render_shortcuts_help_button()
+            default_theme.render_toggle_button()
 
     def render_demo():
         title_label.set_text('🚀 Executive Sales Dashboard (demo)')

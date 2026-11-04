@@ -106,10 +106,9 @@ export default {
                             </div>
                         </div>
                         <button
-                            v-if="props.selected"
                             type="button"
-                            class="table-resize-handle nodrag nopan"
-                            style="position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 0 0 6px 0; background: transparent; cursor: nwse-resize; z-index: 20;"
+                            class="table-resize-handle nodrag nopan transition-opacity"
+                            :style="{ position: 'absolute', right: '2px', bottom: '2px', width: '18px', height: '18px', padding: '0', border: '0', borderRadius: '0 0 6px 0', background: 'transparent', cursor: 'nwse-resize', zIndex: '20', opacity: props.selected ? 1 : 0.8 }"
                             title="Ridimensiona tabella"
                             aria-label="Ridimensiona tabella"
                             @pointerdown.stop.prevent="startResize($event, props.id)"

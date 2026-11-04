@@ -47,6 +47,11 @@ function clone(value) {
   return value === undefined ? value : JSON.parse(JSON.stringify(value));
 }
 
+function isNumericField(field) {
+  const dataType = typeof field === 'string' ? field : field?.data_type;
+  return /int|numeric|decimal|number|float|double|real/i.test(String(dataType || ''));
+}
+
 function deepMerge(target, patch) {
   const output = { ...(target || {}) };
   Object.entries(patch || {}).forEach(([key, value]) => {
@@ -119,20 +124,23 @@ function normaliseField(field, tableName = '') {
       name: field,
       kind: 'column',
       data_type: 'string',
-      aggregation: 'SUM',
+      aggregation: 'COUNT',
       display_name: field,
     };
   }
   const column = field.column || field.name || '';
   const kind = field.kind || (field.is_measure ? 'measure' : 'column');
+  const dataType = field.data_type || (kind === 'measure' ? 'number' : 'string');
   return {
     ...clone(field),
     table: field.table || field.table_name || tableName,
     column,
     name: field.name || column,
     kind,
-    data_type: field.data_type || (kind === 'measure' ? 'number' : 'string'),
-    aggregation: field.aggregation || field.agg_func || (kind === 'measure' ? 'SUM' : 'SUM'),
+    data_type: dataType,
+    aggregation: field.aggregation || field.agg_func || (
+      kind === 'measure' || isNumericField(dataType) ? 'SUM' : 'COUNT'
+    ),
     display_name: field.display_name || field.label || field.name || column,
   };
 }
@@ -205,6 +213,14 @@ export const useReportStore = defineStore('report', {
     activeView: 'report',
     activePanel: 'visuals',
     panelOpen: { filters: true, visuals: true, data: true },
+    panelDock: { filters: 'left', data: 'left', visuals: 'right' },
+    panelSizes: {
+      filters: { width: 288, height: 260 },
+      data: { width: 288, height: 360 },
+      visuals: { width: 288, height: 360 },
+    },
+    panelStacked: false,
+    panelBottomHeight: 280,
     messages: [],
   }),
 
@@ -342,6 +358,51 @@ export const useReportStore = defineStore('report', {
 
     togglePanel(panel) {
       if (panel in this.panelOpen) this.panelOpen[panel] = !this.panelOpen[panel];
+    },
+
+    loadPanelPreferences() {
+      if (typeof window === 'undefined') return;
+      try {
+        const saved = window.localStorage.getItem('pybi-report-panel-layout');
+        if (!saved) return;
+        const preferences = JSON.parse(saved);
+        for (const panel of Object.keys(this.panelDock)) {
+          if (['left', 'right', 'bottom'].includes(preferences.panelDock?.[panel])) {
+            this.panelDock[panel] = preferences.panelDock[panel];
+          }
+          for (const dimension of ['width', 'height']) {
+            const size = Number(preferences.panelSizes?.[panel]?.[dimension]);
+            if (Number.isFinite(size) && size >= 180 && size <= 1600) {
+              this.panelSizes[panel][dimension] = size;
+            }
+          }
+        }
+        if (typeof preferences.panelStacked === 'boolean') this.panelStacked = preferences.panelStacked;
+        const bottomHeight = Number(preferences.panelBottomHeight);
+        if (Number.isFinite(bottomHeight) && bottomHeight >= 160 && bottomHeight <= 1600) {
+          this.panelBottomHeight = bottomHeight;
+        }
+      } catch (error) {
+        this.notify(`Preferenze dei pannelli non valide: ${error.message}`, 'warning');
+      }
+    },
+
+    setPanelDock(panel, dock) {
+      if (!(panel in this.panelDock) || !['left', 'right', 'bottom'].includes(dock)) return;
+      this.panelDock[panel] = dock;
+    },
+
+    setPanelStacked(stacked) {
+      this.panelStacked = Boolean(stacked);
+    },
+
+    setPanelSize(panel, dimension, value) {
+      if (!(panel in this.panelSizes) || !['width', 'height'].includes(dimension)) return;
+      this.panelSizes[panel][dimension] = Math.min(1600, Math.max(180, Math.round(Number(value) || 0)));
+    },
+
+    setPanelBottomHeight(value) {
+      this.panelBottomHeight = Math.min(1600, Math.max(160, Math.round(Number(value) || 0)));
     },
 
     setZoom(value) {
@@ -559,8 +620,14 @@ export const useReportStore = defineStore('report', {
         filters: options.filters || [],
       };
       if (options.field) {
-        const bucket = type === 'table' ? 'values' : type === 'card' || type === 'kpi' || type === 'gauge' ? 'values' : 'y_axis';
-        visual.data_buckets[bucket] = [normaliseField(options.field)];
+        const field = normaliseField(options.field);
+        const valueVisuals = ['table', 'matrix', 'card', 'kpi', 'gauge', 'multi_row_card', 'slicer'];
+        const bucket = valueVisuals.includes(type)
+          ? 'values'
+          : field.kind === 'measure' || isNumericField(field)
+            ? 'y_axis'
+            : 'x_axis';
+        visual.data_buckets[bucket] = [field];
       }
       page.visuals.push(visual);
       this.selectVisual(visual.id);

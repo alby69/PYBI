@@ -75,6 +75,8 @@ class SemanticTable(BaseModel):
     source_table: str = Field(..., description="Physical table or DuckDB view name")
     position_x: Optional[float] = Field(None, description="Horizontal position in the model editor")
     position_y: Optional[float] = Field(None, description="Vertical position in the model editor")
+    width: Optional[float] = Field(None, description="Width in the model editor")
+    height: Optional[float] = Field(None, description="Height in the model editor")
     columns: List[SemanticColumn] = Field(default_factory=list, description="Defined columns/dimensions")
     measures: List[SemanticMeasure] = Field(default_factory=list, description="Defined calculated measures")
     primary_key: Optional[List[str]] = Field(None, description="Primary key columns")

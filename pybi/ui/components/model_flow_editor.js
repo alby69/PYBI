@@ -13,6 +13,7 @@ export default {
                 @node-drag-stop="onNodeDragStop"
                 @node-click="onNodeClick"
                 @edge-click="onEdgeClick"
+                @pane-click="onPaneClick"
                 @connect="onConnect"
                 @nodes-change="emitChange"
                 @edges-change="emitChange"
@@ -31,7 +32,8 @@ export default {
 
                 <template #node-table_card="props">
                     <div
-                        class="table-card bg-white border rounded-lg shadow-lg min-w-[220px] max-w-[280px] overflow-visible transition-all duration-150"
+                        class="table-card relative flex flex-col bg-white border rounded-lg shadow-lg min-w-[220px] min-h-[160px] overflow-visible transition-all duration-150"
+                        style="width: 100%; height: 100%; box-sizing: border-box;"
                         :class="props.selected ? 'border-teal-700 ring-2 ring-teal-200' : 'border-slate-300 hover:border-teal-500'"
                     >
                         <Handle
@@ -62,7 +64,7 @@ export default {
                         </div>
 
                         <!-- Table Columns -->
-                        <div class="p-1.5 bg-white flex flex-col gap-1 max-h-[300px] overflow-y-auto rounded-b-md">
+                        <div class="table-columns min-h-0 flex-1 p-1.5 bg-white flex flex-col gap-1 overflow-y-auto rounded-b-md">
                             <div
                                 v-for="col in (props.data.columns || [])"
                                 :key="col.name"
@@ -71,7 +73,7 @@ export default {
                                 <!-- Target Handle (Left) -->
                                 <Handle
                                     type="target"
-                                    :id="col.name"
+                                    :id="'target:' + col.name"
                                     position="left"
                                     style="width: 10px; height: 10px; background: #64748b; border: 2px solid white; left: -6px;"
                                 />
@@ -85,7 +87,7 @@ export default {
                                 <!-- Source Handle (Right) -->
                                 <Handle
                                     type="source"
-                                    :id="col.name"
+                                    :id="'source:' + col.name"
                                     position="right"
                                     style="width: 10px; height: 10px; background: #0f766e; border: 2px solid white; right: -6px;"
                                 />
@@ -103,6 +105,17 @@ export default {
                                 </div>
                             </div>
                         </div>
+                        <button
+                            v-if="props.selected"
+                            type="button"
+                            class="table-resize-handle nodrag nopan"
+                            style="position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 0 0 6px 0; background: transparent; cursor: nwse-resize; z-index: 20;"
+                            title="Ridimensiona tabella"
+                            aria-label="Ridimensiona tabella"
+                            @pointerdown.stop.prevent="startResize($event, props.id)"
+                        >
+                            <span style="position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #0f766e; border-bottom: 2px solid #0f766e;"></span>
+                        </button>
                     </div>
                 </template>
             </VueFlow>
@@ -130,8 +143,12 @@ export default {
     data() {
         return {
             localNodes: [],
-            localEdges: []
+            localEdges: [],
+            resizeSession: null
         };
+    },
+    beforeUnmount() {
+        this.stopResize();
     },
     watch: {
         nodes: {
@@ -163,6 +180,53 @@ export default {
                 }
             }, 100);
         },
+        startResize(event, nodeId) {
+            const node = this.localNodes.find(item => item.id === nodeId);
+            const nodeElement = event.currentTarget.closest('.vue-flow__node');
+            if (!node || !nodeElement) return;
+
+            const viewport = nodeElement.closest('.vue-flow')?.querySelector('.vue-flow__viewport');
+            const transform = viewport ? getComputedStyle(viewport).transform : 'none';
+            const zoom = transform === 'none' ? 1 : new DOMMatrixReadOnly(transform).a;
+            const bounds = nodeElement.getBoundingClientRect();
+            this.resizeSession = {
+                nodeId,
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                startWidth: bounds.width / zoom,
+                startHeight: bounds.height / zoom,
+                zoom
+            };
+            window.addEventListener('pointermove', this.resizeNode);
+            window.addEventListener('pointerup', this.stopResize);
+            window.addEventListener('pointercancel', this.stopResize);
+        },
+        resizeNode(event) {
+            const session = this.resizeSession;
+            if (!session || event.pointerId !== session.pointerId) return;
+            const node = this.localNodes.find(item => item.id === session.nodeId);
+            if (!node) return;
+            const width = Math.max(220, session.startWidth + (event.clientX - session.startX) / session.zoom);
+            const height = Math.max(160, session.startHeight + (event.clientY - session.startY) / session.zoom);
+            node.style = { ...node.style, width: `${width}px`, height: `${height}px` };
+            node.width = width;
+            node.height = height;
+        },
+        stopResize(event) {
+            const session = this.resizeSession;
+            if (!session || (event?.pointerId !== undefined && event.pointerId !== session.pointerId)) return;
+            window.removeEventListener('pointermove', this.resizeNode);
+            window.removeEventListener('pointerup', this.stopResize);
+            window.removeEventListener('pointercancel', this.stopResize);
+            this.resizeSession = null;
+            const node = this.localNodes.find(item => item.id === session.nodeId);
+            if (!node) return;
+            this.$emit('node_resize_stop', {
+                node: { id: node.id, width: node.width, height: node.height },
+                nodes: this.localNodes
+            });
+        },
         onNodeClick(payload) {
             const node = payload && payload.node ? payload.node : null;
             if (!node) return;
@@ -179,6 +243,9 @@ export default {
                 edges: this.localEdges
             });
         },
+        onPaneClick() {
+            this.$emit('pane_click', {});
+        },
         onNodeDragStop(event) {
             this.$emit('node_drag_stop', {
                 node: event.node,
@@ -187,6 +254,12 @@ export default {
             this.emitChange();
         },
         onConnect(connection) {
+            const sourceColumn = connection.sourceHandle?.startsWith('source:')
+                ? connection.sourceHandle.slice('source:'.length)
+                : connection.sourceHandle;
+            const targetColumn = connection.targetHandle?.startsWith('target:')
+                ? connection.targetHandle.slice('target:'.length)
+                : connection.targetHandle;
             const newEdge = {
                 id: `rel_${connection.source}_${connection.sourceHandle}_${connection.target}_${connection.targetHandle}`,
                 source: connection.source,
@@ -196,9 +269,9 @@ export default {
                 label: '*:1',
                 data: {
                     from_table: connection.source,
-                    from_column: connection.sourceHandle,
+                    from_column: sourceColumn,
                     to_table: connection.target,
-                    to_column: connection.targetHandle,
+                    to_column: targetColumn,
                     cardinality: '*:1',
                     join_type: 'LEFT',
                     is_active: true

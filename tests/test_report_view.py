@@ -202,6 +202,34 @@ def test_report_visual_data_and_exports():
         assert b"A" in archive.read("xl/worksheets/sheet1.xml")
 
 
+def test_visual_data_for_categorical_field_without_measure_counts_rows():
+    _create_project_with_sales()
+    widget = _sample_layout()["pages"][0]["visuals"][0]
+    widget["data_buckets"] = {
+        "x_axis": [
+            {
+                "table": "sales",
+                "column": "category",
+                "name": "category",
+                "kind": "column",
+                "data_type": "string",
+                "aggregation": "COUNT",
+            }
+        ],
+        "y_axis": [],
+    }
+
+    response = client.post(
+        f"/api/v1/projects/{PROJECT_ID}/report/visual-data",
+        json={"widget": widget, "filters": []},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["columns"] == ["category", "value"]
+    assert {row["category"]: row["value"] for row in data["rows"]} == {"A": 2, "B": 1}
+
+
 def test_report_endpoints_require_existing_project():
     response = client.get("/api/v1/projects/does_not_exist/report")
     assert response.status_code == 404

@@ -1,13 +1,19 @@
 <template>
-  <div class="data-pane flex h-full min-h-0 w-72 shrink-0 flex-col border-r border-pbi-pane-border bg-pbi-pane text-pbi-text">
-    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2">
+  <div class="data-pane flex h-full min-h-0 w-full min-w-0 flex-col border-r border-pbi-pane-border bg-pbi-pane text-pbi-text">
+    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2" draggable="true" @dragstart="startPanelDrag($event)">
       <div class="flex items-center gap-1.5 text-pbi-md font-semibold">
         <span>🗂</span><span>DATI</span>
         <span class="rounded bg-slate-100 px-1 py-0.5 text-[9px] font-normal text-pbi-text-muted">{{ store.tables.length }}</span>
       </div>
-      <button class="pbi-btn pbi-btn-ghost" :title="collapsed ? 'Espandi pannello dati' : 'Comprimi pannello dati'" @click="collapsed = !collapsed">
-        {{ collapsed ? '›' : '‹' }}
-      </button>
+      <div class="flex items-center">
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a sinistra" @click="store.setPanelDock('data', 'left')">◧</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a destra" @click="store.setPanelDock('data', 'right')">◨</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta in basso" @click="store.setPanelDock('data', 'bottom')">▱</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Nascondi pannello" @click="store.togglePanel('data')">×</button>
+        <button class="pbi-btn pbi-btn-ghost" :title="collapsed ? 'Espandi pannello dati' : 'Comprimi pannello dati'" @click="collapsed = !collapsed">
+          {{ collapsed ? '›' : '‹' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="!collapsed" class="flex min-h-0 flex-1 flex-col">
@@ -430,6 +436,11 @@ async function refresh() {
   await store.fetchTables();
 }
 
+function startPanelDrag(event) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/x-pybi-pane', 'data');
+}
+
 onMounted(() => document.addEventListener('mousedown', closeMenu));
 onBeforeUnmount(() => document.removeEventListener('mousedown', closeMenu));
 
@@ -464,6 +475,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', closeMenu));
       openMeasureModal,
       saveMeasure,
       refresh,
+      startPanelDrag,
     };
   },
 };

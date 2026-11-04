@@ -51,6 +51,9 @@
         <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelOpen.visuals }" :title="localeStore.t('shell.visualizations')" @click="store.togglePanel('visuals')">
           <span>📊</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.visualizations') }}</span>
         </button>
+        <button class="ribbon-btn" :class="{ 'bg-blue-100 text-pbi-accent': store.panelStacked }" title="Impila o affianca i pannelli laterali" @click="store.setPanelStacked(!store.panelStacked)">
+          <span>☷</span><span class="hidden 2xl:inline">{{ store.panelStacked ? 'Affianca' : 'Impila' }}</span>
+        </button>
         <button class="ribbon-btn" :title="localeStore.t('shell.focus')" :disabled="!store.selectedVisual" @click="focusSelected">
           <span>⛶</span><span class="hidden 2xl:inline">{{ localeStore.t('shell.focus') }}</span>
         </button>
@@ -87,26 +90,66 @@
 
     <template v-else>
       <!-- Report View -->
-      <div v-if="store.activeView === 'report'" class="flex min-h-0 flex-1 overflow-hidden">
-        <div v-if="store.panelOpen.filters" class="h-full shrink-0">
-          <nicegui-FiltersPane />
-        </div>
-        <div v-if="store.panelOpen.data" class="h-full shrink-0">
-          <nicegui-DataPane />
+      <div v-if="store.activeView === 'report'" class="report-workspace flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div class="flex min-h-0 flex-1 overflow-hidden">
+          <aside
+            v-if="leftPanels.length"
+            class="dock-side"
+            :class="{ 'dock-stacked': store.panelStacked }"
+            :style="sideDockStyle('left')"
+            @dragover.prevent
+            @drop.prevent="dropPanel('left', $event)"
+          >
+            <template v-for="(panel, index) in leftPanels" :key="panel">
+              <div class="dock-pane" :style="paneStyle(panel, 'left')">
+                <component :is="panelComponents[panel]" class="h-full w-full" />
+              </div>
+              <div v-if="index < leftPanels.length - 1" class="dock-sash" :class="store.panelStacked ? 'dock-sash-row' : 'dock-sash-column'" @pointerdown.prevent="startDockResize($event, 'left', index)"></div>
+            </template>
+          </aside>
+
+          <main class="min-w-0 min-h-0 flex-1" @dragover.prevent @drop.prevent="dropPanel('right', $event)">
+            <nicegui-ReportCanvas :project-id="store.projectId" class="h-full w-full" />
+          </main>
+
+          <aside
+            v-if="rightPanels.length"
+            class="dock-side"
+            :class="{ 'dock-stacked': store.panelStacked }"
+            :style="sideDockStyle('right')"
+            @dragover.prevent
+            @drop.prevent="dropPanel('right', $event)"
+          >
+            <template v-for="(panel, index) in rightPanels" :key="panel">
+              <div class="dock-pane" :style="paneStyle(panel, 'right')">
+                <component :is="panelComponents[panel]" class="h-full w-full" />
+              </div>
+              <div v-if="index < rightPanels.length - 1" class="dock-sash" :class="store.panelStacked ? 'dock-sash-row' : 'dock-sash-column'" @pointerdown.prevent="startDockResize($event, 'right', index)"></div>
+            </template>
+          </aside>
         </div>
 
-        <div class="min-w-0 flex-1">
-          <nicegui-ReportCanvas :project-id="store.projectId" class="h-full w-full" />
-        </div>
-
-        <div v-if="store.panelOpen.visuals" class="h-full shrink-0">
-          <nicegui-VisualizationsPane />
-        </div>
+        <template v-if="bottomPanels.length">
+          <div class="bottom-dock-sash" title="Trascina per ridimensionare i pannelli inferiori" @pointerdown.prevent="startBottomResize"></div>
+          <aside
+            class="dock-bottom"
+            :style="{ height: `${store.panelBottomHeight}px` }"
+            @dragover.prevent
+            @drop.prevent="dropPanel('bottom', $event)"
+          >
+            <template v-for="(panel, index) in bottomPanels" :key="panel">
+              <div class="dock-pane" :style="paneStyle(panel, 'bottom')">
+                <component :is="panelComponents[panel]" class="h-full w-full" />
+              </div>
+              <div v-if="index < bottomPanels.length - 1" class="dock-sash dock-sash-column" @pointerdown.prevent="startDockResize($event, 'bottom', index)"></div>
+            </template>
+          </aside>
+        </template>
       </div>
 
       <!-- Data View -->
       <div v-else class="flex min-h-0 flex-1 overflow-hidden">
-        <nicegui-DataPane class="h-full" />
+        <nicegui-DataPane class="h-full w-72 shrink-0" />
         <nicegui-DataTableView class="h-full min-w-0 flex-1" />
       </div>
     </template>
@@ -134,7 +177,7 @@
 </template>
 
 <script>
-import { computed, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useReportStore } from 'pybi-report-store';
 import { useThemeStore } from 'pybi-theme-store';
 import { useLocaleStore } from 'pybi-locale-store';
@@ -151,6 +194,15 @@ const localeStore = useLocaleStore();
 
 const visualCount = computed(() => store.activePage?.visuals?.length || 0);
 const recentMessages = computed(() => store.messages.slice(-4));
+const panelComponents = {
+  filters: 'nicegui-FiltersPane',
+  data: 'nicegui-DataPane',
+  visuals: 'nicegui-VisualizationsPane',
+};
+const panelIds = ['filters', 'data', 'visuals'];
+const leftPanels = computed(() => panelIds.filter(panel => store.panelOpen[panel] && store.panelDock[panel] === 'left'));
+const rightPanels = computed(() => panelIds.filter(panel => store.panelOpen[panel] && store.panelDock[panel] === 'right'));
+const bottomPanels = computed(() => panelIds.filter(panel => store.panelOpen[panel] && store.panelDock[panel] === 'bottom'));
 const saveStatus = computed(() => {
   if (store.isSaving) return localeStore.t('shell.saving');
   if (store.isDirty) return localeStore.t('shell.unsaved');
@@ -160,6 +212,101 @@ const saveStatus = computed(() => {
   }
   return localeStore.t('shell.ready');
 });
+
+function paneSize(panel, dimension) {
+  return store.panelSizes[panel]?.[dimension] || 288;
+}
+
+function paneStyle(panel, dock) {
+  if (dock !== 'bottom' && store.panelStacked) {
+    const height = paneSize(panel, 'height');
+    return { width: '100%', height: `${height}px`, flex: `1 1 ${height}px`, minHeight: '180px' };
+  }
+  const width = paneSize(panel, 'width');
+  return { width: `${width}px`, flex: `0 1 ${width}px`, minWidth: '180px' };
+}
+
+function sideDockStyle(dock) {
+  const panels = dock === 'left' ? leftPanels.value : rightPanels.value;
+  const width = store.panelStacked
+    ? Math.max(...panels.map(panel => paneSize(panel, 'width')))
+    : panels.reduce((total, panel) => total + paneSize(panel, 'width'), 0) + Math.max(0, panels.length - 1) * 6;
+  return { width: `${width}px`, flex: `0 1 ${width}px`, maxWidth: '42vw' };
+}
+
+function dropPanel(dock, event) {
+  const panel = event.dataTransfer?.getData('application/x-pybi-pane');
+  if (panel) store.setPanelDock(panel, dock);
+}
+
+let resizeState = null;
+function startDockResize(event, dock, index) {
+  const panels = dock === 'left' ? leftPanels.value : dock === 'right' ? rightPanels.value : bottomPanels.value;
+  if (!panels[index + 1]) return;
+  const stacked = dock !== 'bottom' && store.panelStacked;
+  const dimension = stacked ? 'height' : 'width';
+  resizeState = {
+    dock,
+    dimension,
+    first: panels[index],
+    second: panels[index + 1],
+    start: dimension === 'width' ? event.clientX : event.clientY,
+    firstSize: paneSize(panels[index], dimension),
+    secondSize: paneSize(panels[index + 1], dimension),
+  };
+  window.addEventListener('pointermove', onDockResize);
+  window.addEventListener('pointerup', stopDockResize, { once: true });
+}
+
+function onDockResize(event) {
+  if (!resizeState) return;
+  if (resizeState.mode === 'bottom-height') {
+    store.setPanelBottomHeight(Math.min(window.innerHeight * 0.65, Math.max(160, resizeState.startHeight + resizeState.start - event.clientY)));
+    return;
+  }
+  const delta = (resizeState.dimension === 'width' ? event.clientX : event.clientY) - resizeState.start;
+  const next = Math.max(180, resizeState.firstSize + delta);
+  const adjustedDelta = next - resizeState.firstSize;
+  const other = Math.max(180, resizeState.secondSize - adjustedDelta);
+  store.setPanelSize(resizeState.first, resizeState.dimension, next);
+  store.setPanelSize(resizeState.second, resizeState.dimension, other);
+}
+
+function stopDockResize() {
+  window.removeEventListener('pointermove', onDockResize);
+  resizeState = null;
+}
+
+function startBottomResize(event) {
+  resizeState = {
+    mode: 'bottom-height',
+    start: event.clientY,
+    startHeight: store.panelBottomHeight,
+  };
+  window.addEventListener('pointermove', onDockResize);
+  window.addEventListener('pointerup', stopDockResize, { once: true });
+}
+
+let persistTimeout = null;
+watch(
+  () => [store.panelDock, store.panelSizes, store.panelStacked, store.panelBottomHeight],
+  () => {
+    clearTimeout(persistTimeout);
+    persistTimeout = setTimeout(() => {
+      try {
+        window.localStorage.setItem('pybi-report-panel-layout', JSON.stringify({
+          panelDock: store.panelDock,
+          panelSizes: store.panelSizes,
+          panelStacked: store.panelStacked,
+          panelBottomHeight: store.panelBottomHeight,
+        }));
+      } catch (error) {
+        store.notify(`Impossibile salvare le preferenze dei pannelli: ${error.message}`, 'warning');
+      }
+    }, 250);
+  },
+  { deep: true },
+);
 
 function messageClass(level) {
   if (level === 'error') return 'border-red-200 bg-red-50 text-red-800';
@@ -219,6 +366,7 @@ function goHome() {
 }
 
 onMounted(async () => {
+  store.loadPanelPreferences();
   themeStore.initialize();
   const localeLoad = localeStore.initialize();
   let dataLoad;
@@ -231,12 +379,22 @@ onMounted(async () => {
   themeStore.applyFromLayout(store.layout.theme);
 });
 
+onBeforeUnmount(() => {
+  clearTimeout(persistTimeout);
+  window.removeEventListener('pointermove', onDockResize);
+  stopDockResize();
+});
+
     return {
       store,
       themeStore,
       localeStore,
       visualCount,
       recentMessages,
+      panelComponents,
+      leftPanels,
+      rightPanels,
+      bottomPanels,
       saveStatus,
       messageClass,
       messageIcon,
@@ -247,6 +405,11 @@ onMounted(async () => {
       openDataView,
       changeTheme,
       goHome,
+      paneStyle,
+      sideDockStyle,
+      dropPanel,
+      startDockResize,
+      startBottomResize,
     };
   },
 };
@@ -268,5 +431,49 @@ onMounted(async () => {
 }
 .ribbon-btn:disabled {
   opacity: 0.4;
+}
+.dock-side {
+  display: flex;
+  min-width: 180px;
+  max-width: 42vw;
+  min-height: 0;
+  overflow: hidden;
+}
+.dock-side.dock-stacked {
+  flex-direction: column;
+}
+.dock-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.dock-sash,
+.bottom-dock-sash {
+  flex: 0 0 6px;
+  background: #f3f2f1;
+  touch-action: none;
+}
+.dock-sash:hover,
+.bottom-dock-sash:hover {
+  background: #118dff;
+}
+.dock-sash-column {
+  cursor: col-resize;
+}
+.dock-sash-row {
+  cursor: row-resize;
+}
+.bottom-dock-sash {
+  cursor: row-resize;
+}
+.dock-bottom {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 160px;
+  max-height: 65vh;
+  overflow: auto hidden;
+  border-top: 1px solid #d2d0ce;
+  background: white;
 }
 </style>

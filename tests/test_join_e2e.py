@@ -174,7 +174,7 @@ def test_model_editor_relationship_columns_follow_selected_table(page, server):
     expect(from_columns_menu).to_contain_text('store_name')
     expect(from_columns_menu).to_contain_text('country')
     page.get_by_role('option', name='store_name', exact=True).click()
-    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('sourceHandleId', 'store_name')
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('sourceHandleId', 'source:store_name')
 
     to_table = page.get_by_role('combobox', name='Tabella di Destinazione (To Table)')
     to_column = page.get_by_role('combobox', name='Campo di Destinazione (To Column)')
@@ -185,7 +185,7 @@ def test_model_editor_relationship_columns_follow_selected_table(page, server):
     to_columns_menu = page.locator('.q-menu').last
     expect(to_columns_menu).to_contain_text('region')
     page.get_by_role('option', name='sale_id', exact=True).click()
-    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('targetHandleId', 'sale_id')
+    expect(page.locator('.vue-flow__edge-path').first).to_have_attribute('targetHandleId', 'target:sale_id')
 
 
 def test_model_editor_relationships_delete_from_manager_and_properties(page, server):
@@ -214,3 +214,96 @@ def test_model_editor_relationships_delete_from_manager_and_properties(page, ser
     page.reload()
     page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
     expect(page.locator('.vue-flow__edge-path')).to_have_count(sidebar_count - 1)
+
+
+def test_model_editor_can_create_relationship_and_clear_properties(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    page.get_by_role('button', name='Generate from Schema').click()
+    expect(page.locator('.vue-flow__edge-path').first).to_be_visible()
+    expect(page.get_by_text('Seleziona una tabella o una relazione nel canvas per visualizzarne le proprietà.')).to_be_visible()
+
+    page.locator('.vue-flow__edge-path').first.click(force=True)
+    expect(page.get_by_role('combobox', name='Tabella di Origine (From Table)')).to_be_visible()
+    page.locator('.vue-flow__pane').click(position={'x': 20, 'y': 20})
+    expect(page.get_by_text('Seleziona una tabella o una relazione nel canvas per visualizzarne le proprietà.')).to_be_visible()
+    expect(page.get_by_role('combobox', name='Tabella di Origine (From Table)')).not_to_be_visible()
+
+    page.get_by_role('button', name='Nuova relazione').click()
+    page.get_by_role('button', name='Crea relazione').wait_for()
+    from_column = page.get_by_role('combobox', name='Colonna di origine')
+    from_column.click()
+    page.get_by_role('option', name='region', exact=True).click()
+    to_column = page.get_by_role('combobox', name='Colonna di destinazione')
+    to_column.click()
+    page.get_by_role('option', name='country', exact=True).click()
+    page.get_by_role('button', name='Crea relazione').click()
+
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(2)
+    created_edge = page.locator(
+        '.vue-flow__edge-path[sourceHandleId="source:region"][targetHandleId="target:country"]'
+    )
+    expect(created_edge).to_have_count(1)
+    attached_handles = created_edge.evaluate("""edge => {
+        const source = edge.getAttribute('source');
+        const target = edge.getAttribute('target');
+        const sourceHandle = edge.getAttribute('sourceHandleId');
+        const targetHandle = edge.getAttribute('targetHandleId');
+        const handles = [...document.querySelectorAll('.vue-flow__handle')];
+        return {
+            sourceAttached: handles.some(handle => handle.classList.contains('source')
+                && handle.dataset.nodeid === source && handle.dataset.handleid === sourceHandle),
+            targetAttached: handles.some(handle => handle.classList.contains('target')
+                && handle.dataset.nodeid === target && handle.dataset.handleid === targetHandle),
+        };
+    }""")
+    assert attached_handles == {'sourceAttached': True, 'targetAttached': True}
+    page.get_by_role('button', name='Gestisci relazioni').click()
+    expect(page.get_by_text('sales.region  →  stores.country', exact=True)).to_be_visible()
+    page.get_by_label('Chiudi').click()
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    expect(page.locator('.vue-flow__edge-path')).to_have_count(2)
+
+
+def test_model_editor_table_manager_opens_table_properties(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    page.get_by_role('button', name='Generate from Schema').click()
+    page.get_by_role('button', name='Gestisci tabelle').click()
+
+    sales_entry = page.locator('.table-management-entry').filter(has_text='sales').first
+    expect(sales_entry).to_contain_text('colonne')
+    sales_entry.get_by_role('button', name='Proprietà').click()
+    expect(page.get_by_text('Proprietà Tabella')).to_be_visible()
+    expect(page.get_by_text('sales · sorgente:')).to_be_visible()
+
+
+def test_model_editor_resizes_and_persists_table_dimensions(page, server):
+    page.goto(f'{server}/model-editor')
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    table = page.locator('.vue-flow__node').filter(has_text='sales').first
+    expect(table).to_be_visible()
+    table.click()
+    resize_handle = table.get_by_role('button', name='Ridimensiona tabella')
+    expect(resize_handle).to_be_visible()
+
+    before = table.bounding_box()
+    handle = resize_handle.bounding_box()
+    page.mouse.move(handle['x'] + handle['width'] / 2, handle['y'] + handle['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(handle['x'] + handle['width'] / 2 + 100, handle['y'] + handle['height'] / 2 + 80, steps=8)
+    page.mouse.up()
+
+    expect(page.get_by_text('State: Dimensions saved for "sales"')).to_be_visible(timeout=5000)
+    resized = table.bounding_box()
+    assert resized['width'] > before['width'] + 50
+    assert resized['height'] > before['height'] + 40
+    saved_dimensions = table.evaluate("node => ({width: node.style.width, height: node.style.height})")
+    assert saved_dimensions['width'] and saved_dimensions['height']
+
+    page.reload()
+    page.get_by_text('Model View - Visual Table & Relationship Editor').wait_for()
+    table = page.locator('.vue-flow__node').filter(has_text='sales').first
+    restored_dimensions = table.evaluate("node => ({width: node.style.width, height: node.style.height})")
+    assert restored_dimensions == saved_dimensions

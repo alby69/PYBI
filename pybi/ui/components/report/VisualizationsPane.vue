@@ -1,10 +1,15 @@
 <template>
-  <div class="visualizations-pane flex h-full min-h-0 w-72 flex-col border-l border-pbi-pane-border bg-pbi-pane text-pbi-text">
-    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2">
+  <div class="visualizations-pane flex h-full min-h-0 w-full min-w-0 flex-col border-l border-pbi-pane-border bg-pbi-pane text-pbi-text">
+    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2" draggable="true" @dragstart="startPanelDrag($event)">
       <div class="flex items-center gap-1.5 text-pbi-md font-semibold">
         <span>📊</span><span>VISUALIZZAZIONI</span>
       </div>
-      <button class="pbi-btn pbi-btn-ghost" title="Comprimi pannello" @click="store.togglePanel('visuals')">✕</button>
+      <div class="flex items-center">
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a sinistra" @click="store.setPanelDock('visuals', 'left')">◧</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a destra" @click="store.setPanelDock('visuals', 'right')">◨</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta in basso" @click="store.setPanelDock('visuals', 'bottom')">▱</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Nascondi pannello" @click="store.togglePanel('visuals')">×</button>
+      </div>
     </div>
 
     <template v-if="store.panelOpen.visuals">
@@ -243,6 +248,11 @@ function setType(type) {
   tab.value = 'fields';
 }
 
+function startPanelDrag(event) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('application/x-pybi-pane', 'visuals');
+}
+
 function onDragOver(bucket, event) {
   dragOverBucket.value = bucket;
   event.dataTransfer.dropEffect = 'move';
@@ -359,6 +369,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', closeFieldMenu))
       fieldIcon,
       fieldAggregation,
       setType,
+      startPanelDrag,
       onDragOver,
       onDrop,
       onChipDragStart,

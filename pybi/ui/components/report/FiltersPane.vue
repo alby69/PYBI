@@ -1,12 +1,18 @@
 <template>
-  <div class="filters-pane flex h-full min-h-0 w-72 flex-col border-r border-pbi-pane-border bg-pbi-pane text-pbi-text">
-    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2">
+  <div class="filters-pane flex h-full min-h-0 w-full min-w-0 flex-col border-r border-pbi-pane-border bg-pbi-pane text-pbi-text">
+    <div class="flex h-9 shrink-0 items-center justify-between border-b border-pbi-pane-border px-2" draggable="true" @dragstart="startPanelDrag($event)">
       <div class="flex items-center gap-1.5 text-pbi-md font-semibold">
         <span>🔎</span><span>FILTRI</span>
       </div>
-      <button class="pbi-btn pbi-btn-ghost" :title="collapsed ? 'Espandi filtri' : 'Comprimi filtri'" @click="collapsed = !collapsed">
-        {{ collapsed ? '›' : '‹' }}
-      </button>
+      <div class="flex items-center">
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a sinistra" @click="store.setPanelDock('filters', 'left')">◧</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta a destra" @click="store.setPanelDock('filters', 'right')">◨</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Sposta in basso" @click="store.setPanelDock('filters', 'bottom')">▱</button>
+        <button class="pbi-btn pbi-btn-ghost" title="Nascondi pannello" @click="store.togglePanel('filters')">×</button>
+        <button class="pbi-btn pbi-btn-ghost" :title="collapsed ? 'Espandi filtri' : 'Comprimi filtri'" @click="collapsed = !collapsed">
+          {{ collapsed ? '›' : '‹' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="!collapsed" class="min-h-0 flex-1 overflow-y-auto">
@@ -376,6 +382,11 @@ export default defineComponent({
       openSections[scope] = !openSections[scope];
     }
 
+    function startPanelDrag(event) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('application/x-pybi-pane', 'filters');
+    }
+
     function toggleExpanded(filter, scope) {
       expanded[filter.id] = !expanded[filter.id];
       if (expanded[filter.id] && String(filter.mode || filter.type || 'basic').replace('base', 'basic') === 'basic' && !valueOptions[filter.id]) {
@@ -433,6 +444,7 @@ export default defineComponent({
       loadOptions,
       addFilter,
       updateFilter,
+      startPanelDrag,
     };
   },
 });

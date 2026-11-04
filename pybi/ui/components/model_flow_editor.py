@@ -55,12 +55,20 @@ class ModelFlowEditor(ui.element, component='model_flow_editor.js'):
         self.on('node_drag_stop', handler)
         return self
 
+    def on_node_resize_stop(self, handler: Callable) -> 'ModelFlowEditor':
+        self.on('node_resize_stop', handler)
+        return self
+
     def on_node_click(self, handler: Callable) -> 'ModelFlowEditor':
         self.on('node_click', handler)
         return self
 
     def on_edge_click(self, handler: Callable) -> 'ModelFlowEditor':
         self.on('edge_click', handler)
+        return self
+
+    def on_pane_click(self, handler: Callable) -> 'ModelFlowEditor':
+        self.on('pane_click', handler)
         return self
 
     def on_connect(self, handler: Callable) -> 'ModelFlowEditor':

@@ -255,7 +255,6 @@ function startPanelDrag(event) {
 
 function onDragOver(bucket, event) {
   dragOverBucket.value = bucket;
-  event.dataTransfer.dropEffect = 'move';
 }
 
 function parseDragField(event) {

@@ -9,6 +9,13 @@ from fastapi.testclient import TestClient
 from pybi.api.main import app
 from pybi.core.report_storage import REPORT_LAYOUT_FILENAME, get_report_layout_path
 from pybi.core.storage import default_storage
+from pybi.semantic.model_sync import get_semantic_model_path
+from pybi.semantic.schema import (
+    SemanticColumn,
+    SemanticModel,
+    SemanticRelationship,
+    SemanticTable,
+)
 
 client = TestClient(app)
 PROJECT_ID = "v1_report_proj"
@@ -228,6 +235,217 @@ def test_visual_data_for_categorical_field_without_measure_counts_rows():
     data = response.json()
     assert data["columns"] == ["category", "value"]
     assert {row["category"]: row["value"] for row in data["rows"]} == {"A": 2, "B": 1}
+
+
+def test_visual_data_joins_fields_from_related_tables():
+    project_id = "v1_report_join_proj"
+    default_storage.delete_project(project_id)
+    try:
+        default_storage.save_project(project_id, name="Report Join Test")
+        default_storage.save_uploaded_file(
+            project_id,
+            "sales.csv",
+            b"store_id,amount\n1,100\n1,50\n2,200\n3,300\n",
+        )
+        default_storage.save_uploaded_file(
+            project_id,
+            "stores.csv",
+            b"store_id,Regione\n1,North\n2,South\n3,North\n",
+        )
+        model = SemanticModel(
+            name=project_id,
+            tables=[
+                SemanticTable(
+                    name="sales",
+                    source_table="sales",
+                    columns=[
+                        SemanticColumn(name="store_id", column_name="store_id", data_type="integer"),
+                        SemanticColumn(name="amount", column_name="amount", data_type="number"),
+                    ],
+                ),
+                SemanticTable(
+                    name="stores",
+                    source_table="stores",
+                    columns=[
+                        SemanticColumn(name="store_id", column_name="store_id", data_type="integer", is_key=True),
+                        SemanticColumn(name="Regione", column_name="Regione", data_type="string"),
+                    ],
+                ),
+            ],
+            relationships=[
+                SemanticRelationship(
+                    from_table="sales",
+                    from_column="store_id",
+                    to_table="stores",
+                    to_column="store_id",
+                    cardinality="*:1",
+                    join_type="LEFT",
+                    is_active=True,
+                )
+            ],
+        )
+        model.save_yaml_file(get_semantic_model_path(project_id))
+
+        widget = {
+            "id": "vis_join",
+            "type": "bar_chart",
+            "title": "Vendite per regione",
+            "position": {"x": 0, "y": 0, "width": 480, "height": 300, "z_index": 1},
+            "data_buckets": {
+                "x_axis": [
+                    {
+                        "table": "stores",
+                        "column": "Regione",
+                        "name": "Regione",
+                        "kind": "column",
+                        "data_type": "string",
+                        "aggregation": "COUNT",
+                    }
+                ],
+                "y_axis": [
+                    {
+                        "table": "sales",
+                        "column": "amount",
+                        "name": "amount",
+                        "kind": "column",
+                        "data_type": "number",
+                        "aggregation": "SUM",
+                    }
+                ],
+            },
+            "properties": {"table_name": "sales"},
+            "filters": [],
+        }
+
+        response = client.post(
+            f"/api/v1/projects/{project_id}/report/visual-data",
+            json={"widget": widget, "filters": []},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert {row["category"]: row["value"] for row in data["rows"]} == {"North": 450, "South": 200}
+        assert "JOIN" in data["generated_sql"]
+
+        filtered = {
+            "widget": widget,
+            "filters": [
+                {
+                    "field": {"table": "stores", "column": "Regione", "name": "Regione", "kind": "column"},
+                    "mode": "basic",
+                    "values": ["North"],
+                }
+            ],
+        }
+        response = client.post(
+            f"/api/v1/projects/{project_id}/report/visual-data",
+            json=filtered,
+        )
+        assert response.status_code == 200
+        assert {row["category"]: row["value"] for row in response.json()["rows"]} == {"North": 450}
+    finally:
+        default_storage.delete_project(project_id)
+
+
+def test_visual_data_without_bound_table_returns_empty_result():
+    _create_project_with_sales()
+    widget = {
+        "id": "vis_empty",
+        "type": "column_chart",
+        "title": "Nuovo visual",
+        "position": {"x": 0, "y": 0, "width": 480, "height": 300, "z_index": 1},
+        "data_buckets": {"x_axis": [], "y_axis": [], "legend": []},
+        "properties": {},
+        "filters": [],
+    }
+
+    response = client.post(
+        f"/api/v1/projects/{PROJECT_ID}/report/visual-data",
+        json={"widget": widget, "filters": []},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["columns"] == []
+    assert data["rows"] == []
+    assert data["row_count"] == 0
+    assert data["table_name"] is None
+
+
+def test_visual_data_loads_etl_output_table():
+    project_id = "v1_report_etl_proj"
+    output_table = "etl_out_test"
+    default_storage.delete_project(project_id)
+    try:
+        default_storage.save_project(
+            project_id,
+            name="Report ETL Test",
+            etl_dag={
+                "query_name": output_table,
+                "source": {"type": "csv", "path": "raw_sales.csv"},
+                "steps": [],
+            },
+        )
+        default_storage.save_uploaded_file(
+            project_id,
+            "raw_sales.csv",
+            b"Regione,Qta\nNord,10\nSud,20\nNord,5\n",
+        )
+        model = SemanticModel(
+            name=project_id,
+            tables=[
+                SemanticTable(
+                    name=output_table,
+                    source_table=output_table,
+                    columns=[
+                        SemanticColumn(name="Regione", column_name="Regione", data_type="string"),
+                        SemanticColumn(name="Qta", column_name="Qta", data_type="number"),
+                    ],
+                )
+            ],
+        )
+        model.save_yaml_file(get_semantic_model_path(project_id))
+
+        widget = {
+            "id": "vis_etl",
+            "type": "column_chart",
+            "title": "Qta per regione",
+            "position": {"x": 0, "y": 0, "width": 480, "height": 300, "z_index": 1},
+            "data_buckets": {
+                "x_axis": [
+                    {
+                        "table": output_table,
+                        "column": "Regione",
+                        "name": "Regione",
+                        "kind": "column",
+                        "data_type": "string",
+                        "aggregation": "COUNT",
+                    }
+                ],
+                "y_axis": [
+                    {
+                        "table": output_table,
+                        "column": "Qta",
+                        "name": "Qta",
+                        "kind": "column",
+                        "data_type": "number",
+                        "aggregation": "SUM",
+                    }
+                ],
+            },
+            "properties": {"table_name": output_table},
+            "filters": [],
+        }
+
+        response = client.post(
+            f"/api/v1/projects/{project_id}/report/visual-data",
+            json={"widget": widget, "filters": []},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert {row["category"]: row["value"] for row in data["rows"]} == {"Nord": 15, "Sud": 20}
+    finally:
+        default_storage.delete_project(project_id)
 
 
 def test_report_endpoints_require_existing_project():

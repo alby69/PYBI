@@ -71,15 +71,16 @@
 
       <!-- Pie / Donut -->
       <div v-else-if="type === 'pie_chart' || type === 'donut_chart'" class="flex flex-1 items-center justify-center gap-3 overflow-hidden p-2">
-        <div class="relative h-full max-h-[180px] w-1/2 min-w-[80px] max-w-[180px]">
+        <div class="relative h-full max-h-[180px] min-w-[80px] max-w-[180px]" :class="legendVisible ? 'w-1/2' : 'w-full'">
           <div class="absolute inset-0 rounded-full" :style="{ background: pieGradient }"></div>
           <div v-if="type === 'donut_chart'" class="absolute inset-[26%] rounded-full bg-white"></div>
         </div>
-        <div class="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+        <div v-if="legendVisible" class="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto" :style="legendStyle">
+          <div v-if="legend.title" class="font-semibold">{{ legend.title }}</div>
           <div v-for="(item, index) in pieItems" :key="item.label" class="flex items-center gap-1.5 truncate">
             <span class="h-2 w-2 shrink-0 rounded-sm" :style="{ backgroundColor: colors[index % colors.length] }"></span>
             <span class="truncate" :title="item.label">{{ item.label }}</span>
-            <span class="ml-auto shrink-0 text-pbi-text-muted">{{ item.percent.toFixed(1) }}%</span>
+            <span class="ml-auto shrink-0 opacity-75">{{ item.percent.toFixed(1) }}%</span>
           </div>
         </div>
       </div>
@@ -102,7 +103,28 @@
       <div v-else-if="['line_chart', 'area_chart', 'combo_chart', 'scatter_chart'].includes(type)" class="relative flex flex-1 flex-col overflow-hidden p-2">
         <svg class="h-full w-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
           <g v-if="gridlinesVisible">
-            <line v-for="tick in 5" :key="`h-${tick}`" x1="0" :y1="tick * 20" x2="100" :y2="tick * 20" stroke="#e1dfdd" stroke-width="0.4" />
+            <line
+              v-for="tick in 5"
+              :key="`h-${tick}`"
+              x1="0"
+              :y1="tick * 20"
+              x2="100"
+              :y2="tick * 20"
+              :stroke="gridlines.color || '#e1dfdd'"
+              :stroke-width="Number(gridlines.width) || 0.4"
+              :stroke-dasharray="gridlines.stroke === 'dashed' ? '2 2' : gridlines.stroke === 'dotted' ? '0.5 1.5' : undefined"
+            />
+            <line
+              v-for="tick in (gridlines.vertical ? 5 : 0)"
+              :key="`v-${tick}`"
+              :x1="tick * 20"
+              y1="0"
+              :x2="tick * 20"
+              y2="100"
+              :stroke="gridlines.color || '#e1dfdd'"
+              :stroke-width="Number(gridlines.width) || 0.4"
+              :stroke-dasharray="gridlines.stroke === 'dashed' ? '2 2' : gridlines.stroke === 'dotted' ? '0.5 1.5' : undefined"
+            />
           </g>
           <template v-for="(series, index) in lineSeries" :key="series.name">
             <polygon
@@ -130,11 +152,13 @@
             />
           </template>
         </svg>
-        <div v-if="categories.length" class="flex shrink-0 justify-between gap-1 overflow-hidden text-[9px] text-pbi-text-muted">
+        <div v-if="categories.length && xAxisVisible" class="flex shrink-0 justify-between gap-1 overflow-hidden" :style="xAxisLabelStyle">
           <span v-for="category in categories.slice(0, 8)" :key="category" class="truncate">{{ category }}</span>
         </div>
-        <div class="mt-1 flex flex-wrap gap-2">
-          <span v-for="(series, index) in lineSeries" :key="`legend-${series.name}`" class="flex items-center gap-1 text-[9px]">
+        <div v-if="xAxisVisible && xAxis.title" class="mt-0.5 text-center" :style="xAxisLabelStyle">{{ xAxis.title }}</div>
+        <div v-if="legendVisible" class="mt-1 flex flex-wrap gap-2" :style="legendWrapperStyle">
+          <span v-if="legend.title" class="font-semibold">{{ legend.title }}</span>
+          <span v-for="(series, index) in lineSeries" :key="`legend-${series.name}`" class="flex items-center gap-1">
             <span class="h-1.5 w-1.5 rounded-full" :style="{ backgroundColor: colors[index % colors.length] }"></span>
             {{ series.name }}
           </span>
@@ -147,20 +171,28 @@
           v-if="type === 'bar_chart' || type === 'stacked_bar_chart'"
           class="flex min-h-0 flex-1 flex-col justify-center gap-1 overflow-y-auto"
         >
+          <div v-if="yAxisVisible && yAxis.title" class="shrink-0 font-semibold" :style="yAxisLabelStyle">{{ yAxis.title }}</div>
           <div v-for="(category, catIndex) in categories" :key="category" class="flex items-center gap-1.5">
-            <span class="w-20 shrink-0 truncate text-right text-[9px] text-pbi-text-muted" :title="category">{{ category }}</span>
+            <span v-if="yAxisVisible" class="w-20 shrink-0 truncate text-right" :style="yAxisLabelStyle" :title="category">{{ category }}</span>
             <div class="flex min-w-0 flex-1 flex-col gap-0.5">
               <div v-for="(series, sIndex) in chartSeries" :key="series.name" class="flex items-center gap-1">
                 <div
                   class="h-3 rounded-sm transition-all"
                   :style="{ width: barWidth(series.values[catIndex], series.name) + '%', backgroundColor: colors[sIndex % colors.length] }"
                 ></div>
-                <span v-if="dataLabelsVisible" class="text-[8px] text-pbi-text-muted">{{ formatNumber(series.values[catIndex]) }}</span>
+                <span v-if="dataLabelsVisible" :style="dataLabelStyle">{{ formatNumber(series.values[catIndex]) }}</span>
               </div>
             </div>
           </div>
         </div>
         <div v-else class="relative flex min-h-0 flex-1 items-end gap-1 overflow-x-auto border-b border-pbi-pane-border pb-1">
+          <div v-if="gridlinesVisible && gridlines.horizontal" class="pointer-events-none absolute inset-0">
+            <div v-for="tick in 5" :key="`grid-h-${tick}`" class="absolute left-0 right-0" :style="{ bottom: `${tick * 20}%`, ...gridlineStyle }"></div>
+          </div>
+          <div v-if="gridlinesVisible && gridlines.vertical" class="pointer-events-none absolute inset-0">
+            <div v-for="tick in 5" :key="`grid-v-${tick}`" class="absolute bottom-0 top-0" :style="{ left: `${tick * 20}%`, ...gridlineVerticalStyle }"></div>
+          </div>
+          <div v-if="yAxisVisible && yAxis.title" class="pointer-events-none absolute left-1 top-0 text-[9px] font-semibold" :style="yAxisLabelStyle">{{ yAxis.title }}</div>
           <div v-for="(category, catIndex) in categories" :key="category" class="flex h-full min-w-[24px] flex-1 flex-col items-center justify-end gap-0.5">
             <div class="flex w-full flex-1 items-end justify-center gap-0.5">
               <div
@@ -171,12 +203,14 @@
                 :title="`${series.name}: ${formatNumber(series.values[catIndex])}`"
               ></div>
             </div>
-            <span class="w-full truncate text-center text-[8px] text-pbi-text-muted" :title="category">{{ category }}</span>
-            <span v-if="dataLabelsVisible" class="text-[8px] font-semibold">{{ formatNumber(chartSeries[0]?.values[catIndex]) }}</span>
+            <span v-if="dataLabelsVisible" class="font-semibold" :style="dataLabelStyle">{{ formatNumber(chartSeries[0]?.values[catIndex]) }}</span>
+            <span v-if="xAxisVisible" class="w-full truncate text-center" :style="xAxisLabelStyle" :title="category">{{ category }}</span>
           </div>
         </div>
-        <div v-if="chartSeries.length > 1 && legendVisible" class="mt-1 flex flex-wrap justify-center gap-2">
-          <span v-for="(series, index) in chartSeries" :key="`bar-legend-${series.name}`" class="flex items-center gap-1 text-[9px]">
+        <div v-if="xAxisVisible && xAxis.title" class="mt-0.5 text-center" :style="xAxisLabelStyle">{{ xAxis.title }}</div>
+        <div v-if="chartSeries.length > 1 && legendVisible" class="mt-1 flex flex-wrap justify-center gap-2" :style="legendWrapperStyle">
+          <span v-if="legend.title" class="font-semibold">{{ legend.title }}</span>
+          <span v-for="(series, index) in chartSeries" :key="`bar-legend-${series.name}`" class="flex items-center gap-1">
             <span class="h-1.5 w-1.5 rounded-sm" :style="{ backgroundColor: colors[index % colors.length] }"></span>
             {{ series.name }}
           </span>
@@ -244,9 +278,52 @@ const colors = computed(() => {
   const custom = properties.value.dataColors || [];
   return custom.length ? custom : themeStore.dataColors;
 });
-const dataLabelsVisible = computed(() => !!properties.value.dataLabels?.show);
-const legendVisible = computed(() => properties.value.legend?.show !== false);
-const gridlinesVisible = computed(() => properties.value.gridlines?.show !== false);
+const dataLabels = computed(() => properties.value.dataLabels || {});
+const dataLabelsVisible = computed(() => !!dataLabels.value.show);
+const dataLabelStyle = computed(() => ({
+  color: dataLabels.value.color || '#605e5c',
+  fontSize: `${Number(dataLabels.value.fontSize) || 10}px`,
+}));
+const legend = computed(() => properties.value.legend || {});
+const legendVisible = computed(() => legend.value.show !== false);
+const legendStyle = computed(() => ({
+  color: legend.value.color || '#605e5c',
+  fontSize: `${Number(legend.value.fontSize) || 10}px`,
+}));
+const legendPosition = computed(() => String(legend.value.position || 'bottom').toLowerCase());
+const legendWrapperStyle = computed(() => ({
+  ...legendStyle.value,
+  order: legendPosition.value.startsWith('top') ? -1 : 1,
+  justifyContent: legendPosition.value.endsWith('left')
+    ? 'flex-start'
+    : legendPosition.value.endsWith('right')
+      ? 'flex-end'
+      : 'center',
+}));
+const xAxis = computed(() => properties.value.xAxis || {});
+const yAxis = computed(() => properties.value.yAxis || {});
+const xAxisVisible = computed(() => xAxis.value.show !== false);
+const yAxisVisible = computed(() => yAxis.value.show !== false);
+const xAxisLabelStyle = computed(() => ({
+  color: xAxis.value.color || '#605e5c',
+  fontSize: `${Number(xAxis.value.fontSize) || 10}px`,
+}));
+const yAxisLabelStyle = computed(() => ({
+  color: yAxis.value.color || '#605e5c',
+  fontSize: `${Number(yAxis.value.fontSize) || 10}px`,
+}));
+const gridlines = computed(() => properties.value.gridlines || {});
+const gridlinesVisible = computed(() => gridlines.value.show !== false);
+const gridlineStyle = computed(() => ({
+  borderColor: gridlines.value.color || '#e1dfdd',
+  borderTopStyle: gridlines.value.stroke || 'solid',
+  borderTopWidth: `${Number(gridlines.value.width) || 1}px`,
+}));
+const gridlineVerticalStyle = computed(() => ({
+  borderColor: gridlines.value.color || '#e1dfdd',
+  borderLeftStyle: gridlines.value.stroke || 'solid',
+  borderLeftWidth: `${Number(gridlines.value.width) || 1}px`,
+}));
 const isBarLike = computed(() => ['bar_chart', 'column_chart', 'stacked_bar_chart', 'stacked_column', 'stacked_column_100'].includes(type.value));
 
 const numericColumns = computed(() => columns.value.filter(column => rows.value.some(row => typeof row[column] === 'number')));
@@ -427,8 +504,22 @@ watch(() => props.visual.id, () => { selectedSlicerValues.value = []; });
       hasData,
       properties,
       colors,
+      dataLabels,
+      dataLabelStyle,
       dataLabelsVisible,
+      legend,
+      legendStyle,
+      legendWrapperStyle,
       legendVisible,
+      xAxis,
+      yAxis,
+      xAxisVisible,
+      yAxisVisible,
+      xAxisLabelStyle,
+      yAxisLabelStyle,
+      gridlines,
+      gridlineStyle,
+      gridlineVerticalStyle,
       gridlinesVisible,
       isBarLike,
       numericColumns,

@@ -5,6 +5,7 @@
       selected || hovered ? 'border-pbi-pane-border opacity-100' : 'opacity-0',
       selected ? 'bg-blue-50/95' : ''
     ]"
+    :style="headerStyle"
     @mousedown.stop
     @dblclick.stop="startTitleEdit"
   >
@@ -13,23 +14,26 @@
       ref="titleInput"
       v-model="titleDraft"
       class="min-w-0 flex-1 rounded border border-pbi-accent px-1 py-0.5 text-pbi-sm font-semibold outline-none"
+      :style="titleStyle"
       @keydown.enter.prevent="commitTitle"
       @keydown.esc.prevent="cancelTitle"
       @blur="commitTitle"
       @mousedown.stop
     />
-    <div v-else class="min-w-0 flex-1 truncate font-semibold text-pbi-text" :title="visual.title">
-      {{ visual.title || store.visualLabel(visual.type) }}
+    <div v-else-if="titleVisible" class="min-w-0 flex-1 truncate font-semibold text-pbi-text" :style="titleStyle" :title="titleText">
+      {{ titleText }}
     </div>
+    <div v-else class="min-w-0 flex-1"></div>
 
     <div class="flex shrink-0 items-center gap-0.5">
       <button
+        v-if="headerIcons.includes('focus')"
         class="visual-header-btn"
         title="Focus mode"
         @click.stop="$emit('focus', visual.id)"
       >🔍</button>
 
-      <div class="relative">
+      <div v-if="headerIcons.includes('filters')" class="relative">
         <button
           class="visual-header-btn"
           :class="{ 'bg-blue-100 text-blue-700': appliedFilters.length }"
@@ -59,7 +63,7 @@
         </div>
       </div>
 
-      <div class="relative">
+      <div v-if="headerIcons.includes('menu')" class="relative">
         <button class="visual-header-btn" title="Altre opzioni" @click.stop="toggleMenu">⋯</button>
         <div
           v-if="menuOpen"
@@ -131,6 +135,21 @@ const editingTitle = ref(false);
 const titleDraft = ref('');
 const titleInput = ref(null);
 const menuRef = ref(null);
+
+const properties = computed(() => props.visual.properties || {});
+const titleVisible = computed(() => properties.value.titleVisible !== false);
+const headerIcons = computed(() => properties.value.header?.icons || ['focus', 'filters', 'menu']);
+const titleText = computed(() => (
+  properties.value.title ?? props.visual.title ?? store.visualLabel(props.visual.type)
+));
+const titleStyle = computed(() => ({
+  fontSize: `${Number(properties.value.titleFontSize) || 14}px`,
+  color: properties.value.titleColor || '#252423',
+  textAlign: properties.value.titleAlign || 'left',
+}));
+const headerStyle = computed(() => (
+  properties.value.titleBackground ? { backgroundColor: properties.value.titleBackground } : {}
+));
 
 const sortableFields = computed(() => {
   const buckets = props.visual.data_buckets || {};
@@ -247,7 +266,7 @@ function removeVisual() {
 }
 
 function startTitleEdit() {
-  titleDraft.value = props.visual.title || '';
+  titleDraft.value = titleText.value;
   editingTitle.value = true;
   nextTick(() => titleInput.value?.focus());
 }
@@ -256,7 +275,6 @@ function commitTitle() {
   if (!editingTitle.value) return;
   const title = titleDraft.value.trim();
   if (title) {
-    props.visual.title = title;
     store.updateVisualProperties(props.visual.id, { title });
   }
   editingTitle.value = false;
@@ -278,6 +296,12 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', closeMenu));
       titleDraft,
       titleInput,
       menuRef,
+      properties,
+      titleVisible,
+      headerIcons,
+      titleText,
+      titleStyle,
+      headerStyle,
       sortableFields,
       appliedFilters,
       fieldLabel,

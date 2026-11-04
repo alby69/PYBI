@@ -15,6 +15,7 @@ import json
 import os
 import re
 import zipfile
+from collections import deque
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from xml.sax.saxutils import escape
@@ -149,11 +150,32 @@ def _read_data_file(path: str, table_name: str = "") -> pl.DataFrame:
     raise ValueError(f"Unsupported data file extension: {ext}")
 
 
+def _load_etl_output_dataframe(project_id: str, table_name: str) -> Optional[pl.DataFrame]:
+    """Materialise ETL query outputs and return one by name when available."""
+    try:
+        from pybi.semantic.model_sync import load_project_semantic_model
+
+        load_project_semantic_model(project_id)
+
+        from pybi.dashboard.binding import default_binder
+
+        if table_name not in default_binder.list_sources():
+            return None
+        df = default_binder.get_source_data(table_name)
+        if isinstance(df, pl.DataFrame):
+            return df
+        if hasattr(df, "pl"):
+            return df.pl()
+    except Exception:
+        return None
+    return None
+
+
 def load_table_dataframe(project_id: str, table_name: str) -> pl.DataFrame:
     """Load a project table as a Polars DataFrame.
 
     Resolution order: default DataBinder source, semantic model physical name,
-    then raw project files.
+    ETL query output, then raw project files.
     """
     if not table_name:
         raise KeyError("A table name is required")
@@ -184,6 +206,9 @@ def load_table_dataframe(project_id: str, table_name: str) -> pl.DataFrame:
 
     file_path = _find_project_data_file(project_id, physical_name) or _find_project_data_file(project_id, table_name)
     if not file_path:
+        df = _load_etl_output_dataframe(project_id, table_name)
+        if df is not None:
+            return df
         raise KeyError(f"Table '{table_name}' not found in project '{project_id}'")
     return _read_data_file(file_path, physical_name)
 
@@ -417,6 +442,12 @@ def _field_column(field: Any) -> str:
     return str(field.get("column") or field.get("name") or "")
 
 
+def _field_table(field: Any) -> str:
+    if isinstance(field, dict):
+        return str(field.get("table") or field.get("table_name") or "")
+    return ""
+
+
 def _field_kind(field: Any) -> str:
     if isinstance(field, dict):
         return str(field.get("kind") or "")
@@ -435,15 +466,17 @@ def _field_expression(field: Any) -> str:
     return ""
 
 
-def _aggregate_sql(field: Any, alias: str) -> str:
+def _aggregate_sql(field: Any, alias: str, column_ref: Any, expression_ref: Any = None) -> str:
     expression = _field_expression(field)
     if expression:
+        if expression_ref is not None:
+            expression = expression_ref(field, expression)
         return f"{expression} AS {_quote(alias)}"
     column = _field_column(field)
     aggregation = _field_aggregation(field)
     if not column:
         return f"COUNT(*) AS {_quote(alias)}"
-    column_sql = _quote(column)
+    column_sql = column_ref(field, column)
     if aggregation in ("COUNT DISTINCT", "COUNT_DISTINCT", "DISTINCTCOUNT"):
         return f"COUNT(DISTINCT {column_sql}) AS {_quote(alias)}"
     if aggregation in ("COUNT", "COUNTROWS"):
@@ -451,6 +484,17 @@ def _aggregate_sql(field: Any, alias: str) -> str:
     if aggregation not in ("SUM", "AVG", "MIN", "MAX"):
         aggregation = "SUM"
     return f"{aggregation}({column_sql}) AS {_quote(alias)}"
+
+
+def _qualify_expression(expression: str, prefix: str, columns: Iterable[str]) -> str:
+    """Qualify unqualified column references inside a measure/calculated expression."""
+    result = str(expression)
+    for column in sorted({str(item) for item in columns if item}, key=len, reverse=True):
+        escaped = re.escape(column)
+        result = re.sub(rf'(?<![.\w])"{escaped}"', f'{prefix}."{column}"', result)
+        result = re.sub(rf'(?<![.\w])\[{escaped}\]', f'{prefix}."{column}"', result)
+        result = re.sub(rf'(?<![\w."\[]){escaped}(?![\w"\]])', f'{prefix}."{column}"', result)
+    return result
 
 
 def _bucket_fields(buckets: Dict[str, Any], *names: str) -> List[Any]:
@@ -464,7 +508,7 @@ def _bucket_fields(buckets: Dict[str, Any], *names: str) -> List[Any]:
     return []
 
 
-def _conditions_sql(column: str, conditions: List[Dict[str, Any]], logic: str = "AND") -> str:
+def _conditions_sql(column_sql: str, conditions: List[Dict[str, Any]], logic: str = "AND") -> str:
     parts: List[str] = []
     for condition in conditions:
         operator = str(condition.get("operator") or "eq").lower()
@@ -480,22 +524,23 @@ def _conditions_sql(column: str, conditions: List[Dict[str, Any]], logic: str = 
                 literal = f"{raw}%"
             else:
                 literal = f"%{raw}"
-            parts.append(f"CAST({_quote(column)} AS VARCHAR) {sql_op} {_sql_literal(literal)}")
+            parts.append(f"CAST({column_sql} AS VARCHAR) {sql_op} {_sql_literal(literal)}")
         elif operator in ("in", "not_in"):
             values = value if isinstance(value, list) else [value]
             joined = ", ".join(_sql_literal(entry) for entry in values)
-            parts.append(f"{_quote(column)} {'IN' if operator == 'in' else 'NOT IN'} ({joined})")
+            parts.append(f"{column_sql} {'IN' if operator == 'in' else 'NOT IN'} ({joined})")
         elif operator in ("is_null", "is_not_null"):
-            parts.append(f"{_quote(column)} IS {'NULL' if operator == 'is_null' else 'NOT NULL'}")
+            parts.append(f"{column_sql} IS {'NULL' if operator == 'is_null' else 'NOT NULL'}")
         elif value is None or value == "":
             continue
         else:
-            parts.append(f"{_quote(column)} {sql_op} {_sql_literal(value)}")
+            parts.append(f"{column_sql} {sql_op} {_sql_literal(value)}")
     joiner = f" {logic.upper()} " if str(logic).upper() == "OR" else " AND "
     return joiner.join(parts) if parts else ""
 
 
-def _filters_sql(filters: Iterable[Dict[str, Any]]) -> List[str]:
+def _filters_sql(filters: Iterable[Dict[str, Any]], column_ref: Any = None) -> List[str]:
+    column_ref = column_ref or (lambda _field, column: _quote(column))
     clauses: List[str] = []
     for entry in filters or []:
         if not isinstance(entry, dict) or entry.get("disabled") or entry.get("is_active") is False:
@@ -504,6 +549,7 @@ def _filters_sql(filters: Iterable[Dict[str, Any]]) -> List[str]:
         column = _field_column(field) or (field if isinstance(field, str) else "")
         if not column:
             continue
+        column_sql = column_ref(field, column)
         mode = str(entry.get("mode") or entry.get("type") or "basic").lower()
         if mode in ("basic", "base"):
             values = entry.get("values") or entry.get("value")
@@ -512,9 +558,9 @@ def _filters_sql(filters: Iterable[Dict[str, Any]]) -> List[str]:
             if not isinstance(values, list):
                 values = [values]
             joined = ", ".join(_sql_literal(value) for value in values)
-            clauses.append(f"{_quote(column)} IN ({joined})")
+            clauses.append(f"{column_sql} IN ({joined})")
         elif mode in ("advanced", "avanzato"):
-            sql = _conditions_sql(column, entry.get("conditions") or [], entry.get("logic") or "AND")
+            sql = _conditions_sql(column_sql, entry.get("conditions") or [], entry.get("logic") or "AND")
             if sql:
                 clauses.append(f"({sql})")
         elif mode in ("topn", "top_n"):
@@ -555,33 +601,204 @@ def build_visual_data(
     properties = widget_data.get("properties") or {}
     visual_type = str(widget_data.get("type") or "bar_chart").lower()
 
-    all_fields = _bucket_fields(buckets, "x_axis", "category", "axis", "rows", "values", "columns", "y_axis", "measures", "legend", "series", "tooltip")
-    table_name = properties.get("table_name") or properties.get("source_table")
-    if not table_name:
-        for field in all_fields:
-            if isinstance(field, dict) and field.get("table"):
-                table_name = field["table"]
-                break
-    if not table_name:
-        raise ValueError("No table is bound to this visual")
+    x_fields = _bucket_fields(buckets, "x_axis", "category", "axis", "rows")
+    y_fields = _bucket_fields(buckets, "y_axis", "measures", "values")
+    legend_fields = _bucket_fields(buckets, "legend", "series", "columns")
+    all_fields: List[Any] = []
+    for bucket_name in (
+        "x_axis",
+        "category",
+        "axis",
+        "rows",
+        "values",
+        "columns",
+        "y_axis",
+        "measures",
+        "legend",
+        "series",
+        "tooltip",
+    ):
+        all_fields.extend(_bucket_fields(buckets, bucket_name))
 
-    df = load_table_dataframe(project_id, table_name)
+    x_field = x_fields[0] if x_fields else None
+    y_field = y_fields[0] if y_fields else None
+    legend_field = legend_fields[0] if legend_fields else None
+    x_col = _field_column(x_field)
+    y_col = _field_column(y_field)
+    legend_col = _field_column(legend_field)
+
+    model = _semantic_model(project_id)
+
+    def canonical_table(name: Any) -> str:
+        text = str(name or "")
+        if not text or model is None:
+            return text
+        table = model.get_table(text)
+        if table is not None:
+            return table.name
+        for candidate in model.tables:
+            if candidate.source_table == text:
+                return candidate.name
+        return text
+
+    def field_table(field: Any) -> str:
+        return canonical_table(_field_table(field))
+
+    ordered_field_tables: List[str] = []
+    for field in all_fields:
+        name = field_table(field)
+        if name and name not in ordered_field_tables:
+            ordered_field_tables.append(name)
+
+    filters = list(widget_data.get("filters") or []) + list(extra_filters or [])
+
+    table_name = canonical_table(properties.get("table_name") or properties.get("source_table"))
+    if not table_name:
+        if ordered_field_tables:
+            table_name = ordered_field_tables[0]
+        else:
+            for entry in filters:
+                field = entry.get("field") or entry.get("column") if isinstance(entry, dict) else None
+                name = field_table(field)
+                if name:
+                    table_name = name
+                    break
+    if not table_name:
+        return {
+            "columns": [],
+            "rows": [],
+            "row_count": 0,
+            "generated_sql": "",
+            "table_name": None,
+        }
+    if ordered_field_tables and table_name not in ordered_field_tables:
+        table_name = ordered_field_tables[0]
+
+    field_tables = {table_name}
+    field_tables.update(ordered_field_tables)
+    referenced_tables = set(field_tables)
+    for entry in filters:
+        if not isinstance(entry, dict):
+            continue
+        field = entry.get("field") or entry.get("column")
+        name = field_table(field)
+        if name:
+            referenced_tables.add(name)
+
+    parent: Dict[str, Tuple[str, Any]] = {}
+    visit_order: List[str] = []
+    if model is not None:
+        adjacency: Dict[str, List[Tuple[str, Any]]] = {}
+        for rel in model.relationships:
+            if not rel.is_active:
+                continue
+            source = canonical_table(rel.from_table)
+            target = canonical_table(rel.to_table)
+            if not source or not target or source == target:
+                continue
+            adjacency.setdefault(source, []).append((target, rel))
+            adjacency.setdefault(target, []).append((source, rel))
+
+        queue = deque([table_name])
+        visited = {table_name}
+        while queue:
+            current = queue.popleft()
+            for other, rel in adjacency.get(current, []):
+                if other in visited:
+                    continue
+                visited.add(other)
+                parent[other] = (current, rel)
+                visit_order.append(other)
+                queue.append(other)
+
+    needed_tables = {table_name}
+    for name in referenced_tables:
+        if name == table_name or name not in parent:
+            continue
+        cursor = name
+        while cursor != table_name and cursor in parent:
+            needed_tables.add(cursor)
+            cursor = parent[cursor][0]
+
+    unreachable = sorted(name for name in field_tables if name != table_name and name not in parent)
+    if unreachable:
+        raise ValueError(
+            "No active relationship connects table(s) "
+            + ", ".join(f"'{name}'" for name in unreachable)
+            + f" to '{table_name}'"
+        )
+
+    aliases: Dict[str, str] = {table_name: "t0"}
+    tables_to_load: List[str] = [table_name]
+    for name in visit_order:
+        if name in needed_tables and name not in aliases:
+            aliases[name] = f"t{len(aliases)}"
+            tables_to_load.append(name)
+
+    applicable_filters: List[Dict[str, Any]] = []
+    for entry in filters:
+        field = entry.get("field") or entry.get("column") if isinstance(entry, dict) else None
+        name = field_table(field)
+        if name and name not in aliases:
+            continue
+        applicable_filters.append(entry)
+    filters = applicable_filters
+
+    tables_df: Dict[str, pl.DataFrame] = {}
+    for name in tables_to_load:
+        tables_df[name] = load_table_dataframe(project_id, name)
+    df = tables_df[table_name]
+
+    join_sqls: List[str] = []
+    for name in visit_order:
+        if name not in aliases or name not in parent:
+            continue
+        parent_name, rel = parent[name]
+        if parent_name not in aliases:
+            continue
+        parent_alias = _quote(aliases[parent_name])
+        child_alias = _quote(aliases[name])
+        join_type = rel.join_type.value if hasattr(rel.join_type, "value") else str(rel.join_type)
+        join_type = (join_type or "LEFT").upper()
+        if parent_name == canonical_table(rel.from_table):
+            condition = f"{parent_alias}.{_quote(rel.from_column)} = {child_alias}.{_quote(rel.to_column)}"
+        else:
+            condition = f"{parent_alias}.{_quote(rel.to_column)} = {child_alias}.{_quote(rel.from_column)}"
+        join_sqls.append(f"{join_type} JOIN {child_alias} ON {condition}")
+
+    primary_alias = aliases[table_name]
+
+    def resolve_alias(field: Any) -> str:
+        name = field_table(field)
+        if not name and model is not None:
+            column = _field_column(field)
+            if column:
+                found = model.find_column(column)
+                if found is not None:
+                    name = found[0].name
+        return aliases.get(name, primary_alias)
+
+    def column_ref(field: Any, column: Optional[str] = None) -> str:
+        target = column if column is not None else _field_column(field)
+        return f"{_quote(resolve_alias(field))}.{_quote(target)}"
+
+    def expression_ref(field: Any, expression: str) -> str:
+        name = field_table(field) or table_name
+        alias = _quote(aliases.get(name, primary_alias))
+        semantic_table = model.get_table(name) if model is not None else None
+        if semantic_table is not None:
+            columns = [column.column_name for column in semantic_table.columns]
+        elif name in tables_df:
+            columns = list(tables_df[name].columns)
+        else:
+            columns = []
+        return _qualify_expression(expression, alias, columns)
+
     con = duckdb.connect(":memory:")
     try:
-        con.register("tbl", df.to_pandas())
-        filters = list(widget_data.get("filters") or []) + list(extra_filters or [])
-        where_clauses = _filters_sql(filters)
-
-        x_fields = _bucket_fields(buckets, "x_axis", "category", "axis", "rows")
-        y_fields = _bucket_fields(buckets, "y_axis", "measures", "values")
-        legend_fields = _bucket_fields(buckets, "legend", "series", "columns")
-
-        x_field = x_fields[0] if x_fields else None
-        y_field = y_fields[0] if y_fields else None
-        legend_field = legend_fields[0] if legend_fields else None
-        x_col = _field_column(x_field)
-        y_col = _field_column(y_field)
-        legend_col = _field_column(legend_field)
+        for name, alias in aliases.items():
+            con.register(alias, tables_df[name].to_pandas())
+        where_clauses = _filters_sql(filters, column_ref)
 
         select_parts: List[str] = []
         group_parts: List[str] = []
@@ -595,45 +812,56 @@ def build_visual_data(
                 column = _field_column(field)
                 if not column:
                     continue
-                if _field_kind(field) == "measure" or _field_expression(field):
-                    select_parts.append(_aggregate_sql(field, column))
+                if _field_kind(field) == "measure":
+                    select_parts.append(_aggregate_sql(field, column, column_ref, expression_ref))
+                elif _field_expression(field):
+                    expression = expression_ref(field, _field_expression(field))
+                    select_parts.append(f"{expression} AS {_quote(column)}")
+                    group_parts.append(expression)
                 else:
-                    select_parts.append(_quote(column))
-                    group_parts.append(_quote(column))
+                    reference = column_ref(field, column)
+                    select_parts.append(f"{reference} AS {_quote(column)}")
+                    group_parts.append(reference)
             if not select_parts:
                 select_parts = ["*"]
         elif visual_type in ("card", "kpi", "gauge", "multi_row_card"):
             if y_fields:
                 for field in y_fields[:6]:
-                    select_parts.append(_aggregate_sql(field, _field_column(field)))
+                    select_parts.append(_aggregate_sql(field, _field_column(field), column_ref, expression_ref))
             elif x_fields:
-                select_parts.append(_aggregate_sql(x_field, x_col))
+                select_parts.append(_aggregate_sql(x_field, x_col, column_ref, expression_ref))
             else:
                 select_parts.append("COUNT(*) AS value")
         elif visual_type in ("slicer", "filter"):
             column = x_col or y_col
             if column:
-                select_parts = [f"DISTINCT {_quote(column)} AS {_quote(column)}"]
+                reference = column_ref(x_field if x_col else y_field, column)
+                select_parts = [f"DISTINCT {reference} AS {_quote(column)}"]
                 order_parts = [f"{_quote(column)} ASC"]
             else:
                 select_parts = ["*"]
         else:
             if x_col:
-                select_parts.append(f"{_quote(x_col)} AS {_quote('category')}")
-                group_parts.append(_quote(x_col))
+                reference = column_ref(x_field, x_col)
+                select_parts.append(f"{reference} AS {_quote('category')}")
+                group_parts.append(reference)
             if legend_col and legend_col != x_col:
-                select_parts.append(f"{_quote(legend_col)} AS {_quote('series')}")
-                group_parts.append(_quote(legend_col))
+                reference = column_ref(legend_field, legend_col)
+                select_parts.append(f"{reference} AS {_quote('series')}")
+                group_parts.append(reference)
             if y_fields:
                 for field in y_fields[:6]:
-                    select_parts.append(_aggregate_sql(field, "value" if len(y_fields) == 1 else _field_column(field)))
+                    alias = "value" if len(y_fields) == 1 else _field_column(field)
+                    select_parts.append(_aggregate_sql(field, alias, column_ref, expression_ref))
             else:
                 select_parts.append("COUNT(*) AS value")
 
         if not select_parts:
             select_parts = ["*"]
 
-        sql = f"SELECT {', '.join(select_parts)} FROM tbl"
+        sql = f"SELECT {', '.join(select_parts)} FROM {_quote(primary_alias)}"
+        if join_sqls:
+            sql += " " + " ".join(join_sqls)
         if where_clauses:
             sql += " WHERE " + " AND ".join(where_clauses)
         if group_parts:

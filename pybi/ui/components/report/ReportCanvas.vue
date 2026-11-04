@@ -324,6 +324,11 @@ function visualStyle(visual) {
   const border = properties.border || {};
   const shadow = properties.shadow || {};
   const background = colorWithAlpha(properties.background || '#ffffff', properties.backgroundTransparency || 0);
+  const distance = Number(shadow.distance ?? 2);
+  const angle = (Number(shadow.angle ?? 45) * Math.PI) / 180;
+  const offsetX = Number((Math.cos(angle) * distance).toFixed(1));
+  const offsetY = Number((Math.sin(angle) * distance).toFixed(1));
+  const shadowColor = colorWithAlpha(shadow.color || '#000000', shadow.transparency ?? 80);
   return {
     left: `${visual.position.x}px`,
     top: `${visual.position.y}px`,
@@ -334,7 +339,7 @@ function visualStyle(visual) {
     borderRadius: `${border.show ? border.radius ?? 4 : 4}px`,
     border: border.show ? `${border.width || 1}px solid ${border.color || '#d2d0ce'}` : '1px solid transparent',
     boxShadow: shadow.show
-      ? `${shadow.distance || 2}px ${shadow.distance || 2}px ${shadow.blur || 8}px rgba(0,0,0,${(100 - (shadow.transparency ?? 80)) / 100})`
+      ? `${offsetX}px ${offsetY}px ${shadow.blur || 8}px ${shadowColor}`
       : 'var(--pbi-shadow-visual, 0 1.6px 3.6px rgba(0,0,0,.13))',
   };
 }

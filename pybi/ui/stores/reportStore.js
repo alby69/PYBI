@@ -660,6 +660,9 @@ export const useReportStore = defineStore('report', {
       const visual = this.getVisual(visualId);
       if (!visual) return;
       visual.properties = deepMerge(visual.properties, patch);
+      if (Object.prototype.hasOwnProperty.call(patch || {}, 'title')) {
+        visual.title = patch.title ?? visual.title;
+      }
       this.markDirty();
       if (patch.dataColors || patch.sort_by || patch.sort_dir || patch.showAs) this.fetchVisualData(visual);
     },

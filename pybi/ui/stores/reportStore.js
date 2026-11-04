@@ -96,6 +96,7 @@ function defaultProperties(type, title) {
     shadow: { show: false, color: '#000000', blur: 8, angle: 45, distance: 2, transparency: 80 },
     dataColors: [...DEFAULT_COLORS],
     dataLabels: { show: false, position: 'auto', units: 'none', decimals: 0, color: '#252423', fontSize: 10 },
+    lineWidth: 1.8,
     legend: { show: true, position: 'bottom', title: '', color: '#605e5c', fontSize: 10 },
     xAxis: { show: true, title: '', color: '#605e5c', fontSize: 10, logScale: false, interval: null },
     yAxis: { show: true, title: '', color: '#605e5c', fontSize: 10, logScale: false, interval: null },

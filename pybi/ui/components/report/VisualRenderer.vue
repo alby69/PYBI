@@ -126,6 +126,18 @@
               :stroke-dasharray="gridlines.stroke === 'dashed' ? '2 2' : gridlines.stroke === 'dotted' ? '0.5 1.5' : undefined"
             />
           </g>
+          <g v-if="yAxisVisible" class="pointer-events-none">
+            <template v-for="tick in yAxisTicks" :key="`y-tick-${tick.fraction}`">
+              <text
+                :x="0"
+                :y="tick.fraction * 100"
+                :fill="yAxisLabelStyle.color"
+                :font-size="yAxisLabelStyle.fontSize"
+                text-anchor="end"
+                dominant-baseline="middle"
+              >{{ formatNumber(tick.value) }}</text>
+            </template>
+          </g>
           <template v-for="(series, index) in lineSeries" :key="series.name">
             <polygon
               v-if="type === 'area_chart'"
@@ -138,7 +150,7 @@
               :points="series.points"
               fill="none"
               :stroke="colors[index % colors.length]"
-              :stroke-width="type === 'scatter_chart' ? 0 : 1.8"
+              :stroke-width="type === 'scatter_chart' ? 0 : lineWidth"
               stroke-linejoin="round"
               stroke-linecap="round"
             />
@@ -165,7 +177,7 @@
           </template>
         </svg>
         <div v-if="categories.length && xAxisVisible" class="flex shrink-0 justify-between gap-1 overflow-hidden" :style="xAxisLabelStyle">
-          <span v-for="category in categories.slice(0, 8)" :key="category" class="truncate">{{ category }}</span>
+          <span v-for="category in categories" :key="category" class="truncate">{{ category }}</span>
         </div>
         <div v-if="xAxisVisible && xAxis.title" class="mt-0.5 text-center" :style="xAxisLabelStyle">{{ xAxis.title }}</div>
         <div v-if="legendVisible" class="mt-1 flex flex-wrap gap-2" :style="legendWrapperStyle">
@@ -293,6 +305,8 @@ const colors = computed(() => {
 const dataLabels = computed(() => properties.value.dataLabels || {});
 const dataLabelsVisible = computed(() => !!dataLabels.value.show);
 const dataLabelPosition = computed(() => String(dataLabels.value.position || 'auto').toLowerCase());
+const lineWidth = computed(() => Number(properties.value.lineWidth) || 1.8);
+const yAxisTicks = computed(() => [0, 0.2, 0.4, 0.6, 0.8, 1].map(fraction => ({ fraction, value: maxValue.value * fraction })));
 const dataLabelStyle = computed(() => ({
   color: dataLabels.value.color || '#605e5c',
   fontSize: `${Number(dataLabels.value.fontSize) || 10}px`,
@@ -522,6 +536,8 @@ watch(() => props.visual.id, () => { selectedSlicerValues.value = []; });
       dataLabelStyle,
       dataLabelsVisible,
       dataLabelPosition,
+      lineWidth,
+      yAxisTicks,
       legend,
       legendStyle,
       legendWrapperStyle,

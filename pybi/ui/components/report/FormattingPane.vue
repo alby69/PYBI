@@ -119,6 +119,13 @@
             </div>
           </details>
 
+          <details v-if="['line_chart', 'area_chart', 'combo_chart', 'scatter_chart'].includes(visualType)" class="format-section">
+            <summary class="format-section-title">📈 Linee</summary>
+            <div class="space-y-1 p-2">
+              <label class="format-row"><span>Spessore</span><input :value="lineWidth" type="number" step="0.5" min="0.5" max="10" class="format-control" @change="patch('lineWidth', Number($event.target.value))" /></label>
+            </div>
+          </details>
+
           <details class="format-section">
             <summary class="format-section-title">🗂 Legenda</summary>
             <div class="space-y-1 p-2">
@@ -331,6 +338,8 @@ const legend = computed(() => props.value.legend || {});
 const xAxis = computed(() => props.value.xAxis || {});
 const yAxis = computed(() => props.value.yAxis || {});
 const gridlines = computed(() => props.value.gridlines || {});
+const lineWidth = computed(() => Number(props.value.lineWidth) || 1.8);
+const visualType = computed(() => String(visual.value?.type || '').toLowerCase());
 const border = computed(() => props.value.border || {});
 const shadow = computed(() => props.value.shadow || {});
 const header = computed(() => props.value.header || {});
@@ -472,6 +481,8 @@ function applyFx() {
       props,
       dataColors,
       labels,
+      lineWidth,
+      visualType,
       legend,
       xAxis,
       yAxis,

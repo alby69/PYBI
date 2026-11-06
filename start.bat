@@ -32,7 +32,7 @@ if %errorlevel% equ 0 (
     echo.
     echo ===========================================
     echo  PyBI is starting up successfully!
-    echo  Access the application at: http://localhost:8080
+    echo  Access the application at: http://localhost:8081
     echo ===========================================
 ) else (
     echo [ERROR] Failed to start Docker containers.

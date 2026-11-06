@@ -36,5 +36,5 @@ docker compose up -d --build
 
 echo -e "${GREEN}===========================================${NC}"
 echo -e "${GREEN} PyBI is starting up successfully!${NC}"
-echo -e "${GREEN} Access the application at: http://localhost:8080${NC}"
+echo -e "${GREEN} Access the application at: http://localhost:8081${NC}"
 echo -e "${GREEN}===========================================${NC}"

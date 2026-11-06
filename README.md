@@ -16,22 +16,20 @@
   - **Connessioni Resilienti:** Gli archi si agganciano agli handle della colonna semantica o fisica; se la colonna non esiste più, usano un handle sul bordo della tabella invece di finire nel vuoto.
   - **Autodetect e Layout:** Il rilevamento propone relazioni in base ai nomi e ai tipi delle colonne. Le posizioni delle tabelle trascinate vengono salvate nel modello.
   - **Rimozione Tabella:** Rimuove la tabella dal modello e le relazioni e regole RLS collegate, senza cancellare il file sorgente.
-  ![Vista Modello Relazioni](screenshots/model_view_relationships.png)
-
-- **Miglioramenti UI/UX Editor ETL & Dashboard (Report):**
-  - **Gestione dei Widget nella Dashboard:**
-    - **Eliminazione Robusta dei Widget:** Eliminazione sicura sia tramite icona 🗑️ sulla griglia sia dal pulsante "Delete" nel drawer `WidgetConfigurator`, con finestra di dialogo di conferma per prevenire cancellazioni accidentali.
-    - **Aggiornamento e Matching Resiliente:** Assegnazione automatica di un ID univoco (`w1`, `w2`, ...) ai nuovi widget e ricerca con fallback su titolo e tipo di widget in caso di ID mancante per evitare duplicazioni.
-    - **Rilevamento e Selezione Campi:** Feedback visivo con banner di avviso ambrato se la fonte dati è vuota o non elaborata, pulsante di aggiornamento rapido 🔄 per ricaricare le colonne della fonte e supporto alla digitazione manuale dei campi (`with_input=True`).
-  - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.
-  - **State Management dei Passaggi Applicati per Tabella:** Gestione indipendente dello stato `appliedStepsByTable` nello store Vue (`uiStore.js`) e nel Power Query Editor, per conservare ed aggiornare i passaggi specifici di ciascuna tabella sorgente selezionata.
-  - **Importazione e Query:** `Get Data` apre il selettore del pulsante Upload della pagina. New, Duplicate, Reference, Rename, Move to Group e Delete aggiornano l'elenco reattivo del pannello Query.
-  - **Colonne Calcolate:** I campi inseriti da Available Columns usano identificatori DuckDB quotati e con virgolette escape (`"nome colonna"`), evitando errori di preview causati da nomi o spazi.
-  - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).
-- **Potenziamento Engine ETL Backend:** Supporto completo all'operatore di concatenazione standard DuckDB `||` e alla funzione `CONCAT()` durante la creazione di colonne calcolate (`Add Custom Column`).
-- **Fondamenta Fase 6 (Enterprise Parity & Hardening):**
-  - **Semantic Layer Foundations (`pybi/semantic/engine.py`):** Risoluzione automatica di query multi-tabella con clausole `JOIN` automatiche in DuckDB tramite `SemanticQueryResolver`.
-  - **Dynamic Row-Level Security (RLS Engine in `pybi/semantic/rls.py`):** Iniezione dinamica e sicura di clausole `WHERE` basate sui claims dell'utente autenticato (`allowed_regions`, `user_id`, `department`).
+  - **Miglioramenti UI/UX Editor ETL & Dashboard (Report):**
+    - **Gestione dei Widget nella Dashboard:**
+      - **Eliminazione Robusta dei Widget:** Eliminazione sicura sia tramite icona 🗑️ sulla griglia sia dal pulsante "Delete" nel drawer `WidgetConfigurator`, con finestra di dialogo di conferma per prevenire cancellazioni accidentali.
+      - **Aggiornamento e Matching Resiliente:** Assegnazione automatica di un ID univoco (`w1`, `w2`, ...) ai nuovi widget e ricerca con fallback su titolo e tipo di widget in caso di ID mancante per evitare duplicazioni.
+      - **Rilevamento e Selezione Campi:** Feedback visivo con banner di avviso ambrato se la fonte dati è vuota o non elaborata, pulsante di aggiornamento rapido 🔄 per ricaricare le colonne della fonte e supporto alla digitazione manuale dei campi (`with_input=True`).
+      - **Scroll Orizzontale Griglia Dati:** Griglia di anteprima ed intestazioni delle azioni di colonna con scroll orizzontale/verticale fluido senza wrapping forzato.
+      - **State Management dei Passaggi Applicati per Tabella:** Gestione indipendente dello stato `appliedStepsByTable` nello store Vue (`uiStore.js`) e nel Power Query Editor, per conservare ed aggiornare i passaggi specifici di ciascuna tabella sorgente selezionata.
+      - **Importazione e Query:** `Get Data` apre il selettore del pulsante Upload della pagina. New, Duplicate, Reference, Rename, Move to Group e Delete aggiornano l'elenco reattivo del pannello Query.
+      - **Colonne Calcolate:** I campi inseriti da Available Columns usano identificatori DuckDB quotati e con virgolette escape (`"nome colonna"`), evitando errori di preview causati da nomi o spazi.
+      - **Guida Espressioni & Modal Help:** Sezione guida espansa nel modal "Aggiungi Colonna Personalizzata" con esempi pratici (concatenazione stringhe, formule matematiche, condizioni `CASE WHEN`) e prontuario delle funzioni DuckDB/SQL supportate (`CONCAT()`, `UPPER()`, `TRIM()`, `COALESCE()`, ecc.).
+    - **Potenziamento Engine ETL Backend:** Supporto completo all'operatore di concatenazione standard DuckDB `||` e alla funzione `CONCAT()` durante la creazione di colonne calcolate (`Add Custom Column`).
+    - **Fondamenta Fase 6 (Enterprise Parity & Hardening):**
+      - **Semantic Layer Foundations (`pybi/semantic/engine.py`):** Risoluzione automatica di query multi-tabella con clausole `JOIN` automatiche in DuckDB tramite `SemanticQueryResolver`.
+      - **Dynamic Row-Level Security (RLS Engine in `pybi/semantic/rls.py`):** Iniezione dinamica e sicura di clausole `WHERE` basate sui claims dell'utente autenticato (`allowed_regions`, `user_id`, `department`).
 
 ---
 
@@ -106,7 +104,8 @@ The simplest way to run PyBI is using Docker and Docker Compose.
 chmod +x start.sh stop.sh
 ./start.sh
 ```
-Access PyBI in your browser at: [http://localhost:8080](http://localhost:8080)
+
+Access PyBI in your browser at: [http://localhost:8081](http://localhost:8081)
 
 ### Windows
 ```cmd
@@ -123,9 +122,7 @@ pip install -e .
 cp .env.example .env
 ```
 
-For local development, set `DATA_DIR=pybi_data` in `.env` (the example defaults
-to `/app/data` for Docker). Configure `PYBI_JWT_SECRET` with a random value of
-at least 32 characters and set `PYBI_ENV=production` before deployment.
+For local development, set `DATA_DIR=pybi_data` in `.env` (the example defaults to `/app/data` for Docker). Configure `PYBI_JWT_SECRET` with a random value of at least 32 characters and set `PYBI_ENV=production` before deployment.
 
 ### 2. Launching the Application
 ```bash
@@ -147,7 +144,7 @@ PyBI includes a robust Publishing & Export Engine (`pybi.export`) for freezing a
 
 Run tests locally using pytest:
 ```bash
-pip install -e ".[test]"
+pip install -e .[test]
 playwright install --with-deps chromium
 python3 -m pytest
 ```
